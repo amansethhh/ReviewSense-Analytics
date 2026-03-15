@@ -1,11 +1,5 @@
-"""
-app/pages/03_Model_Dashboard.py
---------------------------------
-Streamlit page: Model Performance Dashboard.
+import streamlit as st
 
-Responsibilities:
-- Load pre-computed evaluation metrics for all trained models
-- Display accuracy, F1, precision, recall per model and domain
-- Render confusion matrices, ROC curves, and feature importance charts
-- Allow model comparison side-by-side
-"""
+st.title("Model Performance Dashboard")
+
+st.write("Model evaluation metrics will appear here.")

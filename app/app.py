@@ -1,11 +1,18 @@
-"""
-app/app.py
-----------
-Main Streamlit entry point for ReviewSense Analytics.
+import streamlit as st
 
-Run with:
-    streamlit run app/app.py
+st.set_page_config(
+    page_title="ReviewSense Analytics",
+    layout="wide"
+)
 
-This module configures the global page layout, loads shared CSS,
-and provides the landing / home page of the multi-page application.
-"""
+st.title("ReviewSense Analytics")
+
+st.markdown("""
+AI-powered multi-domain sentiment analysis platform.
+
+Use the sidebar to navigate through the tools:
+- Live Prediction
+- Bulk Analysis
+- Model Dashboard
+- Language Analysis
+""")

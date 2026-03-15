@@ -221,3 +221,9 @@ models/roberta/*
 # Ignore generated reports but keep directory placeholder
 reports/figures/*
 !reports/figures/.gitkeep
+
+# Streamlit cache
+.streamlit/
+
+# Python virtual environment safety
+venv/

@@ -1,12 +1,8 @@
-"""
-app/pages/01_Live_Prediction.py
--------------------------------
-Streamlit page: Live Sentiment Prediction.
+import streamlit as st
 
-Responsibilities:
-- Accept free-text review input from the user
-- Run language detection and optional translation to English
-- Run sarcasm detection and ABSA
-- Display sentiment label, confidence score, LIME explanation,
-  and aspect-level sentiment breakdown
-"""
+st.title("Live Sentiment Prediction")
+
+review = st.text_area("Enter a review")
+
+if st.button("Analyze"):
+    st.success("Prediction module will appear here.")

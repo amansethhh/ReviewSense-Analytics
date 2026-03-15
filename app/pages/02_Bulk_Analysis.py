@@ -1,11 +1,8 @@
-"""
-app/pages/02_Bulk_Analysis.py
-------------------------------
-Streamlit page: Bulk Review Analysis.
+import streamlit as st
 
-Responsibilities:
-- Accept CSV / Excel file uploads containing review text
-- Run batch sentiment prediction across all rows
-- Display interactive results table with filterable columns
-- Allow export of results as CSV or PDF report
-"""
+st.title("Bulk Review Analysis")
+
+file = st.file_uploader("Upload CSV file")
+
+if file:
+    st.success("Bulk processing module will appear here.")
