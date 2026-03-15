@@ -105,8 +105,8 @@ if _scored:
         "📊 Macro F1",
         f"{_best.get('f1', 0) * 100:.2f}%",
     )
-    if "training_time" in _best:
-        st.caption(f"Training time: {_best['training_time']:.2f}s")
+    if "training_time_sec" in _best:
+        st.caption(f"Training time: {_best['training_time_sec']:.2f}s")
 
 st.markdown("---")
 

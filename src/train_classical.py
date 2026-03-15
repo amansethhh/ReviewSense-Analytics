@@ -15,8 +15,9 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
+from sklearn.metrics import accuracy_score, auc, classification_report, confusion_matrix, f1_score, roc_curve
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.preprocessing import label_binarize
 from sklearn.svm import LinearSVC
 
 from src.config import MAX_FEATURES, MODELS_DIR, NGRAM_RANGE, RANDOM_STATE, REPORTS_DIR
@@ -134,11 +135,44 @@ def evaluate_model(model_name, model, X_test_vec, y_test):
 
     cm_path = save_confusion_matrix_png(cm, model_name)
 
-    return {
+    metrics = {
         "accuracy": float(acc),
         "f1": float(f1),
-        "cm_path": str(cm_path)
+        "cm_path": str(cm_path),
+        "confusion_matrix": cm.tolist(),
     }
+
+    # Compute micro-average OvR ROC curve
+    # Limit serialised FPR/TPR arrays to at most _ROC_MAX_POINTS to keep the JSON
+    # file size reasonable without losing meaningful curve resolution.
+    _ROC_MAX_POINTS = 300
+    try:
+        y_bin = label_binarize(y_test, classes=CLASS_LABELS)
+        if hasattr(model, "predict_proba"):
+            scores = np.asarray(model.predict_proba(X_test_vec))
+        elif hasattr(model, "decision_function"):
+            raw = np.asarray(model.decision_function(X_test_vec))
+            if raw.ndim == 1:
+                raw = raw.reshape(-1, 1)
+            shifted = raw - raw.max(axis=1, keepdims=True)
+            exp_raw = np.exp(shifted)
+            scores = exp_raw / exp_raw.sum(axis=1, keepdims=True)
+        else:
+            scores = None
+
+        if scores is not None:
+            fpr, tpr, _ = roc_curve(y_bin.ravel(), scores.ravel())
+            roc_auc = float(auc(fpr, tpr))
+            step = max(1, len(fpr) // _ROC_MAX_POINTS)
+            metrics["roc"] = {
+                "fpr": fpr[::step].tolist(),
+                "tpr": tpr[::step].tolist(),
+                "auc": roc_auc,
+            }
+    except (ValueError, AttributeError, TypeError) as roc_err:
+        print(f"  [ROC] Skipped for {model_name}: {roc_err}")
+
+    return metrics
 
 
 def train_all_models():
