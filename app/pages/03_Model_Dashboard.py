@@ -54,7 +54,9 @@ _RESULTS_PATH = _PROJECT_ROOT / "reports" / "model_results.json"
 if not _RESULTS_PATH.exists():
     st.warning(
         "⚠️ `reports/model_results.json` not found.\n\n"
-        "Train the models first:\n\n"
+        "**Quick demo** — generate sample artifacts in seconds:\n\n"
+        "```\npython scripts/generate_demo_artifacts.py\n```\n\n"
+        "**Production** — train on the full dataset:\n\n"
         "```\npython src/train_classical.py\n```\n\n"
         "Then re-open this page."
     )

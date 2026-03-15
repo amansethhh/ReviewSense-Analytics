@@ -110,7 +110,10 @@ if analyze_clicked:
         model_pipeline, label_map = load_model(selected_model)
     except FileNotFoundError:
         st.error(
-            "🚫 Model file not found. Train the model first:\n\n"
+            "🚫 Model file not found.\n\n"
+            "**Quick demo** — generate sample artifacts in seconds:\n\n"
+            "```\npython scripts/generate_demo_artifacts.py\n```\n\n"
+            "**Production** — train on the full dataset:\n\n"
             "```\npython src/train_classical.py\n```"
         )
         st.stop()

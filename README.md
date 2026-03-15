@@ -74,14 +74,15 @@ git clone https://github.com/amansethhh/ReviewSense-Analytics.git
 cd ReviewSense-Analytics
 pip install -r requirements.txt
 
-# 2. Place your dataset
-#    Copy reviewsense_dataset.csv → data/processed/
+# 2a. Quick demo — generate sample model artifacts (no dataset needed)
+python scripts/generate_demo_artifacts.py
 
-# 3. Preprocess & train
+# 2b. OR: place the full dataset and train production models
+#    Copy reviewsense_dataset.csv → data/processed/
 python src/preprocess.py
 python src/train_classical.py
 
-# 4. Launch the dashboard
+# 3. Launch the dashboard
 streamlit run app/app.py
 ```
 
