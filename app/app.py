@@ -24,7 +24,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # CSS injection
 # ---------------------------------------------------------------------------
-from app.utils import load_css, render_sidebar  # noqa: E402  (after sys.path setup)
+from utils import load_css, render_sidebar  # noqa: E402  (after sys.path setup)
 
 load_css()
 

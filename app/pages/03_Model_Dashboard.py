@@ -29,7 +29,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # CSS
 # ---------------------------------------------------------------------------
-from app.utils import load_css, render_sidebar  # noqa: E402
+from utils import load_css, render_sidebar  # noqa: E402
 
 load_css()
 

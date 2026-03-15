@@ -28,7 +28,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # CSS
 # ---------------------------------------------------------------------------
-from app.utils import load_css, load_model, render_sidebar, sentiment_badge_html  # noqa: E402
+from utils import load_css, load_model, render_sidebar, sentiment_badge_html  # noqa: E402
 
 load_css()
 
