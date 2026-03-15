@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import streamlit as st
 
@@ -20,6 +21,34 @@ def load_css() -> None:
     if _CSS_PATH.exists():
         css_text = _CSS_PATH.read_text(encoding="utf-8")
         st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+
+
+@st.cache_resource
+def load_model(model_name: str = "best"):
+    """Load and cache a trained model pipeline by name.
+
+    Returns (model_pipeline, label_map).  Raises FileNotFoundError when the
+    requested model artefact does not exist on disk.
+    """
+    from src.predict import load_model as _load_model
+
+    return _load_model(model_name)
+
+
+def render_metric_card(label: str, value: Any, icon: str = "") -> None:
+    """Render a styled metric card using st.metric with optional icon prefix."""
+    display_label = f"{icon} {label}".strip() if icon else label
+    st.metric(display_label, value)
+
+
+def render_section_header(title: str, subtitle: str = "") -> None:
+    """Render a styled section header with an optional subtitle."""
+    st.markdown(f"<h2>{title}</h2>", unsafe_allow_html=True)
+    if subtitle:
+        st.markdown(
+            f"<p style='color:#9e9eb8;margin-top:-0.5rem;'>{subtitle}</p>",
+            unsafe_allow_html=True,
+        )
 
 
 def render_sidebar(show_model_selector: bool = True) -> dict:
