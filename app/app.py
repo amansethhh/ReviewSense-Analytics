@@ -144,8 +144,10 @@ with st.container():
                 )
             except FileNotFoundError:
                 st.info(
-                    "💡 Model file not found. Train the model first using "
-                    "`python src/train_classical.py`, then relaunch the app."
+                    "💡 Model file not found. Generate demo artifacts:\n\n"
+                    "```\npython scripts/generate_demo_artifacts.py\n```\n\n"
+                    "Or train on the full dataset:\n\n"
+                    "```\npython src/train_classical.py\n```"
                 )
             except Exception as exc:
                 st.error(f"Prediction error: {exc}")
