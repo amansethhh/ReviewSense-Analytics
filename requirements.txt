@@ -2,11 +2,11 @@ pandas==2.2.0
 numpy==1.26.4
 scikit-learn==1.4.0
 xgboost==2.0.3
-nltk==3.8.1
+nltk==3.9.3
 spacy==3.7.4
 textblob==0.18.0
-transformers==4.38.0
-torch==2.2.0
+transformers==4.48.0
+torch==2.6.0
 datasets==2.18.0
 streamlit==1.32.0
 plotly==5.20.0
