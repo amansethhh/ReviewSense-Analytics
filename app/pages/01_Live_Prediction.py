@@ -28,14 +28,9 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # CSS
 # ---------------------------------------------------------------------------
-_CSS_PATH = _APP_DIR / "assets" / "style.css"
-if _CSS_PATH.exists():
-    st.markdown(f"<style>{_CSS_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+from app.utils import load_css, render_sidebar, sentiment_badge_html  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Sidebar
-# ---------------------------------------------------------------------------
-from app.utils import render_sidebar, sentiment_badge_html  # noqa: E402
+load_css()
 
 sidebar_opts = render_sidebar()
 
@@ -43,13 +38,7 @@ sidebar_opts = render_sidebar()
 # Model loading (cached)
 # ---------------------------------------------------------------------------
 from src.config import DOMAINS, MODEL_NAMES  # noqa: E402
-
-
-@st.cache_resource
-def load_model(model_name: str = "best"):
-    """Load model once and cache for the session lifetime."""
-    from src.predict import load_model as _load
-    return _load(model_name)
+from app.utils import load_model  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

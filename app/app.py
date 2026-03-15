@@ -17,21 +17,20 @@ if str(_PROJECT_ROOT) not in sys.path:
 st.set_page_config(
     page_title="ReviewSense Analytics",
     layout="wide",
-    page_icon="🔍",
+    page_icon="📊",
     initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
 # CSS injection
 # ---------------------------------------------------------------------------
-_CSS_PATH = _APP_DIR / "assets" / "style.css"
-if _CSS_PATH.exists():
-    st.markdown(f"<style>{_CSS_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+from app.utils import load_css, render_sidebar  # noqa: E402  (after sys.path setup)
+
+load_css()
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
-from app.utils import render_sidebar  # noqa: E402  (after sys.path setup)
 
 sidebar_opts = render_sidebar()
 
