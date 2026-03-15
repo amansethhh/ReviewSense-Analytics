@@ -6,7 +6,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import joblib
 import streamlit as st
+from sklearn.pipeline import Pipeline
 
 # Ensure project root is on sys.path so `src` package is importable.
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +16,12 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 _CSS_PATH = Path(__file__).resolve().parent / "assets" / "style.css"
+
+# Absolute paths to model artifacts, resolved relative to this file so the
+# app works regardless of the working directory when Streamlit is launched.
+BASE_DIR = Path(__file__).resolve().parents[1]
+_MODEL_PATH = BASE_DIR / "models" / "classical" / "best_model.pkl"
+_VECTORIZER_PATH = BASE_DIR / "models" / "classical" / "tfidf_vectorizer.pkl"
 
 
 def load_css() -> None:
@@ -27,12 +35,39 @@ def load_css() -> None:
 def load_model(model_name: str = "best"):
     """Load and cache a trained model pipeline by name.
 
-    Returns (model_pipeline, label_map).  Raises FileNotFoundError when the
-    requested model artefact does not exist on disk.
-    """
-    from src.predict import load_model as _load_model
+    For the default ``"best"`` model the function loads
+    ``models/classical/best_model.pkl`` directly using an absolute path
+    derived from this file's location, so it works regardless of the
+    directory from which Streamlit is launched.
 
-    return _load_model(model_name)
+    If the saved artifact is already a :class:`sklearn.pipeline.Pipeline` it
+    is returned as-is; otherwise ``tfidf_vectorizer.pkl`` is loaded and a
+    Pipeline is assembled automatically.
+
+    Returns ``(model_pipeline, label_map)``.  Raises
+    :class:`FileNotFoundError` when the requested artifact does not exist.
+    """
+    from src.config import LABEL_MAP
+
+    if model_name in {"best", "best_model"}:
+        model_path = _MODEL_PATH
+    else:
+        model_path = BASE_DIR / "models" / "classical" / f"{model_name}.pkl"
+
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+
+    model_artifact = joblib.load(model_path)
+
+    if isinstance(model_artifact, Pipeline):
+        model_pipeline = model_artifact
+    else:
+        if not _VECTORIZER_PATH.exists():
+            raise FileNotFoundError(f"Vectorizer file not found: {_VECTORIZER_PATH}")
+        vectorizer = joblib.load(_VECTORIZER_PATH)
+        model_pipeline = Pipeline([("tfidf", vectorizer), ("clf", model_artifact)])
+
+    return model_pipeline, dict(LABEL_MAP)
 
 
 def render_metric_card(label: str, value: Any, icon: str = "") -> None:
