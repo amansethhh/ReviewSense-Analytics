@@ -206,6 +206,18 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Ignore large datasets
+# Ignore large datasets but keep directory placeholders
 data/processed/*
+!data/processed/.gitkeep
 data/exports/*
+!data/exports/.gitkeep
+
+# Ignore model binaries but keep directory placeholders
+models/classical/*
+!models/classical/.gitkeep
+models/roberta/*
+!models/roberta/.gitkeep
+
+# Ignore generated reports but keep directory placeholder
+reports/figures/*
+!reports/figures/.gitkeep
