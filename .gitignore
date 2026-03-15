@@ -227,3 +227,5 @@ reports/figures/*
 
 # Python virtual environment safety
 venv/
+
+reports/*.json
