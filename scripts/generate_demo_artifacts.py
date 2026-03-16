@@ -9,8 +9,13 @@ Run this script once before launching the app:
     python scripts/generate_demo_artifacts.py
 
 It creates:
-    models/classical/best_model.pkl
+    models/classical/best_model.pkl          (full Pipeline)
     models/classical/tfidf_vectorizer.pkl
+    models/classical/naive_bayes.pkl         (full Pipeline)
+    models/classical/linearsvc.pkl           (full Pipeline)
+    models/classical/logistic_regression.pkl (full Pipeline)
+    models/classical/random_forest.pkl       (full Pipeline)
+    models/classical/label_map.json
     reports/model_results.json
 
 The demo models are trained on a small built-in sample corpus (90 labelled
@@ -21,6 +26,7 @@ use the full dataset + src/train_classical.py instead.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -37,7 +43,16 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, auc, confusion_matrix, f1_score, roc_curve
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_curve,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
@@ -45,6 +60,8 @@ from sklearn.preprocessing import label_binarize
 from sklearn.svm import LinearSVC
 
 import joblib
+
+from src.preprocess import preprocess_pipeline
 
 # ---------------------------------------------------------------------------
 # Embedded demo corpus  (label: 0=Negative, 1=Neutral, 2=Positive)
@@ -81,6 +98,21 @@ _DEMO_CORPUS: list[tuple[str, int]] = [
     ("Could not be happier with this purchase.", 2),
     ("The product works great and looks even better than expected.", 2),
     ("One of the best products I have ever bought. Superb!", 2),
+    ("The food was delicious and the service was outstanding.", 2),
+    ("I love this phone. The camera is amazing and battery lasts forever.", 2),
+    ("This service was excellent. Prompt and professional.", 2),
+    ("Truly remarkable product, exceeded every expectation I had.", 2),
+    ("The quality is superb and shipping was incredibly fast.", 2),
+    ("A wonderful product that brings joy every day.", 2),
+    ("Hands down the best gadget I have purchased this year.", 2),
+    ("I am thoroughly impressed by the build quality and design.", 2),
+    ("An excellent phone with wonderful features and great battery.", 2),
+    ("Delightful shopping experience, will definitely come back.", 2),
+    ("The food was amazing, perfectly cooked and beautifully presented.", 2),
+    ("I am so happy with this product, it works exactly as promised.", 2),
+    ("This product is brilliant, good quality, and great design.", 2),
+    ("My experience with customer support was great and helpful.", 2),
+    ("Fabulous product, love everything about this purchase.", 2),
     # --- Negative (label=0) ---
     ("Terrible product, broke after just two days of use.", 0),
     ("Worst purchase ever. Complete waste of money.", 0),
@@ -112,6 +144,25 @@ _DEMO_CORPUS: list[tuple[str, int]] = [
     ("Extremely disappointed. Would not recommend to anyone.", 0),
     ("Avoid this product at all costs. Complete waste of money.", 0),
     ("Very low quality product. Broke after just one use.", 0),
+    ("The food is so bad and I will never come back.", 0),
+    ("I hate this service. Truly awful experience overall.", 0),
+    ("The worst experience ever. Completely unacceptable.", 0),
+    ("This product is terrible. Completely disappointed.", 0),
+    ("This is horrible and not worth any money at all.", 0),
+    ("Terrible phone. The screen broke within one week of usage.", 0),
+    ("The food was terrible and made me feel sick afterwards.", 0),
+    ("I am so sad and disappointed with this terrible product.", 0),
+    ("Horrible service, rude staff, and terrible food quality.", 0),
+    ("This product is absolutely terrible, worst I have ever tried.", 0),
+    ("Terrible experience with this company, never coming back.", 0),
+    ("The product is horrible, poor quality, and bad design.", 0),
+    ("Dreadful product. Stopped working after the first charge.", 0),
+    ("This was a horrible purchase. I regret every penny.", 0),
+    ("The worst meal I have ever had, food was disgusting.", 0),
+    ("Service was terrible and the product is even worse.", 0),
+    ("Hate everything about this product, total disappointment.", 0),
+    ("Bad quality, bad service, bad experience overall.", 0),
+    ("Pathetic product. Falls apart if you even look at it.", 0),
     # --- Neutral (label=1) ---
     ("The product is okay. Not great but not terrible either.", 1),
     ("It works as expected. Nothing special about it.", 1),
@@ -143,19 +194,38 @@ _DEMO_CORPUS: list[tuple[str, int]] = [
     ("Reasonable product. Would work for basic needs.", 1),
     ("Product is fine. Has both good and bad aspects.", 1),
     ("Decent enough. Not the best, but not the worst either.", 1),
+    ("The food was okay. Nothing special but edible.", 1),
+    ("The product is average. Works as expected.", 1),
+    ("The phone works but nothing to brag about.", 1),
+    ("Service was passable. Did not exceed or fall below expectations.", 1),
+    ("An ordinary item that does its job adequately.", 1),
+    ("The food was fine. Not amazing but okay for the price.", 1),
+    ("The food was alright. A bit bland but okay overall.", 1),
+    ("Food was okay, not the best but decent enough to eat.", 1),
+    ("The food was okay and the restaurant was clean.", 1),
+    ("Average food. Nothing wrong but nothing special either.", 1),
+    ("The meal was okay. Edible but not memorable.", 1),
+    ("Service was okay. Staff was friendly but slow.", 1),
+    ("Not bad food. Portion size was acceptable.", 1),
 ]
 
 _CLASS_LABELS = [0, 1, 2]
+_CLASS_NAMES = ["Negative", "Neutral", "Positive"]
 
 
-def _compute_roc(model, X_vec, y_test: list[int]) -> dict | None:
-    """Compute micro-average OvR ROC data for a fitted model."""
+def _sanitize_model_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def _compute_roc(pipeline, X_test, y_test: list[int]) -> dict | None:
+    """Compute micro-average OvR ROC data for a fitted pipeline."""
     try:
         y_bin = label_binarize(y_test, classes=_CLASS_LABELS)
-        if hasattr(model, "predict_proba"):
-            scores = np.asarray(model.predict_proba(X_vec))
-        elif hasattr(model, "decision_function"):
-            raw = np.asarray(model.decision_function(X_vec))
+
+        if hasattr(pipeline, "predict_proba"):
+            scores = np.asarray(pipeline.predict_proba(X_test))
+        elif hasattr(pipeline, "decision_function"):
+            raw = np.asarray(pipeline.decision_function(X_test))
             if raw.ndim == 1:
                 raw = raw.reshape(-1, 1)
             shifted = raw - raw.max(axis=1, keepdims=True)
@@ -182,77 +252,120 @@ def main() -> None:
     print("ReviewSense — demo artifact generator")
     print("=" * 60)
 
-    texts = [t for t, _ in _DEMO_CORPUS]
+    # ── CRITICAL FIX: Preprocess all texts identically to inference ────────
+    raw_texts = [t for t, _ in _DEMO_CORPUS]
     labels = [lbl for _, lbl in _DEMO_CORPUS]
 
+    print("\nPreprocessing demo corpus...")
+    processed_texts = []
+    processed_labels = []
+    for text, label in zip(raw_texts, labels):
+        processed = preprocess_pipeline(text)
+        if processed:
+            processed_texts.append(processed)
+            processed_labels.append(label)
+        else:
+            # Fallback: use lowercase text if preprocessing yields nothing
+            processed_texts.append(text.strip().lower())
+            processed_labels.append(label)
+
+    print(f"  Preprocessed {len(processed_texts)} samples")
+
     X_train, X_test, y_train, y_test = train_test_split(
-        texts, labels, test_size=0.25, random_state=42, stratify=labels
+        processed_texts, processed_labels,
+        test_size=0.25, random_state=42, stratify=processed_labels,
     )
 
     print(f"\nTrain size: {len(X_train)}  |  Test size: {len(X_test)}")
 
     # ── TF-IDF vectoriser ──────────────────────────────────────────────────
-    vectorizer = TfidfVectorizer(max_features=500, ngram_range=(1, 2))
-    X_train_vec = vectorizer.fit_transform(X_train)
-    X_test_vec = vectorizer.transform(X_test)
+    vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
 
     # ── Model zoo ─────────────────────────────────────────────────────────
     _MODELS: dict[str, Any] = {
         "Naive Bayes": MultinomialNB(),
-        "LinearSVC": LinearSVC(random_state=42, max_iter=1000),
-        "Logistic Regression": LogisticRegression(random_state=42, max_iter=500),
-        "Random Forest": RandomForestClassifier(n_estimators=50, random_state=42),
+        "LinearSVC": LinearSVC(random_state=42, max_iter=2000),
+        "Logistic Regression": LogisticRegression(random_state=42, max_iter=1000, C=1.0),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
     }
 
     results: dict[str, dict[str, Any]] = {}
     best_f1 = -1.0
-    best_model = None
+    best_pipeline = None
     best_name = ""
+
+    models_dir = _PROJECT_ROOT / "models" / "classical"
+    models_dir.mkdir(parents=True, exist_ok=True)
 
     print("\nTraining models…\n")
 
     for name, model in _MODELS.items():
         t0 = time.time()
-        model.fit(X_train_vec, y_train)
+
+        # Create full Pipeline for each model
+        pipeline = Pipeline([
+            ("tfidf", vectorizer),
+            ("clf", model),
+        ])
+        pipeline.fit(X_train, y_train)
         elapsed = time.time() - t0
 
-        y_pred = model.predict(X_test_vec)
+        y_pred = pipeline.predict(X_test)
         acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, average="macro")
+        prec = precision_score(y_test, y_pred, average="macro", zero_division=0)
+        rec = recall_score(y_test, y_pred, average="macro", zero_division=0)
         cm = confusion_matrix(y_test, y_pred, labels=_CLASS_LABELS)
+
+        report = classification_report(
+            y_test, y_pred.tolist() if hasattr(y_pred, 'tolist') else y_pred,
+            target_names=_CLASS_NAMES,
+            zero_division=0,
+        )
 
         metrics: dict[str, Any] = {
             "accuracy": float(acc),
+            "precision": float(prec),
+            "recall": float(rec),
             "f1": float(f1),
             "confusion_matrix": cm.tolist(),
             "training_time_sec": float(elapsed),
         }
 
-        roc = _compute_roc(model, X_test_vec, y_test)
+        roc = _compute_roc(pipeline, X_test, y_test)
         if roc is not None:
             metrics["roc"] = roc
 
         results[name] = metrics
-        print(f"  {name:25s}  acc={acc:.3f}  macro-f1={f1:.3f}")
+        print(f"  {name:25s}  acc={acc:.3f}  prec={prec:.3f}  recall={rec:.3f}  macro-f1={f1:.3f}")
+        print(report)
+
+        # Save each model as a FULL Pipeline
+        model_file = models_dir / f"{_sanitize_model_name(name)}.pkl"
+        joblib.dump(pipeline, model_file)
+        print(f"    ✓ Saved → {model_file.relative_to(_PROJECT_ROOT)}")
 
         if f1 > best_f1:
             best_f1 = f1
-            best_model = model
+            best_pipeline = pipeline
             best_name = name
 
-    # ── Save TF-IDF vectoriser ─────────────────────────────────────────────
-    models_dir = _PROJECT_ROOT / "models" / "classical"
-    models_dir.mkdir(parents=True, exist_ok=True)
-
+    # ── Save TF-IDF vectoriser (backward compatibility) ───────────────────
     vec_path = models_dir / "tfidf_vectorizer.pkl"
     joblib.dump(vectorizer, vec_path)
     print(f"\n✓ Saved vectoriser → {vec_path.relative_to(_PROJECT_ROOT)}")
 
     # ── Save best model as a full Pipeline ────────────────────────────────
-    best_pipeline = Pipeline([("tfidf", vectorizer), ("clf", best_model)])
     model_path = models_dir / "best_model.pkl"
     joblib.dump(best_pipeline, model_path)
     print(f"✓ Saved best model ({best_name}) → {model_path.relative_to(_PROJECT_ROOT)}")
+
+    # ── Save label map ────────────────────────────────────────────────────
+    label_map = {0: "Negative", 1: "Neutral", 2: "Positive"}
+    label_map_path = models_dir / "label_map.json"
+    with open(label_map_path, "w", encoding="utf-8") as fh:
+        json.dump(label_map, fh, indent=2)
+    print(f"✓ Saved label map   → {label_map_path.relative_to(_PROJECT_ROOT)}")
 
     # ── Save model_results.json ───────────────────────────────────────────
     reports_dir = _PROJECT_ROOT / "reports"
@@ -262,6 +375,37 @@ def main() -> None:
         json.dump(results, fh, indent=2)
     print(f"✓ Saved metrics      → {results_path.relative_to(_PROJECT_ROOT)}")
 
+    # ── Quick validation ──────────────────────────────────────────────────
+    print("\n" + "=" * 60)
+    print("Quick validation on test sentences:")
+    print("=" * 60)
+
+    test_sentences = [
+        ("The food is so bad", 0),
+        ("This product is terrible", 0),
+        ("I hate this service", 0),
+        ("The worst experience ever", 0),
+        ("This product is amazing", 2),
+        ("I love this phone", 2),
+        ("The service was excellent", 2),
+        ("The food was okay", 1),
+        ("The product is average", 1),
+    ]
+
+    label_names = {0: "Negative", 1: "Neutral", 2: "Positive"}
+    correct = 0
+    total = len(test_sentences)
+
+    for text, expected_label in test_sentences:
+        processed = preprocess_pipeline(text) or text.strip().lower()
+        pred = best_pipeline.predict([processed])[0]
+        pred_label = int(pred)
+        status = "✅" if pred_label == expected_label else "❌"
+        if pred_label == expected_label:
+            correct += 1
+        print(f"  {status} \"{text}\" → {label_names.get(pred_label, pred_label)} (expected {label_names.get(expected_label)})")
+
+    print(f"\nValidation: {correct}/{total} correct")
     print("\n" + "=" * 60)
     print("Done!  Launch the dashboard with:")
     print("    streamlit run app/app.py")

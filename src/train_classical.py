@@ -1,4 +1,8 @@
-"""Train classical sklearn sentiment models for ReviewSense Analytics."""
+"""Train classical sklearn sentiment models for ReviewSense Analytics.
+
+Each model is saved as a full sklearn Pipeline (TF-IDF + Classifier)
+so that inference NEVER needs to reconstruct the pipeline manually.
+"""
 
 from __future__ import annotations
 
@@ -15,8 +19,18 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, auc, classification_report, confusion_matrix, f1_score, roc_curve
+from sklearn.metrics import (
+    accuracy_score,
+    auc,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_curve,
+)
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import label_binarize
 from sklearn.svm import LinearSVC
 
@@ -109,12 +123,15 @@ def save_confusion_matrix_png(cm: np.ndarray, model_name: str):
     return output
 
 
-def evaluate_model(model_name, model, X_test_vec, y_test):
+def evaluate_model(model_name, pipeline, X_test, y_test):
+    """Evaluate a full Pipeline on raw (preprocessed) test text."""
 
-    y_pred = model.predict(X_test_vec)
+    y_pred = pipeline.predict(X_test)
 
     acc = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred, average="macro")
+    precision = precision_score(y_test, y_pred, average="macro", zero_division=0)
+    recall = recall_score(y_test, y_pred, average="macro", zero_division=0)
 
     report = classification_report(
         y_test,
@@ -128,6 +145,8 @@ def evaluate_model(model_name, model, X_test_vec, y_test):
     print("\n" + "=" * 80)
     print("Model:", model_name)
     print("Accuracy:", round(acc, 4))
+    print("Precision:", round(precision, 4))
+    print("Recall:", round(recall, 4))
     print("Macro F1:", round(f1, 4))
     print("Classification Report:")
     print(report)
@@ -136,6 +155,8 @@ def evaluate_model(model_name, model, X_test_vec, y_test):
 
     metrics = {
         "accuracy": float(acc),
+        "precision": float(precision),
+        "recall": float(recall),
         "f1": float(f1),
         "cm_path": str(cm_path),
         "confusion_matrix": cm.tolist(),
@@ -144,11 +165,11 @@ def evaluate_model(model_name, model, X_test_vec, y_test):
     try:
         y_bin = label_binarize(y_test, classes=CLASS_LABELS)
 
-        if hasattr(model, "predict_proba"):
-            scores = model.predict_proba(X_test_vec)
+        if hasattr(pipeline, "predict_proba"):
+            scores = pipeline.predict_proba(X_test)
 
-        elif hasattr(model, "decision_function"):
-            raw = model.decision_function(X_test_vec)
+        elif hasattr(pipeline, "decision_function"):
+            raw = pipeline.decision_function(X_test)
             raw = np.asarray(raw)
 
             if raw.ndim == 1:
@@ -184,6 +205,7 @@ def train_all_models():
     print("Loaded X_train:", X_train.shape)
     print("Loaded X_test:", X_test.shape)
 
+    # ── Build TF-IDF vectorizer ──────────────────────────────────────────
     print("\nBuilding TF-IDF features...")
 
     vectorizer = TfidfVectorizer(
@@ -191,13 +213,13 @@ def train_all_models():
         ngram_range=NGRAM_RANGE
     )
 
-    X_train_vec = vectorizer.fit_transform(X_train)
-    X_test_vec = vectorizer.transform(X_test)
+    # Fit the vectorizer on training data
+    vectorizer.fit(X_train)
 
     results = {}
 
     best_f1 = -1
-    best_model = None
+    best_pipeline = None
     best_name = ""
 
     MODELS_PATH.mkdir(parents=True, exist_ok=True)
@@ -207,32 +229,39 @@ def train_all_models():
 
         start = time.time()
 
-        model.fit(X_train_vec, y_train)
+        # Create a full Pipeline for each model
+        pipeline = Pipeline([
+            ("tfidf", vectorizer),
+            ("clf", model),
+        ])
+
+        # Fit the pipeline (vectorizer is already fitted, clf gets fitted)
+        pipeline.fit(X_train, y_train)
 
         train_time = time.time() - start
 
-        metrics = evaluate_model(name, model, X_test_vec, y_test)
+        metrics = evaluate_model(name, pipeline, X_test, y_test)
 
         metrics["training_time_sec"] = train_time
 
         results[name] = metrics
 
-        # Save individual model
+        # Save the FULL pipeline (vectorizer + classifier together)
         model_file = MODELS_PATH / f"{_sanitize_model_name(name)}.pkl"
-        joblib.dump(model, model_file)
+        joblib.dump(pipeline, model_file)
 
-        print(f"Saved model → {model_file.name}")
+        print(f"Saved pipeline → {model_file.name}")
 
         if metrics["f1"] > best_f1:
             best_f1 = metrics["f1"]
-            best_model = model
+            best_pipeline = pipeline
             best_name = name
 
-    # Save vectorizer
+    # Save the TF-IDF vectorizer separately for backward compatibility
     joblib.dump(vectorizer, MODELS_PATH / "tfidf_vectorizer.pkl")
 
-    # Save best model
-    joblib.dump(best_model, MODELS_PATH / "best_model.pkl")
+    # Save best model as a full Pipeline
+    joblib.dump(best_pipeline, MODELS_PATH / "best_model.pkl")
 
     # Save label map
     label_map = {0: "Negative", 1: "Neutral", 2: "Positive"}
@@ -243,15 +272,18 @@ def train_all_models():
         json.dump(results, f, indent=2)
 
     print("\nBest model:", best_name)
-    print("Saved best_model.pkl and tfidf_vectorizer.pkl")
+    print("Saved best_model.pkl (full Pipeline)")
 
     print("\nFinal Comparison Table")
+    print(f"{'Model':<25s} | {'Accuracy':>8s} | {'Precision':>9s} | {'Recall':>6s} | {'F1':>6s} | {'Time':>6s}")
+    print("-" * 75)
 
     df = pd.DataFrame(results).T.sort_values("f1", ascending=False)
 
     for name, row in df.iterrows():
         print(
-            f"{name} | {row['accuracy']:.4f} | {row['f1']:.4f} | {row['training_time_sec']:.2f}s"
+            f"{name:<25s} | {row['accuracy']:>8.4f} | {row['precision']:>9.4f} | "
+            f"{row['recall']:>6.4f} | {row['f1']:>6.4f} | {row['training_time_sec']:>5.2f}s"
         )
 
 

@@ -38,6 +38,19 @@ NON_ASCII_PATTERN = re.compile(r"[^\x00-\x7F]+")
 WHITESPACE_PATTERN = re.compile(r"\s+")
 PUNCT_PATTERN = re.compile(r"[^a-z0-9\s]+")
 
+# Sentiment-bearing words that must NOT be removed even if they look like
+# stopwords or are very short.  This is critical for correct predictions.
+SENTIMENT_WORDS = frozenset({
+    "good", "great", "bad", "sad", "mad", "love", "hate", "like",
+    "best", "worst", "awful", "ugly", "nice", "fine", "poor", "rich",
+    "fun", "boring", "dull", "cool", "hot", "cold", "happy", "angry",
+    "glad", "hurt", "sick", "well", "ill", "old", "new", "big",
+    "amazing", "terrible", "horrible", "fantastic", "excellent",
+    "wonderful", "disgusting", "outstanding", "perfect", "broken",
+    "not", "no", "never", "nor", "neither", "nobody", "nothing",
+    "nowhere", "hardly", "scarcely", "barely",
+})
+
 
 class _FallbackLemmatizer:
     def lemmatize(self, token: str) -> str:
@@ -52,19 +65,22 @@ class _FallbackLemmatizer:
 def _get_stop_words():
 
     try:
-        return set(stopwords.words("english"))
+        base_stops = set(stopwords.words("english"))
 
     except LookupError:
 
         try:
             nltk.download("stopwords", quiet=True)
-            return set(stopwords.words("english"))
+            base_stops = set(stopwords.words("english"))
 
         except Exception:
 
             warnings.warn("Using sklearn stopwords")
 
-            return set(ENGLISH_STOP_WORDS)
+            base_stops = set(ENGLISH_STOP_WORDS)
+
+    # Never remove sentiment-bearing words
+    return base_stops - SENTIMENT_WORDS
 
 
 @lru_cache(maxsize=1)
@@ -193,7 +209,8 @@ def clean_text(text: str):
 
     text = WHITESPACE_PATTERN.sub(" ", text).strip()
 
-    if len(text) < 15:
+    # Only reject truly empty text, not short reviews
+    if not text:
         return None
 
     return text
@@ -215,24 +232,22 @@ def preprocess_pipeline(text):
     lemmatizer = _get_lemmatizer()
 
     tokens = [
-
         t
-
         for t in wordpunct_tokenize(cleaned)
-
-        if t.isalpha() and t not in stop_words and len(t) > 2
-
+        if t.isalpha() and t not in stop_words and (len(t) > 2 or t in SENTIMENT_WORDS)
     ]
 
     if not tokens:
-        return None
+        # If stopword removal kills everything, fall back to cleaned text
+        return cleaned
 
     tokens = [lemmatizer.lemmatize(t) for t in tokens]
 
     processed = " ".join(tokens)
 
-    if len(processed) < 10:
-        return None
+    # Return the result as long as it's non-empty
+    if not processed:
+        return cleaned
 
     return processed
 

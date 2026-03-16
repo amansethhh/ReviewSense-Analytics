@@ -14,7 +14,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
 from src.config import LABEL_MAP
-from src.preprocess import clean_text, preprocess_pipeline
+from src.preprocess import preprocess_pipeline
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
@@ -23,14 +23,14 @@ CLASS_NAMES = [LABEL_MAP[label] for label in CLASS_LABELS]
 
 
 def _prepare_text(text: str) -> str:
-    processed_text = preprocess_pipeline(text)
-    if processed_text:
-        return processed_text
+    """Apply the same preprocessing used during training.
 
-    cleaned_text = clean_text(text)
-    if cleaned_text:
-        return cleaned_text
-
+    Uses the improved preprocess_pipeline() that preserves sentiment words
+    and falls back to cleaned text instead of returning None.
+    """
+    processed = preprocess_pipeline(text)
+    if processed:
+        return processed
     return str(text or "").strip().lower()
 
 

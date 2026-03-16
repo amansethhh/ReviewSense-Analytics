@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import re
 from pathlib import Path
 from typing import Any
@@ -13,14 +12,14 @@ from sklearn.pipeline import Pipeline
 from textblob import TextBlob
 
 from src.config import LABEL_MAP, MODELS_DIR
-from src.preprocess import clean_text, normalize_label, preprocess_pipeline
+from src.preprocess import preprocess_pipeline
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CLASSICAL_MODELS_PATH = PROJECT_ROOT / MODELS_DIR
 
 
 def _sanitize_model_name(model_name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", model_name.strip().lower()).strip("_")
+    return re.sub(r"[^a-z0-9]+", model_name.strip().lower(), "").strip("_")
 
 
 def _resolve_model_path(model_name: str) -> Path:
@@ -46,6 +45,7 @@ def _resolve_model_path(model_name: str) -> Path:
 
 
 def _build_pipeline_if_needed(model_artifact: Any) -> Pipeline:
+    """Wrap a bare classifier with the saved vectorizer if needed."""
     if isinstance(model_artifact, Pipeline):
         return model_artifact
 
@@ -60,14 +60,17 @@ def _build_pipeline_if_needed(model_artifact: Any) -> Pipeline:
 
 
 def _prepare_text_for_inference(text: str) -> str:
-    processed_text = preprocess_pipeline(text)
-    if processed_text:
-        return processed_text
+    """Apply the SAME preprocessing used during training.
 
-    cleaned_text = clean_text(text)
-    if cleaned_text:
-        return cleaned_text
+    This ensures TF-IDF feature alignment between training and inference.
+    The improved preprocess_pipeline() now returns cleaned text as fallback
+    instead of None, so this should rarely need the final fallback.
+    """
+    processed = preprocess_pipeline(text)
+    if processed:
+        return processed
 
+    # Final safety net — should rarely reach here after preprocessing fixes
     return str(text or "").strip().lower()
 
 
@@ -107,6 +110,7 @@ def _softmax(values: np.ndarray) -> np.ndarray:
 
 
 def _coerce_label(value: Any) -> int:
+    from src.preprocess import normalize_label
     normalized_value = normalize_label(value)
     if normalized_value is not None:
         return int(normalized_value)
@@ -114,6 +118,8 @@ def _coerce_label(value: Any) -> int:
 
 
 def _estimate_confidence(model_pipeline: Pipeline, prepared_text: str, predicted_label: int) -> float:
+    import math
+
     classes = _get_model_classes(model_pipeline)
     label_order = np.array(sorted(LABEL_MAP.keys()))
     matching_indices = np.where(label_order == predicted_label)[0]
@@ -144,8 +150,10 @@ def _estimate_confidence(model_pipeline: Pipeline, prepared_text: str, predicted
 
 
 def load_model(model_name="best"):
-    """Load model and vectorizer from models/classical/."""
+    """Load model pipeline from models/classical/.
 
+    Returns (Pipeline, label_map_dict).
+    """
     model_path = _resolve_model_path(model_name)
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
@@ -156,8 +164,11 @@ def load_model(model_name="best"):
 
 
 def predict_sentiment(text, model_pipeline):
-    """Preprocess text, predict label and confidence."""
+    """Preprocess text, predict label and confidence.
 
+    Uses the same preprocess_pipeline() that was used during training
+    to ensure TF-IDF feature alignment.
+    """
     original_text = str(text or "").strip()
     if not original_text:
         return {
