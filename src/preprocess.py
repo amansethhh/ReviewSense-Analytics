@@ -41,14 +41,24 @@ PUNCT_PATTERN = re.compile(r"[^a-z0-9\s]+")
 # Sentiment-bearing words that must NOT be removed even if they look like
 # stopwords or are very short.  This is critical for correct predictions.
 SENTIMENT_WORDS = frozenset({
+    # Core sentiment adjectives
     "good", "great", "bad", "sad", "mad", "love", "hate", "like",
     "best", "worst", "awful", "ugly", "nice", "fine", "poor", "rich",
     "fun", "boring", "dull", "cool", "hot", "cold", "happy", "angry",
     "glad", "hurt", "sick", "well", "ill", "old", "new", "big",
     "amazing", "terrible", "horrible", "fantastic", "excellent",
     "wonderful", "disgusting", "outstanding", "perfect", "broken",
+    "superb", "brilliant", "delighted", "disappointed", "pathetic",
+    "dreadful", "mediocre", "decent", "fabulous", "rubbish",
+    # Negation words (critical for sentiment reversal)
     "not", "no", "never", "nor", "neither", "nobody", "nothing",
     "nowhere", "hardly", "scarcely", "barely",
+    # Amplifiers & degree modifiers (critical for short text sentiment)
+    "so", "very", "really", "too", "extremely", "incredibly",
+    "absolutely", "totally", "completely", "quite", "rather",
+    "most", "more", "less", "bit", "much", "far",
+    # Hedging / neutral-leaning words
+    "okay", "ok", "average", "fair", "alright",
 })
 
 
