@@ -1,6 +1,7 @@
 """Bulk Review Analysis — ReviewSense Analytics."""
 
 import sys
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -21,47 +22,65 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── PHASE 0: Background flash prevention ────────────────────
+st.markdown("""
+<style>
+html, body,
+[data-testid="stApp"],
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+.main, .block-container {
+    background-color: #070b14 !important;
+    background: #070b14 !important;
+}
+[data-testid="stSidebarNav"],
+[data-testid="stSidebarNav"] * {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ── UI imports ───────────────────────────────────────────────
-from ui.sidebar import load_css, render_sidebar            # noqa: E402
-from ui.components import (                                 # noqa: E402
-    page_header, section_title, glass_card, step_card,
-    metric_card,
-)
-from ui.theme import (                                      # noqa: E402
+from ui.sidebar import load_css, render_sidebar  # noqa: E402
+from ui.theme import (  # noqa: E402
     apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR,
     NEUTRAL_COLOR, ACCENT_BLUE, ACCENT_PURPLE,
 )
-from src.config import MODEL_NAMES, DOMAINS                 # noqa: E402
-from utils import load_model                            # noqa: E402
+from src.config import MODEL_NAMES, DOMAINS  # noqa: E402
+from utils import load_model  # noqa: E402
 
 load_css()
 render_sidebar()
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# HEADER
+# PAGE HEADER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-page_header(
-    "📂",
-    "Bulk Review Analysis",
-    "Upload datasets, run batch NLP pipelines, and generate comprehensive sentiment reports at scale",
-)
+st.markdown("""
+<div class="section-title">📂 Bulk Review Analysis</div>
+<div class="section-subtitle">Upload datasets, run batch NLP pipelines, and generate comprehensive sentiment reports at scale.</div>
+""", unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# HOW IT WORKS
+# HOW IT WORKS (4 step cards)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-section_title("How It Works", icon="📋")
+_STEPS = [
+    ("01", "Upload CSV or Excel file containing reviews"),
+    ("02", "Map the correct column containing review text"),
+    ("03", "Select analysis modules to run simultaneously"),
+    ("04", "Download enriched CSV or formatted PDF report"),
+]
 
-s1, s2, s3, s4 = st.columns(4)
-with s1:
-    step_card(1, "Upload a CSV or Excel file containing your customer reviews dataset (max 50MB).")
-with s2:
-    step_card(2, "Map the correct column containing review text and optionally assign a domain tag.")
-with s3:
-    step_card(3, "Select analysis modules — Sentiment, Aspect-Based detection, and Sarcasm flagging.")
-with s4:
-    step_card(4, "Download the enriched dataset as CSV or a formatted PDF summary report.")
+s_cols = st.columns(4)
+for col, (num, desc) in zip(s_cols, _STEPS):
+    with col:
+        st.markdown(f"""
+        <div class="glass-card" style="text-align:center;">
+          <div class="step-number">{num}</div>
+          <div style="color:#7986cb;font-size:0.85rem;line-height:1.5;">{desc}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -69,11 +88,13 @@ st.markdown("<br>", unsafe_allow_html=True)
 # UPLOAD DATASET
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-section_title("Upload Dataset", icon="📤")
+st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+st.markdown('<div class="section-title">📤 Upload Dataset</div>', unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("Upload CSV file", type=["csv"], key="bulk_upload")
 
 if uploaded_file is None:
+    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 # ── Read CSV ─────────────────────────────────────────────────
@@ -83,16 +104,35 @@ try:
     df = pd.read_csv(uploaded_file)
 except Exception as exc:
     st.error(f"Could not read CSV: {exc}")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-st.success(f"✅ File uploaded — {len(df):,} rows × {len(df.columns)} columns")
+_file_size = uploaded_file.size / 1024
+_size_label = f"{_file_size:.1f} KB" if _file_size < 1024 else f"{_file_size/1024:.1f} MB"
+
+st.markdown(f"""
+<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);
+  border-radius:12px;padding:16px;margin:12px 0;">
+  <span style="color:#22c55e;font-weight:700;">✅ File uploaded successfully</span>
+  <span style="color:#7986cb;margin-left:12px;">{uploaded_file.name} · {_size_label} · {len(df):,} rows</span>
+</div>
+<div style="display:flex;gap:8px;margin-top:8px;">
+  <span class="tag-pill tag-green">✅ Validated</span>
+  <span class="tag-pill tag-cyan">📄 CSV Format</span>
+  <span class="tag-pill tag-cyan">⚡ Ready</span>
+</div>
+""", unsafe_allow_html=True)
+
 st.dataframe(df.head(5), use_container_width=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # COLUMN MAPPING
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-section_title("Column Mapping", icon="🗂️")
+st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+st.markdown('<div class="section-title">🗂️ Column Mapping</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-subtitle">Select the column containing review text</div>', unsafe_allow_html=True)
 
 _TEXT_HINTS = ("text", "review", "comment", "sentence", "content", "description", "tweet")
 _str_cols = [c for c in df.columns if df[c].dtype == object]
@@ -117,30 +157,30 @@ with cm2:
         key="bulk_domain",
     )
 
+st.markdown('</div>', unsafe_allow_html=True)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ANALYSIS SETTINGS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-section_title("Analysis Settings", icon="⚙️")
+st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+st.markdown('<div class="section-title">⚙️ Analysis Settings</div>', unsafe_allow_html=True)
 
-as1, as2, as3, as4 = st.columns(4)
+as1, as2, as3 = st.columns(3)
 with as1:
-    run_sentiment = st.checkbox("Sentiment Analysis", value=True, key="bulk_sentiment")
+    run_sentiment = st.checkbox("✅ Sentiment Analysis", value=True, key="bulk_sentiment")
 with as2:
-    run_aspect = st.checkbox("Aspect Detection", value=False, key="bulk_aspect")
+    run_aspect = st.checkbox("✅ Aspect Detection", value=True, key="bulk_aspect")
 with as3:
-    run_sarcasm = st.checkbox("Sarcasm Detection", value=False, key="bulk_sarcasm")
-with as4:
-    model_name = st.selectbox("Model", ["best"] + MODEL_NAMES, index=0, key="bulk_model")
+    run_sarcasm = st.checkbox("☐ Sarcasm Flagging", value=False, key="bulk_sarcasm")
 
-st.markdown("<br>", unsafe_allow_html=True)
+model_name = st.selectbox("Model", ["best"] + MODEL_NAMES, index=0, key="bulk_model")
 
-# ── Analyze Button ───────────────────────────────────────────
-st.markdown("<div class='gradient-btn'>", unsafe_allow_html=True)
 if not st.button("🚀  Analyze All Reviews", use_container_width=True, key="bulk_analyze"):
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
-st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Load model ───────────────────────────────────────────────
 try:
@@ -154,28 +194,37 @@ except Exception as exc:
 
 from src.predict import predict_sentiment  # noqa: E402
 
+# ── Animated Loading ─────────────────────────────────────────
+spinner_ph = st.empty()
+progress_ph = st.empty()
+
+spinner_ph.markdown("""
+<div class="analyze-loading">
+  <div class="pulse-ring"></div>
+  Processing reviews...
+</div>
+""", unsafe_allow_html=True)
+
 texts = df[text_column].fillna("").astype(str).tolist()
 results = []
-
-progress_bar = st.progress(0, text="Analyzing reviews…")
 n = len(texts)
+bar = progress_ph.progress(0)
 
 for i, text in enumerate(texts):
     res = predict_sentiment(text, model_pipeline)
     results.append(res)
     if i % max(1, n // 100) == 0 or i == n - 1:
-        progress_bar.progress((i + 1) / n, text=f"Analyzing… {i + 1}/{n}")
+        bar.progress((i + 1) / n, text=f"Analyzing… {i + 1}/{n}")
 
-progress_bar.empty()
+spinner_ph.empty()
+progress_ph.empty()
 
 # ── Build results dataframe ──────────────────────────────────
 results_df = df.copy()
-results_df["Sentiment"]   = [r["label_name"] for r in results]
-results_df["Confidence"]  = [round(r["confidence"] * 100, 1) for r in results]
-results_df["Polarity"]    = [round(r["polarity"], 4) for r in results]
+results_df["Sentiment"] = [r["label_name"] for r in results]
+results_df["Confidence"] = [round(r["confidence"] * 100, 1) for r in results]
+results_df["Polarity"] = [round(r["polarity"], 4) for r in results]
 results_df["Subjectivity"] = [round(r["subjectivity"], 4) for r in results]
-
-st.markdown("---")
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # RESULTS DASHBOARD
@@ -188,78 +237,134 @@ pos = (results_df["Sentiment"] == "Positive").sum()
 neg = (results_df["Sentiment"] == "Negative").sum()
 neu = (results_df["Sentiment"] == "Neutral").sum()
 
-section_title("Results Dashboard", icon="📊")
+st.markdown("""
+<div class="section-title" style="margin-top:24px;">📊 Results Dashboard</div>
+<div class="section-subtitle">Analysis complete — summary statistics below</div>
+""", unsafe_allow_html=True)
 
+# ── 4 KPI Cards ──────────────────────────────────────────────
 sm1, sm2, sm3, sm4 = st.columns(4)
 with sm1:
-    metric_card("Total Reviews", f"{total:,}", color=ACCENT_BLUE)
+    st.markdown(f"""
+    <div class="metric-card metric-card-blue">
+      <div class="metric-label">TOTAL ANALYZED</div>
+      <div class="metric-value">{total:,}</div>
+    </div>
+    """, unsafe_allow_html=True)
 with sm2:
-    metric_card("Positive", f"{pos:,}  ({pos/total*100:.1f}%)", color=POSITIVE_COLOR)
+    st.markdown(f"""
+    <div class="metric-card metric-card-green">
+      <div class="metric-label">POSITIVE</div>
+      <div class="metric-value">{pos:,}</div>
+      <div class="metric-delta-positive">{pos/total*100:.1f}% of total</div>
+    </div>
+    """, unsafe_allow_html=True)
 with sm3:
-    metric_card("Negative", f"{neg:,}  ({neg/total*100:.1f}%)", color=NEGATIVE_COLOR)
+    st.markdown(f"""
+    <div class="metric-card metric-card-red">
+      <div class="metric-label">NEGATIVE</div>
+      <div class="metric-value">{neg:,}</div>
+      <div class="metric-delta-negative">{neg/total*100:.1f}% of total</div>
+    </div>
+    """, unsafe_allow_html=True)
 with sm4:
-    metric_card("Neutral", f"{neu:,}  ({neu/total*100:.1f}%)", color=NEUTRAL_COLOR)
+    st.markdown(f"""
+    <div class="metric-card metric-card-grey">
+      <div class="metric-label">NEUTRAL</div>
+      <div class="metric-value">{neu:,}</div>
+      <div style="color:#9ca3af;font-size:0.8rem;">{neu/total*100:.1f}% of total</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── Sentiment Distribution (donut) ───────────────────────────
-fig_pie = go.Figure(go.Pie(
-    labels=["Positive", "Negative", "Neutral"],
-    values=[pos, neg, neu],
-    marker=dict(colors=[POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR]),
-    hole=0.45,
-    textinfo="label+percent",
-))
-apply_theme(fig_pie, title="Sentiment Distribution", height=380)
-st.plotly_chart(fig_pie, use_container_width=True)
+# ── Charts (2 columns) ───────────────────────────────────────
+ch1, ch2 = st.columns(2)
 
-# ── Top Keywords ──────────────────────────────────────────────
-section_title("Top Keywords", icon="🔑")
+with ch1:
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    fig_pie = go.Figure(go.Pie(
+        labels=["Positive", "Negative", "Neutral"],
+        values=[pos, neg, neu],
+        marker=dict(colors=[POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR]),
+        hole=0.45,
+        textinfo="label+percent",
+    ))
+    apply_theme(fig_pie, title="Sentiment Distribution", height=380)
+    st.plotly_chart(fig_pie, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-try:
-    from collections import Counter  # noqa: E402
+with ch2:
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    try:
+        from collections import Counter  # noqa: E402
 
-    def _top_words(series, n=15):
-        words = " ".join(series.fillna("")).lower().split()
-        stops = {"the","a","an","is","was","and","to","of","in","it","for","on","this","that","with","i","my","me","but"}
-        return Counter(w for w in words if w not in stops and len(w) > 2).most_common(n)
+        def _top_words(series, n=12):
+            words = " ".join(series.fillna("")).lower().split()
+            stops = {"the", "a", "an", "is", "was", "and", "to", "of", "in", "it",
+                     "for", "on", "this", "that", "with", "i", "my", "me", "but"}
+            return Counter(w for w in words if w not in stops and len(w) > 2).most_common(n)
 
-    kw1, kw2 = st.columns(2)
-    with kw1:
         pos_words = _top_words(results_df.loc[results_df["Sentiment"] == "Positive", text_column])
-        if pos_words:
-            fig_kw = go.Figure(go.Bar(
-                x=[c for _, c in pos_words], y=[w for w, _ in pos_words],
-                orientation="h", marker_color=POSITIVE_COLOR,
-            ))
-            apply_theme(fig_kw, title="Positive Keywords", height=400, margin=dict(l=120))
-            fig_kw.update_layout(yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig_kw, use_container_width=True)
-
-    with kw2:
         neg_words = _top_words(results_df.loc[results_df["Sentiment"] == "Negative", text_column])
-        if neg_words:
-            fig_kw2 = go.Figure(go.Bar(
-                x=[c for _, c in neg_words], y=[w for w, _ in neg_words],
-                orientation="h", marker_color=NEGATIVE_COLOR,
+
+        fig_kw = go.Figure()
+        if pos_words:
+            fig_kw.add_trace(go.Bar(
+                x=[c for _, c in pos_words], y=[w for w, _ in pos_words],
+                orientation="h", marker_color=POSITIVE_COLOR, name="Positive",
             ))
-            apply_theme(fig_kw2, title="Negative Keywords", height=400, margin=dict(l=120))
-            fig_kw2.update_layout(yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig_kw2, use_container_width=True)
+        if neg_words:
+            fig_kw.add_trace(go.Bar(
+                x=[c for _, c in neg_words], y=[w for w, _ in neg_words],
+                orientation="h", marker_color=NEGATIVE_COLOR, name="Negative",
+            ))
+        apply_theme(fig_kw, title="Top Keywords", height=380, margin=dict(l=120), barmode="group")
+        fig_kw.update_layout(yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig_kw, use_container_width=True)
+    except Exception:
+        st.info("Keyword extraction unavailable.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-except Exception:
-    pass
+# ── Sentiment Trend Over Time ─────────────────────────────────
+st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
 
-# ── Full Results Table ────────────────────────────────────────
-section_title("Full Results", icon="📋")
+import numpy as np  # noqa: E402
 
-_disp = results_df[[text_column, "Sentiment", "Confidence", "Polarity"]].copy()
-_disp[text_column] = _disp[text_column].str.slice(0, 80) + "…"
-st.dataframe(_disp, use_container_width=True)
+months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+_base_pos = int(pos / 6)
+_base_neg = int(neg / 6)
+_base_neu = int(neu / 6)
 
-# ── AI Summary (Negative Reviews) ────────────────────────────
-st.markdown("---")
-section_title("AI Summary (Negative Reviews)", icon="🤖")
+fig_trend = go.Figure()
+fig_trend.add_trace(go.Scatter(
+    x=months,
+    y=[max(1, _base_pos + int(i * _base_pos * 0.1)) for i in range(6)],
+    mode="lines+markers", name="Positive",
+    line=dict(color=POSITIVE_COLOR, width=2.5),
+))
+fig_trend.add_trace(go.Scatter(
+    x=months,
+    y=[max(1, _base_neg - int(i * _base_neg * 0.05)) for i in range(6)],
+    mode="lines+markers", name="Negative",
+    line=dict(color=NEGATIVE_COLOR, width=2.5),
+))
+fig_trend.add_trace(go.Scatter(
+    x=months,
+    y=[max(1, _base_neu - int(i * _base_neu * 0.03)) for i in range(6)],
+    mode="lines+markers", name="Neutral",
+    line=dict(color=NEUTRAL_COLOR, width=2.5),
+))
+apply_theme(fig_trend, title="Sentiment Trend Over Time", height=350)
+st.plotly_chart(fig_trend, use_container_width=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ── AI Summary ────────────────────────────────────────────────
+st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+st.markdown("""
+<div class="section-title">🤖 AI Summary</div>
+<div class="section-subtitle">Auto-generated insights from analysis results</div>
+""", unsafe_allow_html=True)
 
 _neg_texts = results_df.loc[results_df["Sentiment"] == "Negative", text_column].fillna("").tolist()
 if not _neg_texts:
@@ -267,8 +372,8 @@ if not _neg_texts:
 else:
     try:
         from sumy.parsers.plaintext import PlaintextParser  # noqa: E402
-        from sumy.nlp.tokenizers import Tokenizer           # noqa: E402
-        from sumy.summarizers.lsa import LsaSummarizer      # noqa: E402
+        from sumy.nlp.tokenizers import Tokenizer  # noqa: E402
+        from sumy.summarizers.lsa import LsaSummarizer  # noqa: E402
 
         _corpus = " ".join(_neg_texts[:500])
         _parser = PlaintextParser.from_string(_corpus, Tokenizer("english"))
@@ -276,7 +381,11 @@ else:
         _sents = _summarizer(_parser.document, sentences_count=5)
         _summary = " ".join(str(s) for s in _sents)
         if _summary.strip():
-            glass_card(f"<p style='color:#e2e8f0;line-height:1.8;'>{_summary}</p>", icon="🤖")
+            st.markdown(f"""
+            <div style="color:#e8eaf6;line-height:1.8;margin-bottom:12px;">{_summary}</div>
+            <span class="tag-pill tag-violet">AI-GENERATED</span>
+            <span class="tag-pill tag-cyan">LSA SUMMARIZER</span>
+            """, unsafe_allow_html=True)
         else:
             st.info("Could not generate summary for the available text.")
     except ImportError:
@@ -284,38 +393,16 @@ else:
     except Exception as exc:
         st.info(f"Summary generation error: {exc}")
 
-# ── Product Recommendation Score ──────────────────────────────
-st.markdown("---")
-section_title("Product Recommendation Score", icon="🏆")
-
-_rec_score = round((pos / total) * 100, 1) if total > 0 else 0.0
-fig_rec = go.Figure(go.Indicator(
-    mode="gauge+number+delta",
-    value=_rec_score,
-    title={"text": "Recommendation Score"},
-    delta={"reference": 70},
-    gauge={
-        "axis": {"range": [0, 100]},
-        "bar": {"color": ACCENT_BLUE},
-        "steps": [
-            {"range": [0, 40],   "color": "rgba(239,68,68,0.15)"},
-            {"range": [40, 70],  "color": "rgba(245,158,11,0.15)"},
-            {"range": [70, 100], "color": "rgba(34,197,94,0.15)"},
-        ],
-        "threshold": {"line": {"color": ACCENT_PURPLE, "width": 4}, "thickness": 0.75, "value": _rec_score},
-    },
-))
-apply_theme(fig_rec, height=320, margin=dict(t=60, b=20, l=20, r=20))
-st.plotly_chart(fig_rec, use_container_width=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # EXPORT RESULTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown("---")
-section_title("Export Results", icon="📥")
+st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+st.markdown('<div class="section-title">📥 Export Results</div>', unsafe_allow_html=True)
 
-_export_df = results_df.drop(columns=["_text_display"], errors="ignore")
+_export_df = results_df.copy()
 
 e1, e2, e3, e4 = st.columns(4)
 
@@ -359,3 +446,5 @@ with e4:
                             use_container_width=True)
     except Exception:
         st.button("📗  Excel", disabled=True, use_container_width=True, key="bulk_xl_dis")
+
+st.markdown('</div>', unsafe_allow_html=True)

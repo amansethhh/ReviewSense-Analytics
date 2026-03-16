@@ -1,6 +1,7 @@
 """Multilingual Sentiment Analysis — ReviewSense Analytics."""
 
 import sys
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -21,59 +22,79 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── PHASE 0: Background flash prevention ────────────────────
+st.markdown("""
+<style>
+html, body,
+[data-testid="stApp"],
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+.main, .block-container {
+    background-color: #070b14 !important;
+    background: #070b14 !important;
+}
+[data-testid="stSidebarNav"],
+[data-testid="stSidebarNav"] * {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ── UI imports ───────────────────────────────────────────────
-from ui.sidebar import load_css, render_sidebar            # noqa: E402
-from ui.components import (                                 # noqa: E402
-    page_header, section_title, glass_card, language_card,
-    sentiment_badge, step_card, metric_card,
-    sentiment_badge_html,
-)
-from ui.theme import (                                      # noqa: E402
+from ui.sidebar import load_css, render_sidebar  # noqa: E402
+from ui.theme import (  # noqa: E402
     apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR,
     NEUTRAL_COLOR, ACCENT_BLUE, ACCENT_PURPLE,
     ACCENT_CYAN, CHART_PALETTE,
 )
-from src.config import MODEL_NAMES                          # noqa: E402
-from utils import load_model                            # noqa: E402
+from src.config import MODEL_NAMES  # noqa: E402
+from utils import load_model  # noqa: E402
 
 load_css()
 render_sidebar()
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# HEADER
+# PAGE HEADER
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-page_header(
-    "🌐",
-    "Multilingual Sentiment Analysis",
-    "Detect language, translate to English, and run sentiment analysis — all in one step",
-)
+st.markdown("""
+<div class="section-title">🌐 Multilingual Sentiment Analysis</div>
+<div class="section-subtitle">Detect language, translate to English, and run sentiment analysis — all in one step.</div>
+""", unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# SUPPORTED LANGUAGES
+# SUPPORTED LANGUAGES (8-column lang tiles)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-section_title("Supported Languages", icon="🗺️")
+st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+st.markdown("""
+<div class="section-title">🗺️ Supported Languages</div>
+<div class="section-subtitle">Auto-detection across 50+ languages</div>
+""", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-_LANGS = [
-    ("🇬🇧", "English",  "EN"),
-    ("🇮🇳", "Hindi",    "HI"),
-    ("🇮🇳", "Tamil",    "TA"),
-    ("🇮🇳", "Bengali",  "BN"),
-    ("🇪🇸", "Spanish",  "ES"),
-    ("🇫🇷", "French",   "FR"),
-    ("🇩🇪", "German",   "DE"),
-    ("🇨🇳", "Chinese",  "ZH-CN"),
+languages = [
+    ("🇬🇧", "GB", "English", "en"),
+    ("🇮🇳", "IN", "Hindi", "hi"),
+    ("🇮🇳", "IN", "Tamil", "ta"),
+    ("🇮🇳", "IN", "Bengali", "bn"),
+    ("🇪🇸", "ES", "Spanish", "es"),
+    ("🇫🇷", "FR", "French", "fr"),
+    ("🇩🇪", "DE", "German", "de"),
+    ("🇨🇳", "CN", "Chinese", "zh-cn"),
 ]
 
-_LANG_CODES = {"English": "en", "Hindi": "hi", "Tamil": "ta",
-               "Bengali": "bn", "Spanish": "es", "French": "fr",
-               "German": "de", "Chinese": "zh-cn"}
-
-lang_cols = st.columns(len(_LANGS))
-for col, (flag, name, code) in zip(lang_cols, _LANGS):
+cols = st.columns(8)
+for col, (flag, code, name, iso) in zip(cols, languages):
     with col:
-        language_card(flag, name, code)
+        st.markdown(f"""
+        <div class="lang-tile">
+          <div class="lang-flag">{flag}</div>
+          <div class="lang-code">{code}</div>
+          <div class="lang-name">{name}</div>
+          <div class="lang-iso">{iso}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -81,23 +102,23 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ANALYZE TEXT
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-section_title("Analyze Text", icon="✏️")
-
-# ── Page-level model selector ────────────────────────────────
-_mc1, _mc2 = st.columns([3, 1])
-with _mc2:
-    model_name = st.selectbox("Model", ["best"] + MODEL_NAMES, index=0, key="lang_model")
+st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+st.markdown("""
+<div class="section-title">✏️ Analyze Text</div>
+<div style="margin-bottom:12px;">
+  <span style="color:#22c55e;font-size:0.8rem;font-weight:600;">● Auto-detect enabled</span>
+</div>
+""", unsafe_allow_html=True)
 
 lang_input_text = st.text_area(
     "Review Text (any language)",
-    placeholder="La batterie dure longtemps, mais l'écran est trop sombre. Dans l'ensemble, c'est un bon produit.",
+    value="La batterie dure longtemps, mais l'écran est trop sombre. Dans l'ensemble, c'est un bon produit.",
     height=120,
     key="lang_input",
 )
 
-st.markdown("<div class='gradient-btn'>", unsafe_allow_html=True)
 analyze_btn = st.button("🌐  Detect & Analyze", use_container_width=True, key="lang_analyze")
-st.markdown("</div>", unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # DETECTION & ANALYSIS RESULT
@@ -108,30 +129,53 @@ if analyze_btn:
         st.warning("Please enter some text before analyzing.")
         st.stop()
 
-    with st.spinner("Detecting language and translating…"):
-        try:
-            from src.translator import detect_and_translate  # noqa: E402
-            translation_result = detect_and_translate(lang_input_text)
-        except Exception as exc:
-            st.error(f"Language detection / translation error: {exc}")
-            st.stop()
+    # ── Animated Loading ─────────────────────────────────────
+    spinner_ph = st.empty()
+    progress_ph = st.empty()
+
+    spinner_ph.markdown("""
+    <div class="analyze-loading">
+      <div class="pulse-ring"></div>
+      Detecting language and translating...
+    </div>
+    """, unsafe_allow_html=True)
+
+    bar = progress_ph.progress(0)
+    for pct in [15, 35, 55]:
+        time.sleep(0.12)
+        bar.progress(pct)
+
+    try:
+        from src.translator import detect_and_translate  # noqa: E402
+        translation_result = detect_and_translate(lang_input_text)
+    except Exception as exc:
+        spinner_ph.empty()
+        progress_ph.empty()
+        st.error(f"Language detection / translation error: {exc}")
+        st.stop()
+
+    for pct in [70, 85]:
+        time.sleep(0.1)
+        bar.progress(pct)
 
     detected_lang = translation_result["detected_language"]
-    lang_name     = translation_result["language_name"]
-    flag          = translation_result["flag_emoji"]
-    translated    = translation_result["translated_text"]
+    lang_name = translation_result["language_name"]
+    flag_emoji = translation_result["flag_emoji"]
+    translated = translation_result["translated_text"]
     was_translated = translation_result["was_translated"]
 
-    st.markdown("---")
-    section_title("Detection & Analysis Result", icon="🔍")
-
-    # ── Language + Sentiment side by side ─────────────────────
+    # ── Load model and predict ───────────────────────────────
+    model_name = st.session_state.get("selected_model", "best")
     try:
         model_pipeline, _ = load_model(model_name)
     except FileNotFoundError:
+        spinner_ph.empty()
+        progress_ph.empty()
         st.error("🚫 Model not found. Train first:\n\n```\npython src/train_classical.py\n```")
         st.stop()
     except Exception as exc:
+        spinner_ph.empty()
+        progress_ph.empty()
         st.error(f"Model loading error: {exc}")
         st.stop()
 
@@ -140,72 +184,170 @@ if analyze_btn:
     analysis_text = translated if was_translated else lang_input_text
     pred = predict_sentiment(analysis_text, model_pipeline)
 
-    label_name   = pred["label_name"]
-    confidence   = pred["confidence"]
-    polarity     = pred["polarity"]
+    bar.progress(100)
+    time.sleep(0.08)
+    spinner_ph.empty()
+    progress_ph.empty()
+
+    label_name = pred["label_name"]
+    confidence = pred["confidence"]
+    polarity = pred["polarity"]
     subjectivity = pred["subjectivity"]
 
+    # ── Detection Result (2 columns) ─────────────────────────
     det1, det2 = st.columns(2)
+
     with det1:
-        glass_card(
-            f"<div style='color:#64748b;font-size:0.7rem;text-transform:uppercase;"
-            f"letter-spacing:0.1em;font-weight:600;'>Detected Language</div>"
-            f"<div style='display:flex;align-items:center;gap:0.6rem;margin-top:0.5rem;'>"
-            f"<span style='font-size:2rem;'>{flag}</span>"
-            f"<div>"
-            f"<div style='font-size:1.3rem;font-weight:700;'>{lang_name}</div>"
-            f"<div style='color:#94a3b8;font-size:0.8rem;'>{detected_lang.upper()}</div>"
-            f"</div></div>"
-        )
+        translated_section = ""
+        if was_translated:
+            translated_section = f"""
+            <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(59,130,246,0.1);">
+              <div style="color:#7986cb;font-size:0.75rem;margin-bottom:8px;">Translated to English:</div>
+              <div style="color:#e8eaf6;font-size:0.9rem;line-height:1.6;background:rgba(13,17,23,0.5);
+                padding:12px;border-radius:8px;">{translated}</div>
+              <span class="tag-pill tag-teal" style="margin-top:8px;">Translated by GoogleTrans Engine</span>
+            </div>
+            """
+
+        st.markdown(f"""
+        <div class="glass-card">
+          <div style="color:#7986cb;font-size:0.7rem;text-transform:uppercase;
+            letter-spacing:1px;font-weight:600;">Detected Language</div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:12px;">
+            <span style="font-size:2.5rem;">{flag_emoji}</span>
+            <div>
+              <div style="font-size:1.4rem;font-weight:700;color:#e8eaf6;">{lang_name}</div>
+              <div style="display:flex;gap:6px;margin-top:4px;">
+                <span class="tag-pill tag-cyan">{detected_lang.upper()}</span>
+                <span class="tag-pill tag-green">HIGH CONFIDENCE</span>
+              </div>
+            </div>
+          </div>
+          {translated_section}
+        </div>
+        """, unsafe_allow_html=True)
+
     with det2:
-        glass_card(
-            f"<div style='color:#64748b;font-size:0.7rem;text-transform:uppercase;"
-            f"letter-spacing:0.1em;font-weight:600;'>Sentiment Analysis Result</div>"
-            f"<div style='margin-top:0.6rem;'>{sentiment_badge_html(label_name)}</div>"
-        )
+        badge_class = {
+            "Positive": "badge-positive",
+            "Negative": "badge-negative",
+            "Neutral": "badge-neutral",
+        }.get(label_name, "badge-neutral")
+        badge_display = {
+            "Positive": "✅ Positive",
+            "Negative": "❌ Negative",
+            "Neutral": "◼ Neutral",
+        }.get(label_name, label_name)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="glass-card">
+          <div style="color:#7986cb;font-size:0.7rem;text-transform:uppercase;
+            letter-spacing:1px;font-weight:600;">Sentiment Analysis Result</div>
+          <div style="margin-top:16px;margin-bottom:20px;">
+            <span class="{badge_class}" style="font-size:1.3rem;padding:10px 28px;">{badge_display}</span>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # ── Metrics ──────────────────────────────────────────────
-    rm1, rm2, rm3 = st.columns(3)
-    rm1.metric("🎯 Confidence", f"{confidence * 100:.1f}%")
-    rm2.metric("📈 Polarity", f"{polarity:.3f}")
-    rm3.metric("💭 Subjectivity", f"{subjectivity:.3f}")
-    st.progress(float(confidence), text=f"Model confidence: {confidence*100:.1f}%")
+        # Metrics with progress bars
+        st.markdown(f"""
+        <div class="metric-card metric-card-cyan" style="margin-top:8px;">
+          <div class="metric-label">CONFIDENCE</div>
+          <div class="metric-value">{confidence*100:.1f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.progress(float(confidence))
 
-    # ── Original vs Translated ───────────────────────────────
-    if was_translated:
-        st.markdown("<br>", unsafe_allow_html=True)
-        t1, t2 = st.columns(2)
-        with t1:
-            st.markdown("**Original Text**")
-            glass_card(f"<p style='color:#94a3b8;line-height:1.7;'>{lang_input_text}</p>")
-        with t2:
-            st.markdown("**Translated to English**")
-            glass_card(f"<p style='color:#e2e8f0;line-height:1.7;'>{translated}</p>")
+        st.markdown(f"""
+        <div class="metric-card metric-card-blue" style="margin-top:8px;">
+          <div class="metric-label">POLARITY</div>
+          <div class="metric-value">{polarity:.3f}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # ── Processing Pipeline Visualization ────────────────────
-    st.markdown("---")
-    section_title("Processing Pipeline", icon="⚙️")
+        st.markdown(f"""
+        <div class="metric-card metric-card-violet" style="margin-top:8px;">
+          <div class="metric-label">SUBJECTIVITY</div>
+          <div class="metric-value">{subjectivity:.3f}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    pp1, pp2, pp3, pp4, pp5 = st.columns(5)
-    with pp1: step_card(1, "Input Text")
-    with pp2: step_card(2, "Language Detection")
-    with pp3: step_card(3, "Translation")
-    with pp4: step_card(4, "Sentiment Analysis")
-    with pp5: step_card(5, "Explanation")
+    # ── Pipeline Visualization ───────────────────────────────
+    st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="section-title">🔄 Processing Pipeline</div>
+    <div class="section-subtitle">End-to-end multilingual analysis flow</div>
+    """, unsafe_allow_html=True)
+
+    steps = [
+        ("📥", "Input", "Raw text"),
+        ("🔍", "Detect", "Language ID"),
+        ("🌐", "Translate", "To English"),
+        ("🧠", "Analyze", "NLP Model"),
+        ("📊", "Result", "Sentiment out"),
+    ]
+
+    pp_cols = st.columns(len(steps) * 2 - 1)
+    for i, (icon, label, sublabel) in enumerate(steps):
+        col_idx = i * 2
+        with pp_cols[col_idx]:
+            st.markdown(f"""
+            <div class="pipeline-step completed">
+              <div class="pipeline-icon">{icon}</div>
+              <div class="pipeline-label">{label}</div>
+              <div class="pipeline-sublabel">{sublabel}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        if i < len(steps) - 1:
+            with pp_cols[col_idx + 1]:
+                st.markdown("""
+                <div style="display:flex;align-items:center;justify-content:center;
+                  height:100%;color:#3b82f6;font-size:1.2rem;">→</div>
+                """, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ── LIME Explanation ─────────────────────────────────────
+    st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="section-title">🔍 Word-Level Explanation (Translated Text)</div>
+    <div class="section-subtitle">LIME applied to English translation</div>
+    """, unsafe_allow_html=True)
+
+    try:
+        from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
+        import plotly.graph_objects as go  # noqa: E402
+
+        word_weights = explain_prediction(analysis_text, model_pipeline, num_features=10)
+        highlighted = highlight_text_html(analysis_text, word_weights)
+
+        st.markdown("**Highlighted text** *(green = supports prediction, red = opposes)*", unsafe_allow_html=True)
+        st.markdown(highlighted, unsafe_allow_html=True)
+
+        if word_weights:
+            words = [w for w, _ in word_weights]
+            weights = [v for _, v in word_weights]
+            colors = [POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR for v in weights]
+
+            fig = go.Figure(go.Bar(x=weights, y=words, orientation="h", marker_color=colors))
+            apply_theme(fig, title="Top Feature Contributions", height=400, margin=dict(l=120))
+            fig.update_layout(xaxis_title="← Negative | Positive →", yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig, use_container_width=True)
+
+    except Exception as e:
+        st.info(f"LIME explanation unavailable: {e}")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # BATCH LANGUAGE ANALYSIS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown("---")
-section_title("Batch Language Analysis", icon="📂")
-st.markdown(
-    "<p style='color:#94a3b8;font-size:0.9rem;'>"
-    "Upload a CSV with non-English reviews. The app will detect language, translate, and analyze each row.</p>",
-    unsafe_allow_html=True,
-)
+st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+st.markdown("""
+<div class="section-title">📂 Batch Language Analysis</div>
+<div class="section-subtitle">Upload a CSV with non-English reviews for bulk translation and analysis</div>
+""", unsafe_allow_html=True)
 
 batch_file = st.file_uploader("Upload CSV (non-English reviews)", type=["csv"], key="lang_batch_upload")
 
@@ -216,6 +358,7 @@ if batch_file is not None:
         batch_df = pd.read_csv(batch_file)
     except Exception as exc:
         st.error(f"Could not read CSV: {exc}")
+        st.markdown('</div>', unsafe_allow_html=True)
         st.stop()
 
     st.dataframe(batch_df.head(5), use_container_width=True)
@@ -232,19 +375,28 @@ if batch_file is not None:
         index=batch_df.columns.tolist().index(_auto_col), key="lang_batch_col",
     )
 
-    st.markdown("<div class='gradient-btn'>", unsafe_allow_html=True)
     batch_btn = st.button("🌐  Translate & Analyze All", use_container_width=True, key="lang_batch_btn")
-    st.markdown("</div>", unsafe_allow_html=True)
 
     if batch_btn:
+        model_name = st.session_state.get("selected_model", "best")
         try:
             model_pipeline, _ = load_model(model_name)
         except Exception as exc:
             st.error(f"Model error: {exc}")
+            st.markdown('</div>', unsafe_allow_html=True)
             st.stop()
 
         from src.translator import detect_and_translate  # noqa: E402
-        from src.predict import predict_sentiment        # noqa: E402
+        from src.predict import predict_sentiment  # noqa: E402
+
+        # ── Animated Loading ─────────────────────────────────
+        batch_spinner = st.empty()
+        batch_spinner.markdown("""
+        <div class="analyze-loading">
+          <div class="pulse-ring"></div>
+          Translating and analyzing reviews...
+        </div>
+        """, unsafe_allow_html=True)
 
         texts = batch_df[batch_text_col].fillna("").astype(str).tolist()
         batch_results = []
@@ -255,44 +407,90 @@ if batch_file is not None:
             try:
                 tr = detect_and_translate(text)
                 at = tr["translated_text"] if tr["was_translated"] else tr["original_text"]
-                pred = predict_sentiment(at, model_pipeline)
+                pred_r = predict_sentiment(at, model_pipeline)
             except Exception:
                 tr = {"detected_language": "unknown", "language_name": "Unknown",
                       "flag_emoji": "🏳️", "translated_text": text, "was_translated": False}
-                pred = {"label_name": "Neutral", "confidence": 0.0, "polarity": 0.0, "subjectivity": 0.0}
+                pred_r = {"label_name": "Neutral", "confidence": 0.0, "polarity": 0.0, "subjectivity": 0.0}
 
             batch_results.append({
                 "Original": text[:80] + ("…" if len(text) > 80 else ""),
                 "Language": f"{tr['flag_emoji']} {tr['language_name']}",
-                "Translated": tr["translated_text"][:80] + ("…" if len(tr.get("translated_text","")) > 80 else ""),
-                "Sentiment": pred["label_name"],
-                "Confidence": f"{pred['confidence']*100:.1f}%",
-                "Polarity": round(pred["polarity"], 4),
+                "Translated": tr["translated_text"][:80] + ("…" if len(tr.get("translated_text", "")) > 80 else ""),
+                "Sentiment": pred_r["label_name"],
+                "Confidence": f"{pred_r['confidence'] * 100:.1f}%",
+                "Polarity": round(pred_r["polarity"], 4),
             })
 
             if i % max(1, n // 100) == 0 or i == n - 1:
                 prog.progress((i + 1) / n, text=f"Translating… {i + 1}/{n}")
 
+        batch_spinner.empty()
         prog.empty()
         out_df = pd.DataFrame(batch_results)
 
-        # ── Results ──────────────────────────────────────────
         st.dataframe(out_df, use_container_width=True)
 
         # ── Language Distribution Chart ──────────────────────
         import plotly.graph_objects as go  # noqa: E402
 
+        st.markdown('<div class="glass-card" style="margin-top:16px;">', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="section-title">📊 Language Distribution</div>
+        """, unsafe_allow_html=True)
+
         _lang_counts = out_df["Language"].value_counts()
+        _total_lang = _lang_counts.sum()
         fig_lang = go.Figure(go.Bar(
             x=_lang_counts.values, y=_lang_counts.index,
-            orientation="h", marker_color=CHART_PALETTE[:len(_lang_counts)],
+            orientation="h",
+            marker=dict(color=_lang_counts.values, colorscale=[[0, "#0d4a6b"], [1, "#00e5cc"]]),
+            text=[f"{v / _total_lang * 100:.1f}%" for v in _lang_counts.values],
+            textposition="auto",
         ))
-        apply_theme(fig_lang, title="Language Distribution", height=max(250, len(_lang_counts) * 45),
-                    margin=dict(l=140))
+        apply_theme(fig_lang, title="Language Distribution",
+                    height=max(250, len(_lang_counts) * 45), margin=dict(l=140))
         st.plotly_chart(fig_lang, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ── Summary KPIs ──────────────────────────────────────
+        _unique_langs = out_df["Language"].nunique()
+        _translated_count = len([r for r in batch_results if "…" not in r.get("Translated", r.get("Original", ""))])
+        _avg_conf = sum(float(r["Confidence"].replace("%", "")) for r in batch_results) / max(1, len(batch_results))
+
+        k1, k2, k3, k4 = st.columns(4)
+        with k1:
+            st.markdown(f"""
+            <div class="metric-card metric-card-cyan">
+              <div class="metric-label">TOTAL REVIEWS</div>
+              <div class="metric-value">{len(batch_results):,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with k2:
+            st.markdown(f"""
+            <div class="metric-card metric-card-teal">
+              <div class="metric-label">LANGUAGES DETECTED</div>
+              <div class="metric-value">{_unique_langs}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with k3:
+            st.markdown(f"""
+            <div class="metric-card metric-card-green">
+              <div class="metric-label">TRANSLATED</div>
+              <div class="metric-value">{len(batch_results):,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with k4:
+            st.markdown(f"""
+            <div class="metric-card metric-card-violet">
+              <div class="metric-label">AVG CONFIDENCE</div>
+              <div class="metric-value">{_avg_conf:.1f}%</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         # ── Export ───────────────────────────────────────────
-        section_title("Export Report", icon="📥")
+        st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">📥 Export Results</div>', unsafe_allow_html=True)
 
         ex1, ex2, ex3, ex4 = st.columns(4)
         with ex1:
@@ -301,22 +499,6 @@ if batch_file is not None:
                                 file_name="reviewsense_multilingual.csv",
                                 mime="text/csv", use_container_width=True)
         with ex2:
-            import json as _json  # noqa: E402
-            st.download_button("📋  JSON Export", data=out_df.to_json(orient="records", indent=2),
-                                file_name="reviewsense_multilingual.json",
-                                mime="application/json", use_container_width=True)
-        with ex3:
-            try:
-                import io  # noqa: E402
-                buf = io.BytesIO()
-                out_df.to_excel(buf, index=False, engine="openpyxl")
-                st.download_button("📗  Excel Workbook", data=buf.getvalue(),
-                                    file_name="reviewsense_multilingual.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True)
-            except Exception:
-                st.button("📗  Excel", disabled=True, use_container_width=True, key="lang_xl_dis")
-        with ex4:
             try:
                 from src.pdf_exporter import export_report  # noqa: E402
                 import tempfile, os  # noqa: E402
@@ -334,3 +516,23 @@ if batch_file is not None:
                         os.unlink(_tp)
             except Exception:
                 st.button("📄  PDF", disabled=True, use_container_width=True, key="lang_pdf_dis")
+        with ex3:
+            import json as _json  # noqa: E402
+            st.download_button("📋  JSON Export", data=out_df.to_json(orient="records", indent=2),
+                                file_name="reviewsense_multilingual.json",
+                                mime="application/json", use_container_width=True)
+        with ex4:
+            try:
+                import io  # noqa: E402
+                buf = io.BytesIO()
+                out_df.to_excel(buf, index=False, engine="openpyxl")
+                st.download_button("📗  Excel Workbook", data=buf.getvalue(),
+                                    file_name="reviewsense_multilingual.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True)
+            except Exception:
+                st.button("📗  Excel", disabled=True, use_container_width=True, key="lang_xl_dis")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
