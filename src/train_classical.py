@@ -22,17 +22,18 @@ from sklearn.svm import LinearSVC
 
 from src.config import MAX_FEATURES, MODELS_DIR, NGRAM_RANGE, RANDOM_STATE, REPORTS_DIR
 
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 MODELS_PATH = PROJECT_ROOT / MODELS_DIR
 REPORTS_PATH = PROJECT_ROOT / REPORTS_DIR
 FIGURES_PATH = REPORTS_PATH / "figures"
 
+
 CLASS_LABELS = [0, 1, 2]
 CLASS_NAMES = ["Negative", "Neutral", "Positive"]
 
 
-# Models now DO NOT contain TF-IDF
 MODELS = {
     "Naive Bayes": MultinomialNB(),
     "LinearSVC": LinearSVC(random_state=RANDOM_STATE, max_iter=2000),
@@ -57,7 +58,6 @@ def _load_numpy_array(file_path: Path) -> np.ndarray:
 
 
 def load_training_data():
-    """Load processed numpy arrays"""
 
     required_files = {
         "X_train": PROCESSED_DIR / "X_train.npy",
@@ -88,7 +88,7 @@ def save_confusion_matrix_png(cm: np.ndarray, model_name: str):
 
     output = FIGURES_PATH / f"cm_{_sanitize_model_name(model_name)}.png"
 
-    fig, ax = plt.subplots(figsize=(6,5))
+    fig, ax = plt.subplots(figsize=(6, 5))
     im = ax.imshow(cm, cmap="Blues")
 
     ax.set_xticks(range(len(CLASS_NAMES)), CLASS_NAMES)
@@ -96,7 +96,6 @@ def save_confusion_matrix_png(cm: np.ndarray, model_name: str):
 
     ax.set_xlabel("Predicted")
     ax.set_ylabel("True")
-
     ax.set_title(model_name)
 
     for i in range(cm.shape[0]):
@@ -126,10 +125,10 @@ def evaluate_model(model_name, model, X_test_vec, y_test):
 
     cm = confusion_matrix(y_test, y_pred, labels=CLASS_LABELS)
 
-    print("\n"+"="*80)
+    print("\n" + "=" * 80)
     print("Model:", model_name)
-    print("Accuracy:", round(acc,4))
-    print("Macro F1:", round(f1,4))
+    print("Accuracy:", round(acc, 4))
+    print("Macro F1:", round(f1, 4))
     print("Classification Report:")
     print(report)
 
@@ -142,35 +141,38 @@ def evaluate_model(model_name, model, X_test_vec, y_test):
         "confusion_matrix": cm.tolist(),
     }
 
-    # Compute micro-average OvR ROC curve
-    # Limit serialised FPR/TPR arrays to at most _ROC_MAX_POINTS to keep the JSON
-    # file size reasonable without losing meaningful curve resolution.
-    _ROC_MAX_POINTS = 300
     try:
         y_bin = label_binarize(y_test, classes=CLASS_LABELS)
+
         if hasattr(model, "predict_proba"):
-            scores = np.asarray(model.predict_proba(X_test_vec))
+            scores = model.predict_proba(X_test_vec)
+
         elif hasattr(model, "decision_function"):
-            raw = np.asarray(model.decision_function(X_test_vec))
+            raw = model.decision_function(X_test_vec)
+            raw = np.asarray(raw)
+
             if raw.ndim == 1:
                 raw = raw.reshape(-1, 1)
+
             shifted = raw - raw.max(axis=1, keepdims=True)
             exp_raw = np.exp(shifted)
             scores = exp_raw / exp_raw.sum(axis=1, keepdims=True)
+
         else:
             scores = None
 
         if scores is not None:
             fpr, tpr, _ = roc_curve(y_bin.ravel(), scores.ravel())
             roc_auc = float(auc(fpr, tpr))
-            step = max(1, len(fpr) // _ROC_MAX_POINTS)
+
             metrics["roc"] = {
-                "fpr": fpr[::step].tolist(),
-                "tpr": tpr[::step].tolist(),
+                "fpr": fpr.tolist(),
+                "tpr": tpr.tolist(),
                 "auc": roc_auc,
             }
-    except (ValueError, AttributeError, TypeError) as roc_err:
-        print(f"  [ROC] Skipped for {model_name}: {roc_err}")
+
+    except Exception:
+        pass
 
     return metrics
 
@@ -198,6 +200,9 @@ def train_all_models():
     best_model = None
     best_name = ""
 
+    MODELS_PATH.mkdir(parents=True, exist_ok=True)
+    REPORTS_PATH.mkdir(parents=True, exist_ok=True)
+
     for name, model in MODELS.items():
 
         start = time.time()
@@ -212,16 +217,27 @@ def train_all_models():
 
         results[name] = metrics
 
+        # Save individual model
+        model_file = MODELS_PATH / f"{_sanitize_model_name(name)}.pkl"
+        joblib.dump(model, model_file)
+
+        print(f"Saved model → {model_file.name}")
+
         if metrics["f1"] > best_f1:
             best_f1 = metrics["f1"]
             best_model = model
             best_name = name
 
-    MODELS_PATH.mkdir(parents=True, exist_ok=True)
-    REPORTS_PATH.mkdir(parents=True, exist_ok=True)
-
-    joblib.dump(best_model, MODELS_PATH / "best_model.pkl")
+    # Save vectorizer
     joblib.dump(vectorizer, MODELS_PATH / "tfidf_vectorizer.pkl")
+
+    # Save best model
+    joblib.dump(best_model, MODELS_PATH / "best_model.pkl")
+
+    # Save label map
+    label_map = {0: "Negative", 1: "Neutral", 2: "Positive"}
+    with open(MODELS_PATH / "label_map.json", "w") as f:
+        json.dump(label_map, f, indent=2)
 
     with open(REPORTS_PATH / "model_results.json", "w") as f:
         json.dump(results, f, indent=2)

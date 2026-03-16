@@ -10,22 +10,32 @@ import joblib
 import streamlit as st
 from sklearn.pipeline import Pipeline
 
-# Ensure project root is on sys.path so `src` package is importable.
+# Ensure project root is on sys.path
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 _CSS_PATH = Path(__file__).resolve().parent / "assets" / "style.css"
 
-# Absolute paths to model artifacts, resolved relative to this file so the
-# app works regardless of the working directory when Streamlit is launched.
 BASE_DIR = Path(__file__).resolve().parents[1]
-_MODEL_PATH = BASE_DIR / "models" / "classical" / "best_model.pkl"
-_VECTORIZER_PATH = BASE_DIR / "models" / "classical" / "tfidf_vectorizer.pkl"
+
+MODELS_DIR = BASE_DIR / "models" / "classical"
+
+_VECTOR_PATH = MODELS_DIR / "tfidf_vectorizer.pkl"
 
 
-def load_css() -> None:
-    """Inject the shared glassmorphism CSS into the Streamlit page."""
+# Map UI model names to actual saved filenames
+MODEL_FILE_MAP = {
+    "best": "best_model.pkl",
+    "Naive Bayes": "naive_bayes.pkl",
+    "LinearSVC": "linearsvc.pkl",
+    "Logistic Regression": "logistic_regression.pkl",
+    "Random Forest": "random_forest.pkl",
+}
+
+
+def load_css():
+    """Load custom CSS styling."""
     if _CSS_PATH.exists():
         css_text = _CSS_PATH.read_text(encoding="utf-8")
         st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
@@ -33,26 +43,15 @@ def load_css() -> None:
 
 @st.cache_resource
 def load_model(model_name: str = "best"):
-    """Load and cache a trained model pipeline by name.
-
-    For the default ``"best"`` model the function loads
-    ``models/classical/best_model.pkl`` directly using an absolute path
-    derived from this file's location, so it works regardless of the
-    directory from which Streamlit is launched.
-
-    If the saved artifact is already a :class:`sklearn.pipeline.Pipeline` it
-    is returned as-is; otherwise ``tfidf_vectorizer.pkl`` is loaded and a
-    Pipeline is assembled automatically.
-
-    Returns ``(model_pipeline, label_map)``.  Raises
-    :class:`FileNotFoundError` when the requested artifact does not exist.
-    """
+    """Load selected model and construct pipeline if needed."""
     from src.config import LABEL_MAP
 
-    if model_name in {"best", "best_model"}:
-        model_path = _MODEL_PATH
-    else:
-        model_path = BASE_DIR / "models" / "classical" / f"{model_name}.pkl"
+    if model_name not in MODEL_FILE_MAP:
+        raise ValueError(f"Unknown model: {model_name}")
+
+    model_file = MODEL_FILE_MAP[model_name]
+
+    model_path = MODELS_DIR / model_file
 
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
@@ -61,24 +60,31 @@ def load_model(model_name: str = "best"):
 
     if isinstance(model_artifact, Pipeline):
         model_pipeline = model_artifact
+
     else:
-        if not _VECTORIZER_PATH.exists():
-            raise FileNotFoundError(f"Vectorizer file not found: {_VECTORIZER_PATH}")
-        vectorizer = joblib.load(_VECTORIZER_PATH)
-        model_pipeline = Pipeline([("tfidf", vectorizer), ("clf", model_artifact)])
+        if not _VECTOR_PATH.exists():
+            raise FileNotFoundError(f"Vectorizer file not found: {_VECTOR_PATH}")
+
+        vectorizer = joblib.load(_VECTOR_PATH)
+
+        model_pipeline = Pipeline(
+            [
+                ("tfidf", vectorizer),
+                ("clf", model_artifact),
+            ]
+        )
 
     return model_pipeline, dict(LABEL_MAP)
 
 
-def render_metric_card(label: str, value: Any, icon: str = "") -> None:
-    """Render a styled metric card using st.metric with optional icon prefix."""
+def render_metric_card(label: str, value: Any, icon: str = ""):
     display_label = f"{icon} {label}".strip() if icon else label
     st.metric(display_label, value)
 
 
-def render_section_header(title: str, subtitle: str = "") -> None:
-    """Render a styled section header with an optional subtitle."""
+def render_section_header(title: str, subtitle: str = ""):
     st.markdown(f"<h2>{title}</h2>", unsafe_allow_html=True)
+
     if subtitle:
         st.markdown(
             f"<p style='color:#9e9eb8;margin-top:-0.5rem;'>{subtitle}</p>",
@@ -87,10 +93,10 @@ def render_section_header(title: str, subtitle: str = "") -> None:
 
 
 def render_sidebar(show_model_selector: bool = True) -> dict:
-    """Render the common sidebar and return selected options as a dict."""
     from src.config import DOMAINS, MODEL_NAMES
 
     with st.sidebar:
+
         st.markdown(
             "<h2 style='background:linear-gradient(90deg,#00e5ff,#b048ff,#ff2d87,#00e5ff);"
             "background-size:300% auto;-webkit-background-clip:text;"
@@ -99,6 +105,7 @@ def render_sidebar(show_model_selector: bool = True) -> dict:
             "🔍 ReviewSense</h2>",
             unsafe_allow_html=True,
         )
+
         st.markdown("*AI-Powered Sentiment Intelligence*")
         st.markdown("---")
 
@@ -108,9 +115,11 @@ def render_sidebar(show_model_selector: bool = True) -> dict:
         st.page_link("pages/02_Bulk_Analysis.py", label="📂 Bulk Analysis")
         st.page_link("pages/03_Model_Dashboard.py", label="📊 Model Dashboard")
         st.page_link("pages/04_Language_Analysis.py", label="🌐 Language Analysis")
+
         st.markdown("---")
 
         selected_model = "best"
+
         if show_model_selector:
             selected_model = st.selectbox(
                 "🤖 Model",
@@ -136,10 +145,12 @@ def render_sidebar(show_model_selector: bool = True) -> dict:
         )
 
         st.markdown("---")
+
         st.markdown("**👥 Team — Group 19**")
         st.markdown("• Aman Seth")
         st.markdown("• Anmol Bhatnagar")
         st.markdown("• Arjun Kapoor")
+
         st.caption("Thapar Institute of Engineering & Technology")
 
     return {
@@ -150,11 +161,13 @@ def render_sidebar(show_model_selector: bool = True) -> dict:
 
 
 def sentiment_badge_html(label_name: str) -> str:
-    """Return an HTML pill badge for the given sentiment label."""
+
     mapping = {
         "Positive": ("badge-positive", "✅ Positive"),
         "Negative": ("badge-negative", "❌ Negative"),
         "Neutral": ("badge-neutral", "🟡 Neutral"),
     }
+
     css_class, display = mapping.get(label_name, ("badge-neutral", f"🟡 {label_name}"))
+
     return f"<span class='{css_class}' style='font-size:1.4rem;padding:0.5rem 1.5rem;'>{display}</span>"
