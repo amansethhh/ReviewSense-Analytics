@@ -20,7 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── PHASE 0: Inject background immediately (no white flash) ─
+# ── Inject background immediately (no white flash) ──────────
 st.markdown("""
 <style>
 html, body,
@@ -59,26 +59,19 @@ if "hero_phrase_idx" not in st.session_state:
 
 _current_phrase = _PHRASES[st.session_state["hero_phrase_idx"] % len(_PHRASES)]
 
-st.markdown(
-    '<span class="hero-badge">✦ AI-POWERED SENTIMENT ENGINE</span>',
-    unsafe_allow_html=True,
-)
-st.markdown(
-    f'<div class="hero-title">{_current_phrase}<span class="cursor-blink">|</span></div>',
-    unsafe_allow_html=True,
-)
-st.markdown(
-    '<div class="hero-subtitle">'
-    "Harness the power of transformer-based NLP models to decode customer sentiment at scale. "
-    "Real-time predictions, multi-language support, and domain-specific fine-tuning — all in one platform."
-    "</div>",
-    unsafe_allow_html=True,
-)
+st.markdown(f"""
+<span class="hero-badge">✦ AI-POWERED SENTIMENT ENGINE</span>
+<div class="hero-title">{_current_phrase}<span class="cursor-blink">|</span></div>
+<div class="hero-subtitle">
+  Harness the power of transformer-based NLP models to decode customer sentiment at scale.
+  Real-time predictions, multi-language support, and domain-specific fine-tuning — all in one platform.
+</div>
+""", unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# KPI CARDS
+# KPI CARDS (Pattern A — pure HTML inside single call)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 _KPIs = [
@@ -102,17 +95,16 @@ for col, (label, value, delta, delta_type, color) in zip(
         </div>
         """, unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# CORE CAPABILITIES (2x2 Grid)
+# CORE CAPABILITIES (2x2 Grid) — Pattern A
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown(
-    '<div class="section-title">🚀 Core Capabilities</div>'
-    '<div class="section-subtitle">Enterprise-grade NLP analysis tools</div>',
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<div class="section-title">🚀 Core Capabilities</div>
+<div class="section-subtitle">Enterprise-grade NLP analysis tools</div>
+""", unsafe_allow_html=True)
 
 row1 = st.columns(2)
 row2 = st.columns(2)
@@ -177,22 +169,50 @@ with row2[1]:
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# QUICK ACTIONS
+# FIX 4 — QUICK ACTIONS (styled icon cards)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown(
-    '<div class="section-title">🎯 Quick Actions</div>'
-    '<div class="section-subtitle">Jump into any feature instantly</div>',
-    unsafe_allow_html=True,
-)
+st.markdown("""
+<div class="section-title">🚀 Quick Actions</div>
+<div class="section-subtitle" style="margin-bottom:16px;">
+  Jump into any feature instantly
+</div>
+""", unsafe_allow_html=True)
 
-q1, q2, q3 = st.columns(3)
-with q1:
-    st.page_link("pages/01_Live_Prediction.py", label="⚡ Try Live Prediction", use_container_width=True)
-with q2:
-    st.page_link("pages/02_Bulk_Analysis.py", label="📂 Upload Dataset", use_container_width=True)
-with q3:
-    st.page_link("pages/03_Model_Dashboard.py", label="📊 View Model Dashboard", use_container_width=True)
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.page_link("pages/01_Live_Prediction.py",
+        label="⚡ Try Live Prediction")
+    st.markdown("""
+    <div class="action-card">
+      <div class="action-icon action-icon-cyan">⚡</div>
+      <div>
+        <div class="action-label">Try Live Prediction</div>
+        <div class="action-sublabel">Analyze a review instantly</div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+with col2:
+    st.page_link("pages/02_Bulk_Analysis.py",
+        label="📂 Upload Dataset")
+    st.markdown("""
+    <div class="action-card">
+      <div class="action-icon action-icon-amber">📂</div>
+      <div>
+        <div class="action-label">Upload Dataset</div>
+        <div class="action-sublabel">Batch process thousands of reviews</div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+with col3:
+    st.page_link("pages/03_Model_Dashboard.py",
+        label="📊 View Model Dashboard")
+    st.markdown("""
+    <div class="action-card">
+      <div class="action-icon action-icon-violet">📊</div>
+      <div>
+        <div class="action-label">View Model Dashboard</div>
+        <div class="action-sublabel">Compare all trained classifiers</div>
+      </div>
+    </div>""", unsafe_allow_html=True)

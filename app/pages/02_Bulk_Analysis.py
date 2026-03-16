@@ -22,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── PHASE 0: Background flash prevention ────────────────────
+# ── Background flash prevention ─────────────────────────────
 st.markdown("""
 <style>
 html, body,
@@ -62,7 +62,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# HOW IT WORKS (4 step cards)
+# HOW IT WORKS (4 step cards — Pattern A)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 _STEPS = [
@@ -82,105 +82,143 @@ for col, (num, desc) in zip(s_cols, _STEPS):
         </div>
         """, unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# UPLOAD DATASET
+# FIX 6 — UPLOAD DATASET (upload zone redesign + Pattern B)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">📤 Upload Dataset</div>', unsafe_allow_html=True)
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">📤 Upload Dataset</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("Upload CSV file", type=["csv"], key="bulk_upload")
+    st.markdown("""
+    <div class="upload-zone-wrapper">
+      <div class="upload-zone-header">
+        <div class="upload-icon-circle">📂</div>
+        <div>
+          <div class="upload-text-primary">Drop your review dataset here</div>
+          <div class="upload-text-secondary">Drag and drop or click Browse to upload</div>
+        </div>
+      </div>
+      <div class="upload-badges">
+        <span class="upload-badge upload-badge-csv">CSV</span>
+        <span class="upload-badge upload-badge-excel">XLSX</span>
+        <span class="upload-badge upload-badge-limit">Max 200MB</span>
+        <span class="upload-badge upload-badge-limit">Min 1 Row</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-if uploaded_file is None:
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
-
-# ── Read CSV ─────────────────────────────────────────────────
-import pandas as pd  # noqa: E402
-
-try:
-    df = pd.read_csv(uploaded_file)
-except Exception as exc:
-    st.error(f"Could not read CSV: {exc}")
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
-
-_file_size = uploaded_file.size / 1024
-_size_label = f"{_file_size:.1f} KB" if _file_size < 1024 else f"{_file_size/1024:.1f} MB"
-
-st.markdown(f"""
-<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);
-  border-radius:12px;padding:16px;margin:12px 0;">
-  <span style="color:#22c55e;font-weight:700;">✅ File uploaded successfully</span>
-  <span style="color:#7986cb;margin-left:12px;">{uploaded_file.name} · {_size_label} · {len(df):,} rows</span>
-</div>
-<div style="display:flex;gap:8px;margin-top:8px;">
-  <span class="tag-pill tag-green">✅ Validated</span>
-  <span class="tag-pill tag-cyan">📄 CSV Format</span>
-  <span class="tag-pill tag-cyan">⚡ Ready</span>
-</div>
-""", unsafe_allow_html=True)
-
-st.dataframe(df.head(5), use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# COLUMN MAPPING
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">🗂️ Column Mapping</div>', unsafe_allow_html=True)
-st.markdown('<div class="section-subtitle">Select the column containing review text</div>', unsafe_allow_html=True)
-
-_TEXT_HINTS = ("text", "review", "comment", "sentence", "content", "description", "tweet")
-_str_cols = [c for c in df.columns if df[c].dtype == object]
-_auto_col = next(
-    (c for hint in _TEXT_HINTS for c in _str_cols if hint in c.lower()),
-    _str_cols[0] if _str_cols else df.columns[0],
-)
-
-cm1, cm2 = st.columns(2)
-with cm1:
-    text_column = st.selectbox(
-        "Review Column",
-        options=df.columns.tolist(),
-        index=df.columns.tolist().index(_auto_col),
-        key="bulk_text_col",
-    )
-with cm2:
-    domain_tag = st.selectbox(
-        "Domain Tag (optional)",
-        ["Auto-detect"] + DOMAINS,
-        index=0,
-        key="bulk_domain",
+    uploaded_file = st.file_uploader(
+        "", type=["csv", "xlsx"],
+        label_visibility="collapsed",
+        key="bulk_upload",
     )
 
-st.markdown('</div>', unsafe_allow_html=True)
+    if uploaded_file is None:
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+        st.stop()
+
+    # ── Read CSV ─────────────────────────────────────────────
+    import pandas as pd  # noqa: E402
+
+    try:
+        df = pd.read_csv(uploaded_file)
+    except Exception as exc:
+        st.error(f"Could not read CSV: {exc}")
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+        st.stop()
+
+    _file_size = uploaded_file.size / 1024
+    _size_label = f"{_file_size:.1f} KB" if _file_size < 1024 else f"{_file_size/1024:.1f} MB"
+
+    st.markdown(f"""
+    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);
+      border-radius:12px;padding:16px;margin:12px 0;">
+      <span style="color:#22c55e;font-weight:700;">✅ File uploaded successfully</span>
+      <span style="color:#7986cb;margin-left:12px;">{uploaded_file.name} · {_size_label} · {len(df):,} rows</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <span class="tag-pill tag-green">✅ Validated</span>
+      <span class="tag-pill tag-cyan">📄 CSV Format</span>
+      <span class="tag-pill tag-cyan">⚡ Ready</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.dataframe(df.head(5), use_container_width=True)
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ANALYSIS SETTINGS
+# COLUMN MAPPING — Pattern B
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">⚙️ Analysis Settings</div>', unsafe_allow_html=True)
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">🗂️ Column Mapping</div>
+      <div class="section-subtitle">Select the column containing review text</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-as1, as2, as3 = st.columns(3)
-with as1:
-    run_sentiment = st.checkbox("✅ Sentiment Analysis", value=True, key="bulk_sentiment")
-with as2:
-    run_aspect = st.checkbox("✅ Aspect Detection", value=True, key="bulk_aspect")
-with as3:
-    run_sarcasm = st.checkbox("☐ Sarcasm Flagging", value=False, key="bulk_sarcasm")
+    _TEXT_HINTS = ("text", "review", "comment", "sentence", "content", "description", "tweet")
+    _str_cols = [c for c in df.columns if df[c].dtype == object]
+    _auto_col = next(
+        (c for hint in _TEXT_HINTS for c in _str_cols if hint in c.lower()),
+        _str_cols[0] if _str_cols else df.columns[0],
+    )
 
-model_name = st.selectbox("Model", ["best"] + MODEL_NAMES, index=0, key="bulk_model")
+    cm1, cm2 = st.columns(2)
+    with cm1:
+        text_column = st.selectbox(
+            "Review Column",
+            options=df.columns.tolist(),
+            index=df.columns.tolist().index(_auto_col),
+            key="bulk_text_col",
+        )
+    with cm2:
+        domain_tag = st.selectbox(
+            "Domain Tag (optional)",
+            ["Auto-detect"] + DOMAINS,
+            index=0,
+            key="bulk_domain",
+        )
 
-if not st.button("🚀  Analyze All Reviews", use_container_width=True, key="bulk_analyze"):
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ANALYSIS SETTINGS — Pattern B
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">⚙️ Analysis Settings</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    as1, as2, as3 = st.columns(3)
+    with as1:
+        run_sentiment = st.checkbox("✅ Sentiment Analysis", value=True, key="bulk_sentiment")
+    with as2:
+        run_aspect = st.checkbox("✅ Aspect Detection", value=True, key="bulk_aspect")
+    with as3:
+        run_sarcasm = st.checkbox("☐ Sarcasm Flagging", value=False, key="bulk_sarcasm")
+
+    model_name = st.selectbox("Model", ["best"] + MODEL_NAMES, index=0, key="bulk_model")
+
+    if not st.button("🚀  Analyze All Reviews", use_container_width=True, key="bulk_analyze"):
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+        st.stop()
+
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 # ── Load model ───────────────────────────────────────────────
 try:
@@ -242,7 +280,7 @@ st.markdown("""
 <div class="section-subtitle">Analysis complete — summary statistics below</div>
 """, unsafe_allow_html=True)
 
-# ── 4 KPI Cards ──────────────────────────────────────────────
+# ── 4 KPI Cards (Pattern A) ─────────────────────────────────
 sm1, sm2, sm3, sm4 = st.columns(4)
 with sm1:
     st.markdown(f"""
@@ -276,94 +314,113 @@ with sm4:
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── Charts (2 columns) ───────────────────────────────────────
+# ── Charts (2 columns) — Pattern B ──────────────────────────
 ch1, ch2 = st.columns(2)
 
 with ch1:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    fig_pie = go.Figure(go.Pie(
-        labels=["Positive", "Negative", "Neutral"],
-        values=[pos, neg, neu],
-        marker=dict(colors=[POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR]),
-        hole=0.45,
-        textinfo="label+percent",
-    ))
-    apply_theme(fig_pie, title="Sentiment Distribution", height=380)
-    st.plotly_chart(fig_pie, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown("""
+        <div class="glass-card-header">
+          <div class="section-title">🍩 Sentiment Distribution</div>
+        </div>
+        """, unsafe_allow_html=True)
+        fig_pie = go.Figure(go.Pie(
+            labels=["Positive", "Negative", "Neutral"],
+            values=[pos, neg, neu],
+            marker=dict(colors=[POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR]),
+            hole=0.45,
+            textinfo="label+percent",
+        ))
+        apply_theme(fig_pie, title="Sentiment Distribution", height=380)
+        st.plotly_chart(fig_pie, use_container_width=True, key="bulk_pie")
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 with ch2:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    try:
-        from collections import Counter  # noqa: E402
+    with st.container():
+        st.markdown("""
+        <div class="glass-card-header">
+          <div class="section-title">🔑 Top Keywords</div>
+        </div>
+        """, unsafe_allow_html=True)
+        try:
+            from collections import Counter  # noqa: E402
 
-        def _top_words(series, n=12):
-            words = " ".join(series.fillna("")).lower().split()
-            stops = {"the", "a", "an", "is", "was", "and", "to", "of", "in", "it",
-                     "for", "on", "this", "that", "with", "i", "my", "me", "but"}
-            return Counter(w for w in words if w not in stops and len(w) > 2).most_common(n)
+            def _top_words(series, n=12):
+                words = " ".join(series.fillna("")).lower().split()
+                stops = {"the", "a", "an", "is", "was", "and", "to", "of", "in", "it",
+                         "for", "on", "this", "that", "with", "i", "my", "me", "but"}
+                return Counter(w for w in words if w not in stops and len(w) > 2).most_common(n)
 
-        pos_words = _top_words(results_df.loc[results_df["Sentiment"] == "Positive", text_column])
-        neg_words = _top_words(results_df.loc[results_df["Sentiment"] == "Negative", text_column])
+            pos_words = _top_words(results_df.loc[results_df["Sentiment"] == "Positive", text_column])
+            neg_words = _top_words(results_df.loc[results_df["Sentiment"] == "Negative", text_column])
 
-        fig_kw = go.Figure()
-        if pos_words:
-            fig_kw.add_trace(go.Bar(
-                x=[c for _, c in pos_words], y=[w for w, _ in pos_words],
-                orientation="h", marker_color=POSITIVE_COLOR, name="Positive",
-            ))
-        if neg_words:
-            fig_kw.add_trace(go.Bar(
-                x=[c for _, c in neg_words], y=[w for w, _ in neg_words],
-                orientation="h", marker_color=NEGATIVE_COLOR, name="Negative",
-            ))
-        apply_theme(fig_kw, title="Top Keywords", height=380, margin=dict(l=120), barmode="group")
-        fig_kw.update_layout(yaxis=dict(autorange="reversed"))
-        st.plotly_chart(fig_kw, use_container_width=True)
-    except Exception:
-        st.info("Keyword extraction unavailable.")
-    st.markdown('</div>', unsafe_allow_html=True)
+            fig_kw = go.Figure()
+            if pos_words:
+                fig_kw.add_trace(go.Bar(
+                    x=[c for _, c in pos_words], y=[w for w, _ in pos_words],
+                    orientation="h", marker_color=POSITIVE_COLOR, name="Positive",
+                ))
+            if neg_words:
+                fig_kw.add_trace(go.Bar(
+                    x=[c for _, c in neg_words], y=[w for w, _ in neg_words],
+                    orientation="h", marker_color=NEGATIVE_COLOR, name="Negative",
+                ))
+            apply_theme(fig_kw, title="Top Keywords", height=380, margin=dict(l=120), barmode="group")
+            fig_kw.update_layout(yaxis=dict(autorange="reversed"))
+            st.plotly_chart(fig_kw, use_container_width=True, key="bulk_kw")
+        except Exception:
+            st.info("Keyword extraction unavailable.")
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
-# ── Sentiment Trend Over Time ─────────────────────────────────
-st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
+# ── Sentiment Trend — Pattern B ──────────────────────────────
 import numpy as np  # noqa: E402
 
-months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
-_base_pos = int(pos / 6)
-_base_neg = int(neg / 6)
-_base_neu = int(neu / 6)
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">📈 Sentiment Trend Over Time</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-fig_trend = go.Figure()
-fig_trend.add_trace(go.Scatter(
-    x=months,
-    y=[max(1, _base_pos + int(i * _base_pos * 0.1)) for i in range(6)],
-    mode="lines+markers", name="Positive",
-    line=dict(color=POSITIVE_COLOR, width=2.5),
-))
-fig_trend.add_trace(go.Scatter(
-    x=months,
-    y=[max(1, _base_neg - int(i * _base_neg * 0.05)) for i in range(6)],
-    mode="lines+markers", name="Negative",
-    line=dict(color=NEGATIVE_COLOR, width=2.5),
-))
-fig_trend.add_trace(go.Scatter(
-    x=months,
-    y=[max(1, _base_neu - int(i * _base_neu * 0.03)) for i in range(6)],
-    mode="lines+markers", name="Neutral",
-    line=dict(color=NEUTRAL_COLOR, width=2.5),
-))
-apply_theme(fig_trend, title="Sentiment Trend Over Time", height=350)
-st.plotly_chart(fig_trend, use_container_width=True)
-st.markdown('</div>', unsafe_allow_html=True)
+    months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
+    _base_pos = int(pos / 6)
+    _base_neg = int(neg / 6)
+    _base_neu = int(neu / 6)
 
-# ── AI Summary ────────────────────────────────────────────────
-st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
+    fig_trend = go.Figure()
+    fig_trend.add_trace(go.Scatter(
+        x=months,
+        y=[max(1, _base_pos + int(i * _base_pos * 0.1)) for i in range(6)],
+        mode="lines+markers", name="Positive",
+        line=dict(color=POSITIVE_COLOR, width=2.5),
+    ))
+    fig_trend.add_trace(go.Scatter(
+        x=months,
+        y=[max(1, _base_neg - int(i * _base_neg * 0.05)) for i in range(6)],
+        mode="lines+markers", name="Negative",
+        line=dict(color=NEGATIVE_COLOR, width=2.5),
+    ))
+    fig_trend.add_trace(go.Scatter(
+        x=months,
+        y=[max(1, _base_neu - int(i * _base_neu * 0.03)) for i in range(6)],
+        mode="lines+markers", name="Neutral",
+        line=dict(color=NEUTRAL_COLOR, width=2.5),
+    ))
+    apply_theme(fig_trend, title="Sentiment Trend Over Time", height=350)
+    st.plotly_chart(fig_trend, use_container_width=True, key="bulk_trend")
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+# ── AI Summary (Pattern A — pure HTML content) ───────────────
 st.markdown("""
-<div class="section-title">🤖 AI Summary</div>
-<div class="section-subtitle">Auto-generated insights from analysis results</div>
+<div class="glass-card">
+  <div class="section-title">🤖 AI Summary</div>
+  <div class="section-subtitle">Auto-generated insights from analysis results</div>
 """, unsafe_allow_html=True)
 
 _neg_texts = results_df.loc[results_df["Sentiment"] == "Negative", text_column].fillna("").tolist()
@@ -395,56 +452,62 @@ else:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# EXPORT RESULTS
+# EXPORT RESULTS — Pattern B
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">📥 Export Results</div>', unsafe_allow_html=True)
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">📥 Export Results</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-_export_df = results_df.copy()
+    _export_df = results_df.copy()
 
-e1, e2, e3, e4 = st.columns(4)
+    e1, e2, e3, e4 = st.columns(4)
 
-with e1:
-    csv_bytes = _export_df.to_csv(index=False).encode("utf-8")
-    st.download_button("📊  CSV", data=csv_bytes, file_name="reviewsense_bulk.csv",
-                        mime="text/csv", use_container_width=True)
+    with e1:
+        csv_bytes = _export_df.to_csv(index=False).encode("utf-8")
+        st.download_button("📊  CSV", data=csv_bytes, file_name="reviewsense_bulk.csv",
+                            mime="text/csv", use_container_width=True)
 
-with e2:
-    try:
-        from src.pdf_exporter import export_report  # noqa: E402
-        import tempfile, os  # noqa: E402
-
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as _tmp:
-            _tmp_path = _tmp.name
+    with e2:
         try:
-            export_report({"bulk_results": _export_df.to_dict(orient="records")}, _tmp_path)
-            with open(_tmp_path, "rb") as f:
-                _pdf = f.read()
-            st.download_button("📄  PDF", data=_pdf, file_name="reviewsense_bulk.pdf",
-                                mime="application/pdf", use_container_width=True)
-        finally:
-            if os.path.exists(_tmp_path):
-                os.unlink(_tmp_path)
-    except Exception:
-        st.button("📄  PDF", disabled=True, use_container_width=True, key="bulk_pdf_dis")
+            from src.pdf_exporter import export_report  # noqa: E402
+            import tempfile, os  # noqa: E402
 
-with e3:
-    import json as _json  # noqa: E402
-    json_str = _export_df.to_json(orient="records", indent=2)
-    st.download_button("📋  JSON", data=json_str, file_name="reviewsense_bulk.json",
-                        mime="application/json", use_container_width=True)
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as _tmp:
+                _tmp_path = _tmp.name
+            try:
+                export_report({"bulk_results": _export_df.to_dict(orient="records")}, _tmp_path)
+                with open(_tmp_path, "rb") as f:
+                    _pdf = f.read()
+                st.download_button("📄  PDF", data=_pdf, file_name="reviewsense_bulk.pdf",
+                                    mime="application/pdf", use_container_width=True)
+            finally:
+                if os.path.exists(_tmp_path):
+                    os.unlink(_tmp_path)
+        except Exception:
+            st.button("📄  PDF", disabled=True, use_container_width=True, key="bulk_pdf_dis")
 
-with e4:
-    try:
-        import io  # noqa: E402
-        buf = io.BytesIO()
-        _export_df.to_excel(buf, index=False, engine="openpyxl")
-        st.download_button("📗  Excel", data=buf.getvalue(), file_name="reviewsense_bulk.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True)
-    except Exception:
-        st.button("📗  Excel", disabled=True, use_container_width=True, key="bulk_xl_dis")
+    with e3:
+        import json as _json  # noqa: E402
+        json_str = _export_df.to_json(orient="records", indent=2)
+        st.download_button("📋  JSON", data=json_str, file_name="reviewsense_bulk.json",
+                            mime="application/json", use_container_width=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+    with e4:
+        try:
+            import io  # noqa: E402
+            buf = io.BytesIO()
+            _export_df.to_excel(buf, index=False, engine="openpyxl")
+            st.download_button("📗  Excel", data=buf.getvalue(), file_name="reviewsense_bulk.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True)
+        except Exception:
+            st.button("📗  Excel", disabled=True, use_container_width=True, key="bulk_xl_dis")
+
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)

@@ -22,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── PHASE 0: Background flash prevention ────────────────────
+# ── Background flash prevention ─────────────────────────────
 st.markdown("""
 <style>
 html, body,
@@ -53,7 +53,7 @@ load_css()
 render_sidebar()
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PAGE HEADER
+# PAGE HEADER (Pattern A — self-closing HTML)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 st.markdown("""
@@ -62,44 +62,50 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# REVIEW INPUT (glass-card)
+# REVIEW INPUT — Pattern B (widgets inside st.container)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">📝 Review Input</div>', unsafe_allow_html=True)
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">📝 Review Input</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-review_text = st.text_area(
-    "Review Text",
-    placeholder="The food was absolutely amazing but the service was incredibly slow and disappointing.",
-    height=140,
-    key="live_review",
-)
-
-c1, c2, c3 = st.columns(3)
-with c1:
-    selected_model = st.selectbox(
-        "Model",
-        ["best"] + MODEL_NAMES,
-        index=0,
-        key="live_model",
-    )
-with c2:
-    domain_context = st.selectbox(
-        "Domain Context",
-        ["Auto-detect"] + DOMAINS,
-        index=0,
-        key="live_domain",
-    )
-with c3:
-    star_rating = st.select_slider(
-        "Star Rating",
-        options=["—", "★", "★★", "★★★", "★★★★", "★★★★★"],
-        value="—",
-        key="live_stars",
+    review_text = st.text_area(
+        "Review Text",
+        placeholder="The food was absolutely amazing but the service was incredibly slow and disappointing.",
+        height=140,
+        key="live_review",
     )
 
-analyze_clicked = st.button("⚡  Analyze Sentiment", use_container_width=True, key="live_analyze")
-st.markdown('</div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        selected_model = st.selectbox(
+            "Model",
+            ["best"] + MODEL_NAMES,
+            index=0,
+            key="live_model",
+        )
+    with c2:
+        domain_context = st.selectbox(
+            "Domain Context",
+            ["Auto-detect"] + DOMAINS,
+            index=0,
+            key="live_domain",
+        )
+    with c3:
+        star_rating = st.select_slider(
+            "Star Rating",
+            options=["—", "★", "★★", "★★★", "★★★★", "★★★★★"],
+            value="—",
+            key="live_stars",
+        )
+
+    analyze_clicked = st.button("⚡  Analyze Sentiment", use_container_width=True, key="live_analyze")
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # RESULTS
@@ -148,7 +154,7 @@ if analyze_clicked:
     polarity = float(result["polarity"])
     subjectivity = float(result["subjectivity"])
 
-    # ── Results Card ─────────────────────────────────────────
+    # ── Results Card (Pattern A — pure HTML) ─────────────────
     badge_class = {
         "Positive": "badge-positive",
         "Negative": "badge-negative",
@@ -195,80 +201,92 @@ if analyze_clicked:
 
     st.progress(confidence, text=f"Confidence Level — {confidence * 100:.1f}%")
 
-    # ── LIME Explanation ─────────────────────────────────────
-    st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="section-title">🔍 LIME Explanation</div>
-    <div class="section-subtitle">Local Interpretable Model Explanations</div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-    try:
-        from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
-        import plotly.graph_objects as go  # noqa: E402
+    # ── LIME Explanation — Pattern B ─────────────────────────
+    with st.container():
+        st.markdown("""
+        <div class="glass-card-header">
+          <div class="section-title">🔍 LIME Explanation</div>
+          <div class="section-subtitle">Local Interpretable Model Explanations</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        word_weights = explain_prediction(review_text, model_pipeline, num_features=10)
-        highlighted = highlight_text_html(review_text, word_weights)
+        try:
+            from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
+            import plotly.graph_objects as go  # noqa: E402
 
-        st.markdown("**Highlighted text** *(green = supports prediction, red = opposes)*", unsafe_allow_html=True)
-        st.markdown(highlighted, unsafe_allow_html=True)
+            word_weights = explain_prediction(review_text, model_pipeline, num_features=10)
+            highlighted = highlight_text_html(review_text, word_weights)
 
-        if word_weights:
-            words = [w for w, _ in word_weights]
-            weights = [v for _, v in word_weights]
-            colors = [POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR for v in weights]
+            st.markdown("**Highlighted text** *(green = supports prediction, red = opposes)*", unsafe_allow_html=True)
+            st.markdown(highlighted, unsafe_allow_html=True)
 
-            fig = go.Figure(go.Bar(x=weights, y=words, orientation="h", marker_color=colors))
-            apply_theme(fig, title="Top Feature Contributions", height=400, margin=dict(l=120))
-            fig.update_layout(xaxis_title="← Negative | Positive →", yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True)
+            if word_weights:
+                words = [w for w, _ in word_weights]
+                weights = [v for _, v in word_weights]
+                colors = [POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR for v in weights]
 
-    except Exception as e:
-        st.info(f"LIME explanation unavailable: {e}")
+                fig = go.Figure(go.Bar(x=weights, y=words, orientation="h", marker_color=colors))
+                apply_theme(fig, title="Top Feature Contributions", height=400, margin=dict(l=120))
+                fig.update_layout(xaxis_title="← Negative | Positive →", yaxis=dict(autorange="reversed"))
+                st.plotly_chart(fig, use_container_width=True, key="lime_bar")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.info(f"LIME explanation unavailable: {e}")
 
-    # ── ABSA ─────────────────────────────────────────────────
-    st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-    st.markdown("""
-    <div class="section-title">🔬 Aspect-Based Sentiment Analysis</div>
-    <div class="section-subtitle">Token-level aspect extraction and polarity scoring</div>
-    """, unsafe_allow_html=True)
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
-    try:
-        from src.absa import get_aspect_dataframe  # noqa: E402
-        import plotly.graph_objects as go  # noqa: E402
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-        aspect_df = get_aspect_dataframe(review_text)
+    # ── ABSA — Pattern B ─────────────────────────────────────
+    with st.container():
+        st.markdown("""
+        <div class="glass-card-header">
+          <div class="section-title">🔬 Aspect-Based Sentiment Analysis</div>
+          <div class="section-subtitle">Token-level aspect extraction and polarity scoring</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        if aspect_df.empty:
-            st.info("No distinct aspects detected in this review.")
-        else:
-            st.dataframe(aspect_df, use_container_width=True)
+        try:
+            from src.absa import get_aspect_dataframe  # noqa: E402
+            import plotly.graph_objects as go  # noqa: E402
 
-            colors = [
-                POSITIVE_COLOR if p > 0.1 else NEGATIVE_COLOR if p < -0.1 else NEUTRAL_COLOR
-                for p in aspect_df["Polarity"]
-            ]
-            fig = go.Figure(go.Bar(
-                x=aspect_df["Polarity"], y=aspect_df["Aspect"],
-                orientation="h", marker_color=colors,
-            ))
-            apply_theme(fig, title="Aspect Polarity", height=max(300, len(aspect_df) * 40),
-                        margin=dict(l=180))
-            fig.update_layout(xaxis_title="Polarity", yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True)
+            aspect_df = get_aspect_dataframe(review_text)
 
-    except Exception as e:
-        st.info(f"Aspect analysis unavailable: {e}")
+            if aspect_df.empty:
+                st.info("No distinct aspects detected in this review.")
+            else:
+                st.dataframe(aspect_df, use_container_width=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+                colors = [
+                    POSITIVE_COLOR if p > 0.1 else NEGATIVE_COLOR if p < -0.1 else NEUTRAL_COLOR
+                    for p in aspect_df["Polarity"]
+                ]
+                fig = go.Figure(go.Bar(
+                    x=aspect_df["Polarity"], y=aspect_df["Aspect"],
+                    orientation="h", marker_color=colors,
+                ))
+                apply_theme(fig, title="Aspect Polarity", height=max(300, len(aspect_df) * 40),
+                            margin=dict(l=180))
+                fig.update_layout(xaxis_title="Polarity", yaxis=dict(autorange="reversed"))
+                st.plotly_chart(fig, use_container_width=True, key="absa_bar")
+
+        except Exception as e:
+            st.info(f"Aspect analysis unavailable: {e}")
+
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
     # ── Sarcasm Detection + Polarity Gauge (2-column) ────────
     sarc_col, gauge_col = st.columns(2)
 
     with sarc_col:
-        st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">🎭 Sarcasm Detection</div>', unsafe_allow_html=True)
+        st.markdown("""
+        <div class="glass-card">
+          <div class="section-title">🎭 Sarcasm Detection</div>
+        """, unsafe_allow_html=True)
 
         try:
             from src.sarcasm_detector import detect_sarcasm  # noqa: E402
@@ -279,32 +297,31 @@ if analyze_clicked:
 
             if sarc["is_sarcastic"]:
                 st.markdown(f"""
-                <div style="margin-top:12px;">
                   <span class="tag-pill tag-amber" style="font-size:0.85rem;padding:6px 16px;">⚠️ SARCASM DETECTED</span>
                   <div style="margin-top:12px;color:#7986cb;font-size:0.9rem;">
                     <strong>Reason:</strong> {sarc['reason']}<br>
                     <strong>Irony Score:</strong> {sarc['confidence']*100:.0f}%
                   </div>
-                </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div style="margin-top:12px;">
                   <span class="tag-pill tag-green" style="font-size:0.85rem;padding:6px 16px;">✅ NO SARCASM</span>
                   <div style="margin-top:8px;color:#7986cb;font-size:0.9rem;">No sarcasm indicators detected.</div>
-                </div>
                 """, unsafe_allow_html=True)
 
         except Exception as e:
-            st.info(f"Sarcasm detection unavailable: {e}")
+            st.markdown(f'<div style="color:#7986cb;">Sarcasm detection unavailable: {e}</div>', unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
 
     with gauge_col:
-        st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">📈 Polarity Gauge</div>', unsafe_allow_html=True)
-
         import plotly.graph_objects as go  # noqa: E402
+
+        st.markdown("""
+        <div class="glass-card">
+          <div class="section-title">📈 Polarity Gauge</div>
+        </div>
+        """, unsafe_allow_html=True)
 
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
@@ -321,60 +338,65 @@ if analyze_clicked:
             },
         ))
         apply_theme(fig_gauge, height=280, margin=dict(t=60, b=20, l=20, r=20))
-        st.plotly_chart(fig_gauge, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.plotly_chart(fig_gauge, use_container_width=True, key="polarity_gauge")
 
-    # ── Export Options ────────────────────────────────────────
-    st.markdown('<div class="glass-card" style="margin-top:20px;">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">📥 Export Results</div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-    import json as _json  # noqa: E402
+    # ── Export Options — Pattern B ────────────────────────────
+    with st.container():
+        st.markdown("""
+        <div class="glass-card-header">
+          <div class="section-title">📥 Export Results</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    _export_data = {
-        "text": review_text,
-        "sentiment": label_name,
-        "confidence": round(confidence, 4),
-        "polarity": round(polarity, 4),
-        "subjectivity": round(subjectivity, 4),
-    }
+        import json as _json  # noqa: E402
 
-    e1, e2, e3 = st.columns(3)
-    with e1:
-        st.download_button(
-            "📊  Download CSV",
-            data=f"text,sentiment,confidence,polarity,subjectivity\n"
-                 f"\"{review_text}\",{label_name},{confidence:.4f},{polarity:.4f},{subjectivity:.4f}",
-            file_name="reviewsense_result.csv", mime="text/csv",
-            use_container_width=True, key="live_csv",
-        )
-    with e2:
-        st.download_button(
-            "📋  Download JSON",
-            data=_json.dumps(_export_data, indent=2),
-            file_name="reviewsense_result.json", mime="application/json",
-            use_container_width=True, key="live_json",
-        )
-    with e3:
-        try:
-            from src.pdf_exporter import export_report  # noqa: E402
-            import tempfile, os  # noqa: E402
+        _export_data = {
+            "text": review_text,
+            "sentiment": label_name,
+            "confidence": float(f"{confidence:.4f}"),
+            "polarity": float(f"{polarity:.4f}"),
+            "subjectivity": float(f"{subjectivity:.4f}"),
+        }
 
-            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as _tmp:
-                _tmp_path = _tmp.name
+        e1, e2, e3 = st.columns(3)
+        with e1:
+            st.download_button(
+                "📊  Download CSV",
+                data=f"text,sentiment,confidence,polarity,subjectivity\n"
+                     f"\"{review_text}\",{label_name},{confidence:.4f},{polarity:.4f},{subjectivity:.4f}",
+                file_name="reviewsense_result.csv", mime="text/csv",
+                use_container_width=True, key="live_csv",
+            )
+        with e2:
+            st.download_button(
+                "📋  Download JSON",
+                data=_json.dumps(_export_data, indent=2),
+                file_name="reviewsense_result.json", mime="application/json",
+                use_container_width=True, key="live_json",
+            )
+        with e3:
             try:
-                export_report({"single_result": _export_data}, _tmp_path)
-                with open(_tmp_path, "rb") as f:
-                    _pdf = f.read()
-                st.download_button(
-                    "📄  Download PDF",
-                    data=_pdf,
-                    file_name="reviewsense_result.pdf", mime="application/pdf",
-                    use_container_width=True, key="live_pdf",
-                )
-            finally:
-                if os.path.exists(_tmp_path):
-                    os.unlink(_tmp_path)
-        except Exception:
-            st.button("📄  Download PDF", disabled=True, use_container_width=True, key="live_pdf_dis")
+                from src.pdf_exporter import export_report  # noqa: E402
+                import tempfile, os  # noqa: E402
 
-    st.markdown('</div>', unsafe_allow_html=True)
+                with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as _tmp:
+                    _tmp_path = _tmp.name
+                try:
+                    export_report({"single_result": _export_data}, _tmp_path)
+                    with open(_tmp_path, "rb") as f:
+                        _pdf = f.read()
+                    st.download_button(
+                        "📄  Download PDF",
+                        data=_pdf,
+                        file_name="reviewsense_result.pdf", mime="application/pdf",
+                        use_container_width=True, key="live_pdf",
+                    )
+                finally:
+                    if os.path.exists(_tmp_path):
+                        os.unlink(_tmp_path)
+            except Exception:
+                st.button("📄  Download PDF", disabled=True, use_container_width=True, key="live_pdf_dis")
+
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)

@@ -1,6 +1,6 @@
 """Sidebar module — Navigation + Model Configuration.
 
-Provides render_sidebar() which all pages call after st.set_page_config().
+FIX 7: Correct order — Logo → System Online → Nav → Model Config → Footer
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ def load_css():
 
 
 def render_sidebar():
-    """Render sidebar with navigation, model config, and system status."""
+    """Render sidebar with logo, status, navigation, model config, footer."""
 
-    # STEP 1 — Kill native Streamlit nav (belt AND suspenders)
+    # 1. Kill native Streamlit nav
     st.markdown("""
     <style>
     [data-testid="stSidebarNav"],
@@ -31,10 +31,10 @@ def render_sidebar():
     </style>
     """, unsafe_allow_html=True)
 
-    # STEP 2 — Logo + branding
+    # 2. Logo + branding
     st.sidebar.markdown("""
-    <div style="padding:8px 0 20px 0; border-bottom:
-      1px solid rgba(59,130,246,0.1); margin-bottom:20px;">
+    <div style="padding:8px 0 12px 0; border-bottom:
+      1px solid rgba(59,130,246,0.1); margin-bottom:0;">
       <div style="display:flex; align-items:center; gap:10px;">
         <div style="width:36px;height:36px;border-radius:10px;
           background:linear-gradient(135deg,#3b82f6,#7b2fff);
@@ -50,7 +50,19 @@ def render_sidebar():
     </div>
     """, unsafe_allow_html=True)
 
-    # STEP 3 — Navigation (styled page links)
+    # 3. System Online badge (immediately below logo)
+    st.sidebar.markdown("""
+    <div style="padding:4px 0 16px 0;
+      border-bottom:1px solid rgba(59,130,246,0.1);
+      margin-bottom:16px;">
+      <span style="color:#22c55e;font-size:0.75rem;
+        font-weight:600;letter-spacing:0.3px;">
+        ● All Systems Operational
+      </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 4. Navigation
     st.sidebar.markdown(
         '<p style="font-size:0.7rem;font-weight:700;'
         'letter-spacing:1px;color:#4a5568;'
@@ -64,7 +76,7 @@ def render_sidebar():
     st.sidebar.page_link("pages/03_Model_Dashboard.py", label="📊  Model Dashboard")
     st.sidebar.page_link("pages/04_Language_Analysis.py", label="🌐  Language Analysis")
 
-    # STEP 4 — Model Configuration card
+    # 5. Model Configuration
     st.sidebar.markdown("""
     <div style="margin-top:24px;padding-top:16px;
       border-top:1px solid rgba(59,130,246,0.1);">
@@ -93,20 +105,11 @@ def render_sidebar():
         key="global_domain",
     )
 
-    # Store in session state for page access
     st.session_state["selected_model"] = selected_model
     st.session_state["confidence_threshold"] = confidence_threshold
     st.session_state["domain_filter"] = domain_filter
 
-    # STEP 5 — System status
-    st.sidebar.markdown("""
-    <div style="margin-top:16px;">
-      <span style="color:#22c55e;font-size:0.75rem;">
-        ● System Online</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # STEP 6 — Footer (NO college branding)
+    # 6. Footer (pinned to bottom, NO college branding)
     st.sidebar.markdown("""
     <div style="margin-top:40px;
       padding:0 16px;border-top:1px solid rgba(59,130,246,0.08);
