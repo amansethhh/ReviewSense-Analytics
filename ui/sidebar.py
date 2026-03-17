@@ -1,6 +1,6 @@
 """Sidebar module — Navigation + Model Configuration.
 
-FIX 7: Correct order — Logo → System Online → Nav → Model Config → Footer
+FIX 7: Correct order — Logo → System Online → Nav → Model Config → Footer (pinned)
 """
 
 from __future__ import annotations
@@ -109,16 +109,17 @@ def render_sidebar():
     st.session_state["confidence_threshold"] = confidence_threshold
     st.session_state["domain_filter"] = domain_filter
 
-    # 6. Footer (pinned to bottom, NO college branding)
+    # 6. Spacer — pushes footer to bottom via flex
+    st.sidebar.markdown(
+        '<div class="sidebar-footer-spacer"></div>',
+        unsafe_allow_html=True,
+    )
+
+    # 7. Footer — pinned to bottom
     st.sidebar.markdown("""
-    <div style="margin-top:40px;
-      padding:0 16px;border-top:1px solid rgba(59,130,246,0.08);
-      padding-top:16px;">
-      <div style="font-size:0.7rem;color:#4a5568;
-        text-align:center;line-height:1.6;">
-        ReviewSense Analytics<br>
-        AI Sentiment Intelligence Platform<br>
-        © 2026
-      </div>
+    <div class="sidebar-footer">
+      ReviewSense Analytics<br>
+      AI Sentiment Intelligence Platform<br>
+      © 2026
     </div>
     """, unsafe_allow_html=True)
