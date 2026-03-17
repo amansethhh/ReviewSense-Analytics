@@ -94,7 +94,10 @@ if analyze_clicked:
         st.warning("⚠️ Please enter some review text before analyzing.")
         st.stop()
 
-    from src.pipeline.inference import run_pipeline  # noqa: E402
+    from src.pipeline.inference import run_pipeline, preload_models  # noqa: E402
+
+    # Preload models eagerly (cached — instant on subsequent runs)
+    preload_models()
 
     # ── Spinning ring + progress bar ─────────────────────────
     status_ph = st.empty()

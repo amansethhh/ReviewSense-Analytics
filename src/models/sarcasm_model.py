@@ -1,6 +1,6 @@
 """Sarcasm/irony detection — cardiffnlp/twitter-roberta-base-irony.
 
-Real transformer-based irony detection, replacing rules-based approach.
+Real transformer-based irony detection with batch support.
 """
 
 from __future__ import annotations
@@ -59,3 +59,43 @@ def predict(text: str) -> dict:
         "reason": reason,
         "severity": "high" if irony_prob > 0.8 else "medium" if irony_prob > 0.5 else "low",
     }
+
+
+def predict_batch(texts: list[str], batch_size: int = 16) -> list[dict]:
+    """Batch sarcasm/irony detection — vectorized inference.
+
+    Processes texts in chunks of batch_size for memory efficiency.
+    """
+    if not texts:
+        return []
+
+    tokenizer, model = _load_irony_model()
+    clean_texts = [str(t or "").strip() or "empty" for t in texts]
+    results = []
+
+    for i in range(0, len(clean_texts), batch_size):
+        batch = clean_texts[i:i + batch_size]
+        inputs = tokenizer(
+            batch,
+            return_tensors="pt",
+            truncation=True,
+            padding=True,
+            max_length=512,
+        )
+
+        with torch.no_grad():
+            outputs = model(**inputs)
+
+        all_probs = torch.softmax(outputs.logits, dim=1).numpy()
+
+        for probs in all_probs:
+            irony_prob = float(probs[1])
+            is_sarcastic = irony_prob > 0.5
+            results.append({
+                "is_sarcastic": is_sarcastic,
+                "confidence": irony_prob,
+                "reason": f"Irony detected with {irony_prob*100:.1f}% probability." if is_sarcastic else "No sarcasm detected.",
+                "severity": "high" if irony_prob > 0.8 else "medium" if irony_prob > 0.5 else "low",
+            })
+
+    return results

@@ -60,10 +60,11 @@ def predict(text: str) -> dict:
     }
 
 
-def predict_batch(texts: list[str]) -> list[dict]:
+def predict_batch(texts: list[str], batch_size: int = 32) -> list[dict]:
     """Batch sentiment prediction for multiple texts.
 
-    Uses padded tokenization for efficient GPU/CPU inference.
+    Processes in chunks of batch_size (default 32) to prevent OOM
+    on large datasets while maintaining vectorized speed.
     """
     if not texts:
         return []
@@ -72,29 +73,32 @@ def predict_batch(texts: list[str]) -> list[dict]:
 
     # Clean inputs
     clean_texts = [str(t or "").strip() or "empty" for t in texts]
+    all_results = []
 
-    # Batch tokenize
-    inputs = tokenizer(
-        clean_texts,
-        return_tensors="pt",
-        truncation=True,
-        padding=True,
-        max_length=512,
-    )
+    for i in range(0, len(clean_texts), batch_size):
+        batch = clean_texts[i:i + batch_size]
 
-    with torch.no_grad():
-        outputs = model(**inputs)
+        inputs = tokenizer(
+            batch,
+            return_tensors="pt",
+            truncation=True,
+            padding=True,
+            max_length=512,
+        )
 
-    all_probs = torch.softmax(outputs.logits, dim=1).numpy()
-    results = []
+        with torch.no_grad():
+            outputs = model(**inputs)
 
-    for probs in all_probs:
-        pred_label = int(np.argmax(probs))
-        results.append({
-            "label": pred_label,
-            "label_name": ROBERTA_LABEL_MAP[pred_label],
-            "confidence": float(probs[pred_label]),
-            "scores": [float(p) for p in probs],
-        })
+        batch_probs = torch.softmax(outputs.logits, dim=1).numpy()
 
-    return results
+        for probs in batch_probs:
+            pred_label = int(np.argmax(probs))
+            all_results.append({
+                "label": pred_label,
+                "label_name": ROBERTA_LABEL_MAP[pred_label],
+                "confidence": float(probs[pred_label]),
+                "scores": [float(p) for p in probs],
+            })
+
+    return all_results
+

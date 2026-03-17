@@ -121,12 +121,12 @@ with st.container():
     cl,cr = st.columns([2,1])
     with cl:
         a1,a2,a3 = st.columns(3)
-        with a1: run_sentiment = st.checkbox("Sentiment", value=True, key="bulk_sentiment")
-        with a2: run_aspect = st.checkbox("Aspect", value=True, key="bulk_aspect")
-        with a3: run_sarcasm = st.checkbox("Sarcasm", value=False, key="bulk_sarcasm")
+        with a1: run_sentiment = st.toggle("Sentiment", value=True, key="bulk_sentiment")
+        with a2: run_aspect = st.toggle("Aspect", value=True, key="bulk_aspect")
+        with a3: run_sarcasm = st.toggle("Sarcasm", value=False, key="bulk_sarcasm")
     with cr:
         model_name = st.selectbox("Model", ["best"]+MODEL_NAMES, index=0, key="bulk_model")
-    # Dynamic badges reflecting actual checkbox state
+    # Dynamic badges reflecting actual toggle state
     _badges = []
     for _lbl, _on in [("Sentiment", run_sentiment), ("Aspect", run_aspect), ("Sarcasm", run_sarcasm)]:
         if _on:
@@ -138,30 +138,40 @@ with st.container():
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
+# Large dataset warning
+if len(df) > 1500:
+    st.warning(f"⚠️ Large dataset detected ({len(df):,} rows). Optimized batch mode enabled — processing may take a moment.")
+
 # ━━━ ANALYZE BUTTON ━━━
 analyze_clicked = st.button("🚀  Analyze All Reviews", use_container_width=True, key="bulk_analyze")
 
 if analyze_clicked:
-    try:
-        model_pipeline, label_map = load_model(model_name)
-    except Exception:
-        pass  # Transformer model loads lazily
+    from src.pipeline.inference import run_pipeline_batch, preload_models  # noqa: E402
 
-    from src.pipeline.inference import run_pipeline_batch  # noqa: E402
+    # Preload models eagerly (cached — instant on subsequent runs)
+    preload_models()
 
     sph = st.empty(); pph = st.empty()
     sph.markdown('<div class="analyze-loading"><div class="spin-ring"></div> Processing reviews with RoBERTa...</div>', unsafe_allow_html=True)
     texts = df[text_column].fillna("").astype(str).tolist()
 
     bar = pph.progress(0)
-    bar.progress(10, text="Tokenizing & translating...")
 
-    results = run_pipeline_batch(texts, enable_sarcasm=run_sarcasm, enable_aspects=run_aspect)
+    # Real-time progress callback from pipeline
+    def _progress(pct, msg):
+        bar.progress(min(pct, 100), text=msg)
 
-    bar.progress(100, text="Complete!")
-    time.sleep(0.3)
+    results = run_pipeline_batch(
+        texts,
+        enable_sarcasm=run_sarcasm,
+        enable_aspects=run_aspect,
+        progress_callback=_progress,
+    )
+
+    time.sleep(0.2)
     sph.empty(); pph.empty()
 
+    # In-place column assignment (no df.copy() — saves memory)
     rdf = df.copy()
     rdf["Sentiment"] = [r["sentiment"] for r in results]
     rdf["Confidence"] = [round(r["confidence"]*100,1) for r in results]
