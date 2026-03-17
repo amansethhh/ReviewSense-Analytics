@@ -29,6 +29,16 @@ from utils import load_model  # noqa: E402
 load_css()
 render_sidebar()
 
+# ━━━ SESSION STATE DEFAULTS ━━━
+for _key, _default in [
+    ("bulk_results_data", None),
+    ("bulk_results_df", None),
+    ("bulk_text_col_used", None),
+    ("bulk_sarcasm_was_on", False),
+]:
+    if _key not in st.session_state:
+        st.session_state[_key] = _default
+
 # ━━━ HEADER ━━━
 st.markdown("""<div class="glass-card">
   <div class="section-title">📂 Bulk Review Analysis</div>
@@ -63,6 +73,9 @@ with st.container():
     st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 if uploaded_file is None:
+    # Clear stale results when file is removed
+    st.session_state.bulk_results_data = None
+    st.session_state.bulk_results_df = None
     st.stop()
 
 import pandas as pd  # noqa: E402
@@ -102,57 +115,107 @@ with st.container():
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━ ANALYSIS SETTINGS (Pattern B) ━━━
+# Stable control panel — wrapped in container to prevent jumping
 with st.container():
     st.markdown('<div class="glass-card-header"><div class="section-title">⚙️ Analysis Settings</div><div class="section-subtitle">Choose modules and model</div></div>', unsafe_allow_html=True)
     cl,cr = st.columns([2,1])
     with cl:
         a1,a2,a3 = st.columns(3)
-        with a1: run_sentiment = st.checkbox("✅ Sentiment", value=True, key="bulk_sentiment")
-        with a2: run_aspect = st.checkbox("✅ Aspect", value=True, key="bulk_aspect")
-        with a3: run_sarcasm = st.checkbox("☐ Sarcasm", value=False, key="bulk_sarcasm")
+        with a1: run_sentiment = st.checkbox("Sentiment", value=True, key="bulk_sentiment")
+        with a2: run_aspect = st.checkbox("Aspect", value=True, key="bulk_aspect")
+        with a3: run_sarcasm = st.checkbox("Sarcasm", value=False, key="bulk_sarcasm")
     with cr:
         model_name = st.selectbox("Model", ["best"]+MODEL_NAMES, index=0, key="bulk_model")
+    # Dynamic badges reflecting actual checkbox state
+    _badges = []
+    for _lbl, _on in [("Sentiment", run_sentiment), ("Aspect", run_aspect), ("Sarcasm", run_sarcasm)]:
+        if _on:
+            _badges.append(f'<span class="tag-pill tag-green">✅ {_lbl}</span>')
+        else:
+            _badges.append(f'<span class="tag-pill" style="background:rgba(156,163,175,0.15);color:#9ca3af;">◻ {_lbl}</span>')
+    st.markdown(f'<div style="margin-top:4px;">{" ".join(_badges)}</div>', unsafe_allow_html=True)
     st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-if not st.button("🚀  Analyze All Reviews", use_container_width=True, key="bulk_analyze"):
+# ━━━ ANALYZE BUTTON ━━━
+analyze_clicked = st.button("🚀  Analyze All Reviews", use_container_width=True, key="bulk_analyze")
+
+if analyze_clicked:
+    try:
+        model_pipeline, label_map = load_model(model_name)
+    except Exception:
+        pass  # Transformer model loads lazily
+
+    from src.pipeline.inference import run_pipeline_batch  # noqa: E402
+
+    sph = st.empty(); pph = st.empty()
+    sph.markdown('<div class="analyze-loading"><div class="spin-ring"></div> Processing reviews with RoBERTa...</div>', unsafe_allow_html=True)
+    texts = df[text_column].fillna("").astype(str).tolist()
+
+    bar = pph.progress(0)
+    bar.progress(10, text="Tokenizing & translating...")
+
+    results = run_pipeline_batch(texts, enable_sarcasm=run_sarcasm, enable_aspects=run_aspect)
+
+    bar.progress(100, text="Complete!")
+    time.sleep(0.3)
+    sph.empty(); pph.empty()
+
+    rdf = df.copy()
+    rdf["Sentiment"] = [r["sentiment"] for r in results]
+    rdf["Confidence"] = [round(r["confidence"]*100,1) for r in results]
+    rdf["Polarity"] = [round(r["polarity"],4) for r in results]
+    rdf["Subjectivity"] = [round(r["subjectivity"],4) for r in results]
+    rdf["Language"] = [r.get("language_name", "Unknown") for r in results]
+    rdf["Sarcasm"] = [("Yes" if r.get("sarcasm", {}).get("is_sarcastic") else "No") if r.get("sarcasm") else "N/A" for r in results]
+
+    # Persist in session state — prevents flicker on rerender
+    st.session_state.bulk_results_data = results
+    st.session_state.bulk_results_df = rdf
+    st.session_state.bulk_text_col_used = text_column
+    st.session_state.bulk_sarcasm_was_on = run_sarcasm
+
+# ━━━ RENDER RESULTS FROM SESSION STATE (anti-flicker) ━━━
+rdf = st.session_state.bulk_results_df
+if rdf is None:
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
     st.stop()
 
-try:
-    model_pipeline, label_map = load_model(model_name)
-except FileNotFoundError:
-    st.error("🚫 Model not found. Train first."); st.stop()
-except Exception as exc:
-    st.error(f"Model error: {exc}"); st.stop()
-
-from src.predict import predict_sentiment  # noqa: E402
-
-sph = st.empty(); pph = st.empty()
-sph.markdown('<div class="analyze-loading"><div class="spin-ring"></div> Processing reviews...</div>', unsafe_allow_html=True)
-texts = df[text_column].fillna("").astype(str).tolist()
-results = []; n = len(texts); bar = pph.progress(0)
-for i, text in enumerate(texts):
-    results.append(predict_sentiment(text, model_pipeline))
-    if i % max(1,n//100)==0 or i==n-1: bar.progress((i+1)/n, text=f"Analyzing… {i+1}/{n}")
-sph.empty(); pph.empty()
-
-rdf = df.copy()
-rdf["Sentiment"] = [r["label_name"] for r in results]
-rdf["Confidence"] = [round(r["confidence"]*100,1) for r in results]
-rdf["Polarity"] = [round(r["polarity"],4) for r in results]
-rdf["Subjectivity"] = [round(r["subjectivity"],4) for r in results]
+text_column = st.session_state.bulk_text_col_used or text_column
+results = st.session_state.bulk_results_data or []
+sarcasm_was_on = st.session_state.bulk_sarcasm_was_on
 
 import plotly.graph_objects as go  # noqa: E402
-total=len(rdf); pos=(rdf["Sentiment"]=="Positive").sum(); neg=(rdf["Sentiment"]=="Negative").sum(); neu=(rdf["Sentiment"]=="Neutral").sum()
+total=len(rdf); pos=int((rdf["Sentiment"]=="Positive").sum()); neg=int((rdf["Sentiment"]=="Negative").sum())
+neu=int((rdf["Sentiment"]=="Neutral").sum()); unc=int((rdf["Sentiment"]=="Uncertain").sum())
+sarc_count = int((rdf["Sarcasm"]=="Yes").sum()) if sarcasm_was_on else 0
 
 st.markdown('<div class="glass-card"><div class="section-title">📊 Results Dashboard</div><div class="section-subtitle" style="margin-bottom:0;">Analysis complete</div></div>', unsafe_allow_html=True)
 
-s1,s2,s3,s4 = st.columns(4)
-with s1: st.markdown(f'<div class="metric-card metric-card-blue"><div class="metric-label">TOTAL</div><div class="metric-value">{total:,}</div></div>', unsafe_allow_html=True)
+# ── Metric cards — 5 columns if sarcasm was on, 4 otherwise ──
+if sarcasm_was_on:
+    s1,s2,s3,s4,s5 = st.columns(5)
+else:
+    s1,s2,s3,s4 = st.columns(4)
+
+with s1: st.markdown(f'<div class="metric-card metric-card-blue"><div class="metric-label">TOTAL</div><div class="metric-value">{total:,}</div><div style="color:var(--subtext);font-size:0.8rem;margin-top:4px;">{total:,} reviews</div></div>', unsafe_allow_html=True)
 with s2: st.markdown(f'<div class="metric-card metric-card-green"><div class="metric-label">POSITIVE</div><div class="metric-value">{pos:,}</div><div class="metric-delta-positive">{pos/total*100:.1f}%</div></div>', unsafe_allow_html=True)
 with s3: st.markdown(f'<div class="metric-card metric-card-red"><div class="metric-label">NEGATIVE</div><div class="metric-value">{neg:,}</div><div class="metric-delta-negative">{neg/total*100:.1f}%</div></div>', unsafe_allow_html=True)
-with s4: st.markdown(f'<div class="metric-card metric-card-grey"><div class="metric-label">NEUTRAL</div><div class="metric-value">{neu:,}</div><div style="color:#9ca3af;font-size:0.8rem;">{neu/total*100:.1f}%</div></div>', unsafe_allow_html=True)
+with s4: st.markdown(f'<div class="metric-card metric-card-grey"><div class="metric-label">NEUTRAL</div><div class="metric-value">{neu:,}</div><div style="color:var(--neutral);font-size:0.8rem;margin-top:4px;">{neu/total*100:.1f}%</div></div>', unsafe_allow_html=True)
+if sarcasm_was_on:
+    with s5: st.markdown(f'<div class="metric-card metric-card-amber"><div class="metric-label">SARCASM</div><div class="metric-value">{sarc_count:,}</div><div style="color:var(--amber);font-size:0.8rem;margin-top:4px;">{sarc_count/total*100:.1f}% detected</div></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+# ── Results dataframe ──
+display_cols = [c for c in ["Sentiment","Confidence","Polarity","Language","Sarcasm"] if c in rdf.columns]
+if text_column in rdf.columns:
+    display_cols = [text_column] + display_cols
+# Remove Sarcasm column if it wasn't enabled
+if not sarcasm_was_on and "Sarcasm" in display_cols:
+    display_cols.remove("Sarcasm")
+st.dataframe(rdf[display_cols], use_container_width=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
@@ -176,7 +239,7 @@ with c2:
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-months=["Oct","Nov","Dec","Jan","Feb","Mar"]; bp,bn,bne=int(pos/6),int(neg/6),int(neu/6)
+months=["Oct","Nov","Dec","Jan","Feb","Mar"]; bp,bn,bne=max(1,int(pos/6)),max(1,int(neg/6)),max(1,int(neu/6))
 ft=go.Figure()
 ft.add_trace(go.Scatter(x=months,y=[max(1,bp+int(i*bp*0.1)) for i in range(6)],mode="lines+markers",name="Positive",line=dict(color=POSITIVE_COLOR,width=2.5)))
 ft.add_trace(go.Scatter(x=months,y=[max(1,bn-int(i*bn*0.05)) for i in range(6)],mode="lines+markers",name="Negative",line=dict(color=NEGATIVE_COLOR,width=2.5)))

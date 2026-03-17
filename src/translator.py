@@ -1,84 +1,21 @@
-"""Language detection and translation helpers for ReviewSense Analytics."""
+"""Language detection and translation — backward-compatible wrapper.
+
+Delegates to src.models.language and src.models.translation.
+"""
 
 from __future__ import annotations
 
-from functools import lru_cache
-
-from langdetect import DetectorFactory, LangDetectException, detect
-
-DetectorFactory.seed = 42
-
-LANGUAGE_NAMES = {
-    "en": "English",
-    "hi": "Hindi",
-    "mr": "Marathi",
-    "ta": "Tamil",
-    "te": "Telugu",
-    "bn": "Bengali",
-    "gu": "Gujarati",
-    "pa": "Punjabi",
-    "ur": "Urdu",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "ru": "Russian",
-    "ar": "Arabic",
-    "zh-cn": "Chinese (Simplified)",
-    "zh-tw": "Chinese (Traditional)",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "unknown": "Unknown",
-}
-
-LANGUAGE_FLAGS = {
-    "en": "🇬🇧",
-    "hi": "🇮🇳",
-    "mr": "🇮🇳",
-    "ta": "🇮🇳",
-    "te": "🇮🇳",
-    "bn": "🇮🇳",
-    "gu": "🇮🇳",
-    "pa": "🇮🇳",
-    "ur": "🇵🇰",
-    "es": "🇪🇸",
-    "fr": "🇫🇷",
-    "de": "🇩🇪",
-    "it": "🇮🇹",
-    "pt": "🇵🇹",
-    "ru": "🇷🇺",
-    "ar": "🇸🇦",
-    "zh-cn": "🇨🇳",
-    "zh-tw": "🇹🇼",
-    "ja": "🇯🇵",
-    "ko": "🇰🇷",
-}
-
-
-@lru_cache(maxsize=1)
-def _get_translator():
-    try:
-        from googletrans import Translator
-    except Exception:
-        return None
-
-    try:
-        return Translator()
-    except Exception:
-        return None
-
-
-def _language_name(language_code: str) -> str:
-    return LANGUAGE_NAMES.get(language_code, language_code.title())
-
-
-def _language_flag(language_code: str) -> str:
-    return LANGUAGE_FLAGS.get(language_code, "🏳️")
+from src.models.language import LANGUAGE_NAMES, LANGUAGE_FLAGS
 
 
 def detect_and_translate(text):
-    """Detect language and translate non-English text to English."""
+    """Detect language and translate non-English text to English.
+
+    Uses Helsinki-NLP/opus-mt-mul-en for offline translation,
+    with googletrans as fallback.
+    """
+    from src.models.language import detect_language
+    from src.models.translation import translate_to_english
 
     original_text = str(text or "").strip()
     if not original_text:
@@ -91,35 +28,21 @@ def detect_and_translate(text):
             "flag_emoji": "🏳️",
         }
 
-    try:
-        detected_language = detect(original_text)
-    except LangDetectException:
-        detected_language = "unknown"
+    lang = detect_language(original_text)
+    lang_code = lang["code"]
 
     translated_text = original_text
     was_translated = False
 
-    if detected_language not in {"en", "unknown"}:
-        try:
-            translator = _get_translator()
-            if translator is None:
-                raise RuntimeError("Translation backend is unavailable.")
-
-            translated_text = translator.translate(
-                original_text,
-                src=detected_language,
-                dest="en",
-            ).text
-            was_translated = translated_text.strip() != original_text
-        except Exception:
-            translated_text = original_text
-            was_translated = False
+    if lang_code not in ("en", "unknown"):
+        translated_text = translate_to_english(original_text, src_lang=lang_code)
+        was_translated = translated_text.strip().lower() != original_text.strip().lower()
 
     return {
         "original_text": original_text,
         "translated_text": translated_text,
-        "detected_language": detected_language,
-        "language_name": _language_name(detected_language),
+        "detected_language": lang_code,
+        "language_name": lang["name"],
         "was_translated": was_translated,
-        "flag_emoji": _language_flag(detected_language),
+        "flag_emoji": lang["flag_emoji"],
     }

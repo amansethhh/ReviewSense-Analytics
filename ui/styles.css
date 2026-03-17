@@ -421,3 +421,51 @@ hr { border: none !important; border-top: 1px solid rgba(59,130,246,0.08) !impor
 [data-testid="metric-container"] { background: var(--bg-card) !important; backdrop-filter: blur(14px); border: 1px solid var(--border) !important; border-radius: 14px !important; padding: 1.15rem 1.25rem !important; overflow: hidden !important; }
 [data-testid="metric-container"] label { color: var(--subtext) !important; font-size: 0.72rem !important; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600 !important; }
 [data-testid="metric-container"] [data-testid="stMetricValue"] { color: var(--text) !important; font-size: 1.8rem !important; font-weight: 700 !important; }
+
+/* ══════════════════════════════════════════════════════════
+   METRIC CARDS — equal-size color-coded stat tiles
+   ══════════════════════════════════════════════════════════ */
+
+.metric-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.metric-label {
+  color: var(--subtext);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.metric-value {
+  color: var(--text);
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.metric-delta-positive { color: var(--positive); font-size: 0.8rem; font-weight: 600; margin-top: 4px; }
+.metric-delta-negative { color: var(--negative); font-size: 0.8rem; font-weight: 600; margin-top: 4px; }
+
+/* Color accents — left border glow */
+.metric-card-cyan   { border-left: 3px solid var(--cyan); }
+.metric-card-blue   { border-left: 3px solid var(--blue); }
+.metric-card-violet { border-left: 3px solid var(--violet); }
+.metric-card-green  { border-left: 3px solid var(--positive); }
+.metric-card-red    { border-left: 3px solid var(--negative); }
+.metric-card-amber  { border-left: 3px solid var(--amber); }
+.metric-card-teal   { border-left: 3px solid var(--teal); }
+.metric-card-grey   { border-left: 3px solid var(--neutral); }
+

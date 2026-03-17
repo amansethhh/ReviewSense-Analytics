@@ -16,9 +16,18 @@ ROBERTA_DIR = "models/roberta/reviewsense_roberta/"
 REPORTS_DIR = "reports/"
 
 # =========================
+# HuggingFace Model IDs
+# =========================
+
+HF_SENTIMENT_MODEL = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+HF_SARCASM_MODEL = "cardiffnlp/twitter-roberta-base-irony"
+HF_TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-mul-en"
+
+# =========================
 # Label Mapping
 # =========================
-# IMPORTANT: Must match training labels
+# Matches RoBERTa sentiment model output:
+# 0=negative, 1=neutral, 2=positive
 
 LABEL_MAP = {
     0: "Negative",
@@ -49,19 +58,15 @@ DOMAINS = [
 ]
 
 # =========================
-# Available Classical Models
+# Available Models (UI display names)
 # =========================
-# Must match saved filenames
 
 MODEL_NAMES = [
-    "naive_bayes",
-    "linearsvc",
-    "logistic_regression",
-    "random_forest",
+    "RoBERTa (Transformer)",
 ]
 
 # =========================
-# Training Configuration
+# Training Configuration (kept for classical model compat)
 # =========================
 
 MAX_FEATURES = 15000

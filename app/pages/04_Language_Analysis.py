@@ -89,37 +89,23 @@ if analyze_btn:
     bar = pph.progress(0)
     for pct in [15,35,55]: time.sleep(0.12); bar.progress(pct)
 
-    try:
-        from src.translator import detect_and_translate  # noqa: E402
-        tr = detect_and_translate(lang_input_text)
-    except Exception as exc:
-        sph.empty(); pph.empty(); st.error(f"Detection error: {exc}"); st.stop()
+    from src.pipeline.inference import run_pipeline  # noqa: E402
+    result = run_pipeline(lang_input_text, enable_sarcasm=False, enable_aspects=False)
 
-    for pct in [70,85]: time.sleep(0.1); bar.progress(pct)
+    for pct in [70, 85]: time.sleep(0.1); bar.progress(pct)
 
-    detected_lang = tr["detected_language"]
-    lang_name = tr["language_name"]
-    flag_emoji = tr["flag_emoji"]
-    translated = tr["translated_text"]
-    was_translated = tr["was_translated"]
+    detected_lang = result["language"]
+    lang_name = result["language_name"]
+    flag_emoji = result["flag_emoji"]
+    translated = result["translated"]
+    was_translated = result["was_translated"]
 
-    mn = st.session_state.get("selected_model","best")
-    try:
-        model_pipeline, _ = load_model(mn)
-    except FileNotFoundError:
-        sph.empty(); pph.empty(); st.error("🚫 Model not found."); st.stop()
-    except Exception as exc:
-        sph.empty(); pph.empty(); st.error(f"Model error: {exc}"); st.stop()
-
-    from src.predict import predict_sentiment  # noqa: E402
-    at = translated if was_translated else lang_input_text
-    pred = predict_sentiment(at, model_pipeline)
     bar.progress(100); time.sleep(0.08); sph.empty(); pph.empty()
 
-    label_name = pred["label_name"]
-    confidence = pred["confidence"]
-    polarity = pred["polarity"]
-    subjectivity = pred["subjectivity"]
+    label_name = result["sentiment"]
+    confidence = result["confidence"]
+    polarity = result["polarity"]
+    subjectivity = result["subjectivity"]
 
     # ── Detection + Sentiment (2-col, Pattern A) ──
     d1, d2 = st.columns(2)
@@ -170,17 +156,23 @@ if analyze_btn:
 
     # ── LIME (Pattern B) ──
     with st.container():
-        st.markdown('<div class="glass-card-header"><div class="section-title">🔍 Word-Level Explanation</div><div class="section-subtitle">LIME on translated text</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card-header"><div class="section-title">🔍 Word-Level Explanation</div><div class="section-subtitle">LIME on translated text · Cached for speed</div></div>', unsafe_allow_html=True)
         try:
             from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
             import plotly.graph_objects as go  # noqa: E402
-            ww = explain_prediction(at, model_pipeline, num_features=10)
-            st.markdown(highlight_text_html(at, ww), unsafe_allow_html=True)
+            analysis_text = translated if was_translated else lang_input_text
+
+            lime_ph = st.empty()
+            lime_ph.info("⏳ Generating LIME explanation... (cached after first run)")
+            ww = explain_prediction(analysis_text, num_features=6)
+            lime_ph.empty()
+
+            st.markdown(highlight_text_html(analysis_text, ww), unsafe_allow_html=True)
             if ww:
                 ws=[w for w,_ in ww]; wts=[v for _,v in ww]
                 cl=[POSITIVE_COLOR if v>=0 else NEGATIVE_COLOR for v in wts]
                 fig=go.Figure(go.Bar(x=wts,y=ws,orientation="h",marker_color=cl))
-                apply_theme(fig,title="",height=400,margin=dict(l=120))
+                apply_theme(fig,title="",height=350,margin=dict(l=120))
                 fig.update_layout(xaxis_title="← Negative | Positive →",yaxis=dict(autorange="reversed"))
                 st.plotly_chart(fig,use_container_width=True,key="lang_lime")
         except Exception as e:
@@ -229,34 +221,31 @@ if batch_file is not None:
     st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
     if st.button("🌐  Translate & Analyze All", use_container_width=True, key="lang_batch_btn"):
-        mn2 = st.session_state.get("selected_model","best")
-        try:
-            mp2, _ = load_model(mn2)
-        except Exception as exc:
-            st.error(f"Model error: {exc}"); st.stop()
-
-        from src.translator import detect_and_translate  # noqa: E402
-        from src.predict import predict_sentiment as ps2  # noqa: E402
+        from src.pipeline.inference import run_pipeline_batch as rpb  # noqa: E402
 
         bsph = st.empty()
-        bsph.markdown('<div class="analyze-loading"><div class="spin-ring"></div> Translating and analyzing...</div>', unsafe_allow_html=True)
+        bsph.markdown('<div class="analyze-loading"><div class="spin-ring"></div> Translating and analyzing with RoBERTa...</div>', unsafe_allow_html=True)
         texts = bdf[btc].fillna("").astype(str).tolist()
-        br = []; prog = st.progress(0); n = len(texts)
+        prog = st.progress(0)
+        prog.progress(10, text="Running pipeline batch...")
 
-        for i, text in enumerate(texts):
-            try:
-                tr2 = detect_and_translate(text)
-                at2 = tr2["translated_text"] if tr2["was_translated"] else tr2["original_text"]
-                pr = ps2(at2, mp2)
-            except Exception:
-                tr2 = {"detected_language":"unknown","language_name":"Unknown","flag_emoji":"🏳️","translated_text":text,"was_translated":False}
-                pr = {"label_name":"Neutral","confidence":0.0,"polarity":0.0,"subjectivity":0.0}
-            br.append({"Original":text[:80]+("…" if len(text)>80 else ""),"Language":f"{tr2['flag_emoji']} {tr2['language_name']}",
-                "Translated":tr2["translated_text"][:80]+("…" if len(tr2.get("translated_text",""))>80 else ""),
-                "Sentiment":pr["label_name"],"Confidence":f"{pr['confidence']*100:.1f}%","Polarity":round(pr["polarity"],4)})
-            if i%max(1,n//100)==0 or i==n-1: prog.progress((i+1)/n, text=f"Translating… {i+1}/{n}")
+        batch_results = rpb(texts, enable_sarcasm=False, enable_aspects=False)
 
+        prog.progress(100, text="Complete!")
+        import time as _time; _time.sleep(0.3)  # noqa: E702
         bsph.empty(); prog.empty()
+
+        br = []
+        for r in batch_results:
+            orig = r["original"]
+            br.append({
+                "Original": orig[:80] + ("…" if len(orig) > 80 else ""),
+                "Language": f"{r['flag_emoji']} {r['language_name']}",
+                "Translated": r["translated"][:80] + ("…" if len(r["translated"]) > 80 else ""),
+                "Sentiment": r["sentiment"],
+                "Confidence": f"{r['confidence']*100:.1f}%",
+                "Polarity": round(r["polarity"], 4),
+            })
         odf = pd.DataFrame(br)
         st.dataframe(odf, use_container_width=True)
         st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
