@@ -2,7 +2,10 @@
 
 import sys
 import time
+import warnings
 from pathlib import Path
+
+warnings.filterwarnings("ignore")
 
 import streamlit as st
 
@@ -258,20 +261,66 @@ apply_theme(ft,title="Sentiment Trend",height=350); st.plotly_chart(ft,use_conta
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── AI Summary (Pattern B) ──
+# ── AI Summary (Pattern B) — insight-based, clean HTML formatting ──
 with st.container():
-    st.markdown('<div class="glass-card-header"><div class="section-title">🤖 AI Summary</div><div class="section-subtitle">Auto-generated insights</div></div>', unsafe_allow_html=True)
-    _nt=rdf.loc[rdf["Sentiment"]=="Negative",text_column].fillna("").tolist()
-    if not _nt: st.info("No negative reviews — great! 🎉")
-    else:
-        try:
-            from sumy.parsers.plaintext import PlaintextParser; from sumy.nlp.tokenizers import Tokenizer; from sumy.summarizers.lsa import LsaSummarizer  # noqa
-            _p=PlaintextParser.from_string(" ".join(_nt[:500]),Tokenizer("english")); _su=LsaSummarizer()(_p.document,sentences_count=5)
-            _sm=" ".join(str(s) for s in _su)
-            if _sm.strip(): st.markdown(f'<div style="color:#e8eaf6;line-height:1.8;margin-bottom:12px;">{_sm}</div><span class="tag-pill tag-violet">AI-GENERATED</span>', unsafe_allow_html=True)
-            else: st.info("Could not generate summary.")
-        except ImportError: st.info("Install `sumy` for AI summaries.")
-        except Exception as e: st.info(f"Summary error: {e}")
+    st.markdown('<div class="glass-card-header"><div class="section-title">🤖 AI Summary</div><div class="section-subtitle">Auto-generated insights from analysis results</div></div>', unsafe_allow_html=True)
+
+    # Generate structured insights from DataFrame stats
+    def _generate_insights(df_result, total_count, pos_count, neg_count, neu_count, sarc_on, sarc_cnt):
+        """Build a structured, insight-based summary — clean HTML, no markdown."""
+        pos_pct = pos_count / total_count * 100 if total_count else 0
+        neg_pct = neg_count / total_count * 100 if total_count else 0
+        neu_pct = neu_count / total_count * 100 if total_count else 0
+        avg_conf = df_result["Confidence"].mean() if "Confidence" in df_result.columns else 0
+        avg_pol = df_result["Polarity"].mean() if "Polarity" in df_result.columns else 0
+
+        # Determine overall sentiment trend
+        if pos_pct > 60:
+            trend = "overwhelmingly positive"
+        elif pos_pct > 45:
+            trend = "generally positive"
+        elif neg_pct > 45:
+            trend = "predominantly negative"
+        elif neu_pct > 50:
+            trend = "largely neutral"
+        else:
+            trend = "mixed"
+
+        conf_label = "high" if avg_conf > 75 else "moderate" if avg_conf > 55 else "low"
+        pol_label = "positive leaning" if avg_pol > 0.1 else "negative leaning" if avg_pol < -0.1 else "balanced"
+
+        # Build HTML lines — no markdown ** symbols
+        H = '<span style="color:#00e5cc;font-weight:600;">'  # header style
+        E = '</span>'
+        lines = []
+        lines.append(f'📈 {H}Overall Sentiment:{E} The dataset of {total_count:,} reviews shows a {trend} sentiment pattern.')
+        lines.append(f'📊 {H}Distribution:{E} {pos_pct:.1f}% positive, {neg_pct:.1f}% negative, {neu_pct:.1f}% neutral.')
+        lines.append(f'🎯 {H}Model Confidence:{E} Average confidence score is {avg_conf:.1f}%, indicating {conf_label} prediction reliability.')
+        lines.append(f'📐 {H}Polarity Score:{E} Mean polarity is {avg_pol:.3f} ({pol_label}).')
+
+        # Language diversity
+        if "Language" in df_result.columns:
+            unique_langs = df_result["Language"].nunique()
+            if unique_langs > 1:
+                top_lang = df_result["Language"].mode().iloc[0] if not df_result["Language"].mode().empty else "English"
+                lines.append(f'🌐 {H}Language Diversity:{E} {unique_langs} languages detected. Primary language: {top_lang}.')
+
+        # Sarcasm insight
+        if sarc_on and sarc_cnt > 0:
+            sarc_pct = sarc_cnt / total_count * 100
+            lines.append(f'🎭 {H}Sarcasm:{E} {sarc_cnt:,} reviews ({sarc_pct:.1f}%) flagged as sarcastic — consider manual review.')
+
+        # Actionable insight
+        if neg_pct > 30:
+            lines.append(f'⚠️ {H}Action Required:{E} {neg_count:,} negative reviews detected — recommended for priority review.')
+        elif pos_pct > 70:
+            lines.append(f'✅ {H}Key Takeaway:{E} Strong positive sentiment indicates high customer satisfaction across the dataset.')
+
+        return "<br>".join(lines)
+
+    summary_html = _generate_insights(rdf, total, pos, neg, neu, sarcasm_was_on, sarc_count)
+    st.markdown(f'<div style="color:#e8eaf6;line-height:2.0;margin-bottom:12px;font-size:0.92rem;">{summary_html}</div>', unsafe_allow_html=True)
+    st.markdown('<span class="tag-pill tag-violet">AI-GENERATED</span> <span class="tag-pill tag-cyan">INSTANT</span>', unsafe_allow_html=True)
     st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)

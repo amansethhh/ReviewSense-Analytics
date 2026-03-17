@@ -1,7 +1,10 @@
 """ReviewSense Analytics — Home Page."""
 
 import sys
+import warnings
 from pathlib import Path
+
+warnings.filterwarnings("ignore")
 
 import streamlit as st
 
@@ -27,6 +30,28 @@ html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"],
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
 load_css()
 render_sidebar()
+
+# ── NLTK + Model preload (cached — runs once) ──
+@st.cache_resource
+def _setup_nltk():
+    """Download NLTK data once and cache permanently."""
+    try:
+        import nltk
+        nltk.download("punkt", quiet=True)
+        nltk.download("punkt_tab", quiet=True)
+        nltk.download("stopwords", quiet=True)
+    except Exception:
+        pass
+    return True
+
+_setup_nltk()
+
+# Preload NLP models eagerly on app start
+try:
+    from src.pipeline.inference import preload_models  # noqa: E402
+    preload_models()
+except Exception:
+    pass
 
 # ━━━ HERO (Pattern A — all HTML in one call) ━━━━━━━━━━━━━━
 

@@ -3,7 +3,10 @@
 import json
 import os
 import sys
+import warnings
 from pathlib import Path
+
+warnings.filterwarnings("ignore")
 
 import numpy as np
 import pandas as pd

@@ -2,7 +2,10 @@
 
 import sys
 import time
+import warnings
 from pathlib import Path
+
+warnings.filterwarnings("ignore")
 
 import streamlit as st
 

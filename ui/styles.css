@@ -469,3 +469,69 @@ hr { border: none !important; border-top: 1px solid rgba(59,130,246,0.08) !impor
 .metric-card-teal   { border-left: 3px solid var(--teal); }
 .metric-card-grey   { border-left: 3px solid var(--neutral); }
 
+/* ═══════════════════════════════════════════════
+   PRODUCTION UX SYSTEM — no fake loaders
+   ═══════════════════════════════════════════════ */
+
+/* ── Subtle transitions (not harsh) ── */
+.glass-card,
+.action-card,
+.metric-card {
+  transition:
+    background 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+/* ── Hover lift on cards ── */
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+}
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+.metric-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+
+/* ── Button press feedback ── */
+button:active, .stButton button:active {
+  transform: scale(0.97) !important;
+}
+
+/* ── Text smoothness ── */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Sidebar stability — NO transition, NO blink ── */
+[data-testid="stSidebar"] > div:first-child {
+  min-height: 100vh;
+}
+section[data-testid="stSidebar"],
+section[data-testid="stSidebar"] * {
+  transition: none !important;
+}
+
+/* ── Container stability — prevent layout shift ── */
+[data-testid="stVerticalBlock"] {
+  min-height: 0;
+}
+.stTabs [data-baseweb="tab-panel"] {
+  min-height: 200px;
+}
+
+/* ── Toggle styling — match dark theme ── */
+[data-testid="stToggle"] label span {
+  color: var(--text) !important;
+  font-weight: 500;
+}
+
+/* ── Scroll smoothness ── */
+html {
+  scroll-behavior: smooth;
+}
