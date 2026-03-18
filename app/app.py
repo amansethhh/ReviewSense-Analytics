@@ -150,26 +150,26 @@ st.markdown("""
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    if st.button("⚡ Try Live Prediction", use_container_width=True):
-        st.switch_page("pages/01_Live_Prediction.py")
     st.markdown("""
     <div class="action-card">
       <div class="action-icon action-icon-cyan">⚡</div>
       <div><div class="action-label">Try Live Prediction</div><div class="action-sublabel">Analyze a review instantly</div></div>
     </div>""", unsafe_allow_html=True)
+    if st.button("⚡ Try Live Prediction", use_container_width=True):
+        st.switch_page("pages/01_Live_Prediction.py")
 with col2:
-    if st.button("📂 Upload Dataset", use_container_width=True):
-        st.switch_page("pages/02_Bulk_Analysis.py")
     st.markdown("""
     <div class="action-card">
       <div class="action-icon action-icon-amber">📂</div>
       <div><div class="action-label">Upload Dataset</div><div class="action-sublabel">Batch process thousands of reviews</div></div>
     </div>""", unsafe_allow_html=True)
+    if st.button("📂 Upload Dataset", use_container_width=True):
+        st.switch_page("pages/02_Bulk_Analysis.py")
 with col3:
-    if st.button("📊 View Model Dashboard", use_container_width=True):
-        st.switch_page("pages/03_Model_Dashboard.py")
     st.markdown("""
     <div class="action-card">
       <div class="action-icon action-icon-violet">📊</div>
       <div><div class="action-label">View Model Dashboard</div><div class="action-sublabel">Compare all trained classifiers</div></div>
     </div>""", unsafe_allow_html=True)
+    if st.button("📊 View Model Dashboard", use_container_width=True):
+        st.switch_page("pages/03_Model_Dashboard.py")
