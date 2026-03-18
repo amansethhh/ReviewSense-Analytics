@@ -30,10 +30,10 @@ html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"],
 
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
 from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR, ACCENT_BLUE  # noqa: E402
-from src.config import DOMAINS, MODEL_NAMES, LABEL_MAP  # noqa: E402
+from src.config import DOMAINS, MODEL_NAMES  # noqa: E402
 from src.analytics import extract_keywords_single, generate_summary_single  # noqa: E402
 from src.exporter import render_export_buttons  # noqa: E402
-from utils import load_model  # noqa: E402
+
 
 load_css()
 render_sidebar()

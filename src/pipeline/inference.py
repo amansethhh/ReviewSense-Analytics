@@ -10,7 +10,10 @@ Performance-optimized:
 
 from __future__ import annotations
 
+import logging
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 import streamlit as st
 
@@ -25,7 +28,7 @@ def clean_text(text: str) -> str | None:
     if not text or str(text).strip() == "":
         return None
     t = str(text).strip()
-    if "??" in t or t == "??????":
+    if t.count("?") > len(t) * 0.5:
         return None
     return t
 
@@ -53,13 +56,16 @@ def preload_models():
     """
     from src.models.sentiment import _load_sentiment_model
     from src.models.sarcasm_model import _load_irony_model
+    from src.models.translation import _load_helsinki_model
 
     s_tok, s_model = _load_sentiment_model()
     i_tok, i_model = _load_irony_model()
+    t_tok, t_model = _load_helsinki_model()
 
     return {
         "sentiment_loaded": s_model is not None,
         "sarcasm_loaded": i_model is not None,
+        "translation_loaded": t_model is not None,
     }
 
 
@@ -87,9 +93,11 @@ def run_pipeline(
     # Step 1: Detect language
     lang_info = detect_language(original)
     lang_code = lang_info["code"]
+    logger.info("Language detected: %s (%s)", lang_info["name"], lang_code)
 
     # Step 2: Translate if not English
     if lang_code not in ("en", "unknown"):
+        logger.info("Translating text from %s to English", lang_code)
         translated = translate_to_english(original, src_lang=lang_code)
         was_translated = translated.strip().lower() != original.strip().lower()
     else:
@@ -98,8 +106,9 @@ def run_pipeline(
 
     # Step 3: Run sentiment on ENGLISH text only
     analysis_text = translated if was_translated else original
-    print(f"[ReviewSense] INPUT TO MODEL: {analysis_text[:200]}")
+    logging.debug("[ReviewSense] INPUT TO MODEL: %s", analysis_text[:200])
 
+    logger.info("Running sentiment prediction")
     sentiment = sentiment_predict(analysis_text)
 
     # Confidence calibration
@@ -119,18 +128,22 @@ def run_pipeline(
     # Step 4: Sarcasm (optional)
     sarcasm_result = None
     if enable_sarcasm:
+        logger.info("Running sarcasm detection")
         from src.models.sarcasm_model import predict as sarcasm_predict
         sarcasm_result = sarcasm_predict(analysis_text)
 
     # Step 5: Aspect analysis (optional)
     aspects = []
     if enable_aspects:
+        logger.info("Running aspect-based analysis")
         try:
             from src.models.aspect import analyze_aspects
             aspects = analyze_aspects(analysis_text)
         except Exception as e:
-            print(f"[ReviewSense] Aspect analysis error: {e}")
+            logger.warning("Aspect analysis error: %s", e)
             aspects = []
+
+    logger.info("Pipeline complete — sentiment: %s (%.1f%%)", label_name, confidence * 100)
 
     return {
         "original": original,
@@ -175,48 +188,70 @@ def run_pipeline_batch(
     # Clean texts — preserve index mapping for output
     clean_texts = [clean_text(t) or "" for t in raw_texts]
     total = len(clean_texts)
+    logger.info("Starting batch analysis: %d reviews", total)
 
     def _progress(pct: int, msg: str):
         if progress_callback:
-            progress_callback(pct, msg)
+            progress_callback(min(pct, 100), msg)
 
-    # ── Step 1+2: Language detection + translation ──
-    _progress(5, "Detecting languages...")
+    # ── Step 1+2: Language detection + translation (5%–25%) ──
+    _progress(5, "🌐 Detecting languages...")
     translated_texts = []
     lang_infos = []
-    for idx, text in enumerate(clean_texts):
+    for i, text in enumerate(clean_texts):
         if not text:
             translated_texts.append("")
             lang_infos.append({"code": "unknown", "name": "Unknown", "flag_emoji": "🏳️", "was_translated": False})
             continue
 
         lang = detect_language(text)
-        if lang["code"] not in ("en", "unknown"):
-            tr = translate_to_english(text, src_lang=lang["code"])
+        lang_code = lang["code"]
+        lang_name = lang["name"]
+
+        if lang_code not in ("en", "unknown"):
+            logger.info("🔄 Review %d/%d — %s detected, translating to English", i + 1, total, lang_name)
+            tr = translate_to_english(text, src_lang=lang_code)
             was_tr = tr.strip().lower() != text.strip().lower()
+            if was_tr:
+                logger.info("✅ Review %d/%d — translated from %s", i + 1, total, lang_name)
         else:
             tr = text
             was_tr = False
+            logger.info("🔍 Review %d/%d — %s (no translation needed)", i + 1, total, lang_name)
 
         translated_texts.append(tr if was_tr else text)
         lang_infos.append({**lang, "was_translated": was_tr, "translated": tr})
 
-    # ── Step 3: Batch sentiment (vectorized, chunked) ──
-    _progress(30, f"Running sentiment on {total} texts...")
-    print(f"[ReviewSense] BATCH: {total} texts for sentiment model")
-    sentiments = sentiment_predict_batch(translated_texts)
+        # Sync UI progress every 2 rows — smooth without lag
+        if i % 2 == 0:
+            pct = 5 + int((i + 1) / total * 20)  # 5%–25%
+            flag = lang.get("flag_emoji", "🏳️")
+            status = "→ EN" if was_tr else "✓"
+            _progress(pct, f"🔍 {i+1}/{total} | {flag} {lang_name} {status}")
 
-    # ── Step 4: Batch sarcasm (vectorized, chunked) ──
+    # ── Step 3: Batch sentiment (vectorized, chunked) — 25%–60% ──
+    _progress(25, f"⚡ Running sentiment model on {total} reviews...")
+    logger.info("Running batch sentiment prediction on %d texts", total)
+    logging.debug("[ReviewSense] BATCH: %d texts for sentiment model", total)
+    sentiments = sentiment_predict_batch(translated_texts)
+    logger.info("Batch sentiment complete")
+    _progress(60, "✅ Sentiment analysis complete")
+
+    # ── Step 4: Batch sarcasm (vectorized, chunked) — 60%–80% ──
     sarcasm_results = [None] * total
     if enable_sarcasm:
-        _progress(60, "Running sarcasm detection...")
+        _progress(60, f"🎭 Running sarcasm detection on {total} reviews...")
+        logger.info("Running batch sarcasm detection on %d texts", total)
         from src.models.sarcasm_model import predict_batch as sarcasm_predict_batch
         sarcasm_results = sarcasm_predict_batch(translated_texts)
+        logger.info("Batch sarcasm complete")
+        _progress(80, "✅ Sarcasm detection complete")
 
-    # ── Step 5: Per-row aspect analysis (if enabled) ──
+    # ── Step 5: Per-row aspect analysis (if enabled) — 80%–90% ──
     aspect_lists: list[list] = [[] for _ in range(total)]
     if enable_aspects:
-        _progress(80, "Running aspect analysis...")
+        _progress(80, "🔬 Running aspect analysis...")
+        logger.info("Running aspect analysis on %d texts", total)
         try:
             from src.models.aspect import analyze_aspects
             for i, at in enumerate(translated_texts):
@@ -227,9 +262,10 @@ def run_pipeline_batch(
                         pass
         except ImportError:
             pass
+        _progress(90, "✅ Aspect analysis complete")
 
-    # ── Assemble results ──
-    _progress(90, "Assembling results...")
+    # ── Assemble results — 90%–100% ──
+    _progress(90, "📊 Assembling results...")
     results = []
     for i in range(total):
         sent = sentiments[i]
@@ -265,7 +301,12 @@ def run_pipeline_batch(
             "aspects": aspect_lists[i],
         })
 
-    _progress(100, "Complete!")
+        # Log final sentiment for each row (throttled)
+        if i % 10 == 0:
+            logger.info("📋 Review %d/%d — %s (%.0f%%)", i + 1, total, label_name, confidence * 100)
+
+    _progress(100, "✅ Analysis complete!")
+    logger.info("Batch analysis complete: %d reviews processed", total)
     return results
 
 

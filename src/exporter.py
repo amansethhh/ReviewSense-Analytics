@@ -7,10 +7,8 @@ Single function `render_export_buttons()` renders a 4-column export row
 from __future__ import annotations
 
 import io
-import json
-import tempfile
 import os
-from pathlib import Path
+import tempfile
 from typing import Any
 
 import pandas as pd
@@ -99,6 +97,7 @@ def render_export_buttons(
             try:
                 buf = io.BytesIO()
                 df.to_excel(buf, index=False, engine="openpyxl")
+                buf.seek(0)
                 st.download_button(
                     "📗 Excel",
                     data=buf.getvalue(),

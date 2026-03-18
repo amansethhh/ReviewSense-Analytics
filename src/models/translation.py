@@ -6,6 +6,7 @@ Falls back to googletrans if Helsinki model fails to load.
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 import streamlit as st
@@ -23,7 +24,7 @@ def _load_helsinki_model():
         model.eval()
         return tokenizer, model
     except Exception as e:
-        print(f"[ReviewSense] Helsinki-NLP model load failed: {e}")
+        logging.debug("[ReviewSense] Helsinki-NLP model load failed: %s", e)
         return None, None
 
 
@@ -58,10 +59,10 @@ def translate_to_english(text: str, src_lang: str = "auto") -> str:
                 translated_ids = model.generate(**inputs, max_length=512)
             translated = tokenizer.decode(translated_ids[0], skip_special_tokens=True)
             if translated and translated.strip() != text.strip():
-                print(f"[ReviewSense] Helsinki translated: '{text[:50]}...' → '{translated[:50]}...'")
+                logging.debug("[ReviewSense] Helsinki translated: '%s...' → '%s...'", text[:50], translated[:50])
                 return translated.strip()
         except Exception as e:
-            print(f"[ReviewSense] Helsinki translation error: {e}")
+            logging.debug("[ReviewSense] Helsinki translation error: %s", e)
 
     # Fallback to googletrans
     translator = _get_googletrans()
@@ -69,10 +70,10 @@ def translate_to_english(text: str, src_lang: str = "auto") -> str:
         try:
             result = translator.translate(text, src=src_lang if src_lang != "auto" else "auto", dest="en")
             if result and result.text:
-                print(f"[ReviewSense] Googletrans translated: '{text[:50]}...' → '{result.text[:50]}...'")
+                logging.debug("[ReviewSense] Googletrans translated: '%s...' → '%s...'", text[:50], result.text[:50])
                 return result.text.strip()
         except Exception as e:
-            print(f"[ReviewSense] Googletrans translation error: {e}")
+            logging.debug("[ReviewSense] Googletrans translation error: %s", e)
 
-    print(f"[ReviewSense] Translation failed, returning original text")
+    logging.debug("[ReviewSense] Translation failed, returning original text")
     return text

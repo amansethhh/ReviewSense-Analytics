@@ -6,6 +6,7 @@ All pages import from here — NO duplicated logic.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
 
@@ -61,17 +62,17 @@ def extract_keywords(
 
     Returns list of (word, count) tuples sorted by frequency.
     """
-    words = " ".join(texts.fillna("")).lower().split()
+    words = re.findall(r'\b[a-z]{3,}\b', " ".join(texts.fillna("")).lower())
     return Counter(
-        w for w in words if w not in STOP_WORDS and len(w) > 2
+        w for w in words if w not in STOP_WORDS
     ).most_common(n)
 
 
 def extract_keywords_single(text: str, n: int = 10) -> list[tuple[str, int]]:
     """Extract keywords from a single text string."""
-    words = str(text).lower().split()
+    words = re.findall(r'\b[a-z]{3,}\b', str(text).lower())
     return Counter(
-        w for w in words if w not in STOP_WORDS and len(w) > 2
+        w for w in words if w not in STOP_WORDS
     ).most_common(n)
 
 

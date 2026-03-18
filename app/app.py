@@ -1,10 +1,24 @@
 """ReviewSense Analytics — Home Page."""
 
+import logging
 import sys
 import warnings
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
+
+# ── Global logging — production-level (INFO), clean format ──
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s",
+)
+
+# Silence noisy HuggingFace transformer logs
+try:
+    from transformers import logging as hf_logging
+    hf_logging.set_verbosity_error()
+except Exception:
+    pass
 
 import streamlit as st
 

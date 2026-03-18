@@ -35,7 +35,6 @@ def sentiment_badge_html(label_name: str) -> str:
         "Positive": ("badge-positive", "✅ Positive"),
         "Negative": ("badge-negative", "❌ Negative"),
         "Neutral":  ("badge-neutral",  "◼ Neutral"),
-        "Uncertain": ("badge-neutral", "⚠️ Uncertain"),
     }
     css_class, display = mapping.get(label_name, ("badge-neutral", f"◼ {label_name}"))
     return f"<span class='{css_class}' style='font-size:1.3rem;padding:0.5rem 1.5rem;'>{display}</span>"

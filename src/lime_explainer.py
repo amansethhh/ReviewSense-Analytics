@@ -64,7 +64,7 @@ def explain_prediction(text, num_features=LIME_NUM_FEATURES):
     Uses reduced num_samples (100) for ~10x speedup.
     """
     source_text = str(text or "").strip()
-    if not source_text:
+    if not source_text or len(source_text) < 5:
         return []
 
     prediction_function = _get_prediction_function()

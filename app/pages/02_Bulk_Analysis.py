@@ -29,7 +29,7 @@ from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR 
 from src.config import MODEL_NAMES, DOMAINS  # noqa: E402
 from src.analytics import compute_metrics, generate_summary, extract_keywords, build_sentiment_pie, build_keywords_chart, build_trend_chart  # noqa: E402
 from src.exporter import render_export_buttons  # noqa: E402
-from utils import load_model  # noqa: E402
+
 
 load_css()
 render_sidebar()
@@ -85,9 +85,12 @@ if uploaded_file is None:
 
 import pandas as pd  # noqa: E402
 try:
-    df = pd.read_csv(uploaded_file)
+    if uploaded_file.name.endswith(".xlsx"):
+        df = pd.read_excel(uploaded_file, engine="openpyxl")
+    else:
+        df = pd.read_csv(uploaded_file)
 except Exception as exc:
-    st.error(f"Could not read CSV: {exc}"); st.stop()
+    st.error(f"Could not read file: {exc}"); st.stop()
 
 _fs = uploaded_file.size/1024
 _sl = f"{_fs:.1f} KB" if _fs < 1024 else f"{_fs/1024:.1f} MB"
@@ -155,15 +158,16 @@ if analyze_clicked:
     # Preload models eagerly (cached — instant on subsequent runs)
     preload_models()
 
-    sph = st.empty(); pph = st.empty()
+    sph = st.empty(); pph = st.empty(); status_text = st.empty()
     sph.markdown('<div class="analyze-loading"><div class="spin-ring"></div> Processing reviews with RoBERTa...</div>', unsafe_allow_html=True)
     texts = df[text_column].fillna("").astype(str).tolist()
 
     bar = pph.progress(0)
 
-    # Real-time progress callback from pipeline
+    # Synchronized progress callback — updates bar + live status
     def _progress(pct, msg):
         bar.progress(min(pct, 100), text=msg)
+        status_text.markdown(f"**{msg}**")
 
     results = run_pipeline_batch(
         texts,
@@ -174,8 +178,8 @@ if analyze_clicked:
 
     time.sleep(0.2)
     sph.empty(); pph.empty()
+    status_text.success("✅ Analysis complete")
 
-    # In-place column assignment (no df.copy() — saves memory)
     rdf = df.copy()
     rdf["Sentiment"] = [r["sentiment"] for r in results]
     rdf["Confidence"] = [round(r["confidence"]*100,1) for r in results]
@@ -203,6 +207,9 @@ sarcasm_was_on = st.session_state.bulk_sarcasm_was_on
 # ── Centralized metrics ──
 import plotly.graph_objects as go  # noqa: E402
 metrics = compute_metrics(rdf)
+if metrics["total"] == 0:
+    st.warning("No valid data after cleaning.")
+    st.stop()
 total, pos, neg, neu, sarc_count = metrics["total"], metrics["pos"], metrics["neg"], metrics["neu"], metrics["sarc_count"]
 
 st.markdown('<div class="glass-card"><div class="section-title">📊 Results Dashboard</div><div class="section-subtitle" style="margin-bottom:0;">Analysis complete</div></div>', unsafe_allow_html=True)

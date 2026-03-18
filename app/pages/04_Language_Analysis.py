@@ -25,11 +25,11 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],
 </style>""", unsafe_allow_html=True)
 
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
-from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR, ACCENT_BLUE, CHART_PALETTE  # noqa: E402
+from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR  # noqa: E402
 from src.config import MODEL_NAMES  # noqa: E402
 from src.analytics import compute_metrics, generate_summary, generate_summary_single, extract_keywords, extract_keywords_single, build_sentiment_pie, build_keywords_chart, build_trend_chart  # noqa: E402
 from src.exporter import render_export_buttons  # noqa: E402
-from utils import load_model  # noqa: E402
+
 
 load_css()
 render_sidebar()
@@ -286,13 +286,19 @@ if batch_file is not None:
         bsph.markdown('<div class="analyze-loading"><div class="spin-ring"></div> Translating and analyzing with RoBERTa...</div>', unsafe_allow_html=True)
         texts = bdf[btc].fillna("").astype(str).tolist()
         prog = st.progress(0)
-        prog.progress(10, text="Running pipeline batch...")
+        lang_status = st.empty()
 
-        batch_results = rpb(texts, enable_sarcasm=False, enable_aspects=False)
+        # Synchronized progress callback
+        def _lang_progress(pct, msg):
+            prog.progress(min(pct, 100), text=msg)
+            lang_status.markdown(f"**{msg}**")
 
-        prog.progress(100, text="Complete!")
-        import time as _time; _time.sleep(0.3)  # noqa: E702
+        batch_results = rpb(texts, enable_sarcasm=False, enable_aspects=False, progress_callback=_lang_progress)
+
+        prog.progress(100, text="✅ Complete!")
+        import time; time.sleep(0.3)  # noqa: E702
         bsph.empty(); prog.empty()
+        lang_status.success("✅ Analysis complete")
 
         # Build results DataFrame
         br = []
@@ -305,6 +311,7 @@ if batch_file is not None:
                 "Sentiment": r["sentiment"],
                 "Confidence": round(r["confidence"] * 100, 1),
                 "Polarity": round(r["polarity"], 4),
+                "Subjectivity": round(r["subjectivity"], 4),
             })
         odf = pd.DataFrame(br)
 
