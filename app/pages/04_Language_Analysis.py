@@ -27,10 +27,22 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
 from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR, ACCENT_BLUE, CHART_PALETTE  # noqa: E402
 from src.config import MODEL_NAMES  # noqa: E402
+from src.analytics import compute_metrics, generate_summary, generate_summary_single, extract_keywords, extract_keywords_single, build_sentiment_pie, build_keywords_chart, build_trend_chart  # noqa: E402
+from src.exporter import render_export_buttons  # noqa: E402
 from utils import load_model  # noqa: E402
 
 load_css()
 render_sidebar()
+
+# ━━━ SESSION STATE ━━━
+for _key, _default in [
+    ("lang_single_result", None),
+    ("lang_single_text", ""),
+    ("lang_batch_results_df", None),
+    ("lang_batch_raw_results", None),
+]:
+    if _key not in st.session_state:
+        st.session_state[_key] = _default
 
 # ━━━ HEADER (Pattern A) ━━━
 st.markdown("""<div class="glass-card">
@@ -82,7 +94,7 @@ st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 analyze_btn = st.button("🌐  Detect & Analyze", use_container_width=True, key="lang_analyze")
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ━━━ RESULTS ━━━
+# ━━━ SINGLE ANALYSIS ━━━
 if analyze_btn:
     if not lang_input_text.strip():
         st.warning("Please enter some text."); st.stop()
@@ -96,15 +108,20 @@ if analyze_btn:
     result = run_pipeline(lang_input_text, enable_sarcasm=False, enable_aspects=False)
 
     for pct in [70, 85]: time.sleep(0.1); bar.progress(pct)
+    bar.progress(100); time.sleep(0.08); sph.empty(); pph.empty()
 
+    st.session_state.lang_single_result = result
+    st.session_state.lang_single_text = lang_input_text
+
+# ── Render single results from session state (anti-flicker) ──
+result = st.session_state.lang_single_result
+if result is not None:
+    lang_input_text = st.session_state.lang_single_text
     detected_lang = result["language"]
     lang_name = result["language_name"]
     flag_emoji = result["flag_emoji"]
     translated = result["translated"]
     was_translated = result["was_translated"]
-
-    bar.progress(100); time.sleep(0.08); sph.empty(); pph.empty()
-
     label_name = result["sentiment"]
     confidence = result["confidence"]
     polarity = result["polarity"]
@@ -157,6 +174,30 @@ if analyze_btn:
 
     st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
+    # ── Keyword Extraction (NEW) ──
+    with st.container():
+        st.markdown('<div class="glass-card-header"><div class="section-title">🔑 Keyword Extraction</div><div class="section-subtitle">Key terms detected in the review</div></div>', unsafe_allow_html=True)
+        analysis_text = translated if was_translated else lang_input_text
+        kw = extract_keywords_single(analysis_text, n=8)
+        if kw:
+            kw_html = " ".join(f'<span class="tag-pill tag-cyan" style="margin:2px;">{w} ({c})</span>' for w, c in kw)
+            st.markdown(f'<div style="padding:8px 0;">{kw_html}</div>', unsafe_allow_html=True)
+        else:
+            st.info("No significant keywords detected.")
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+    # ── AI Micro-Summary (NEW) ──
+    with st.container():
+        st.markdown('<div class="glass-card-header"><div class="section-title">🤖 AI Summary</div><div class="section-subtitle">Single review insight</div></div>', unsafe_allow_html=True)
+        summary_html = generate_summary_single(result)
+        st.markdown(f'<div style="color:#e8eaf6;line-height:2.0;margin-bottom:12px;font-size:0.92rem;">{summary_html}</div>', unsafe_allow_html=True)
+        st.markdown('<span class="tag-pill tag-violet">AI-GENERATED</span> <span class="tag-pill tag-cyan">INSTANT</span>', unsafe_allow_html=True)
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
     # ── LIME (Pattern B) ──
     with st.container():
         st.markdown('<div class="glass-card-header"><div class="section-title">🔍 Word-Level Explanation</div><div class="section-subtitle">LIME on translated text · Cached for speed</div></div>', unsafe_allow_html=True)
@@ -182,7 +223,22 @@ if analyze_btn:
             st.info(f"LIME unavailable: {e}")
         st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
-st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+    # ── Export (centralized, 4-format) (NEW) ──
+    import pandas as pd  # noqa: E402
+    single_df = pd.DataFrame([{
+        "Text": lang_input_text,
+        "Language": lang_name,
+        "Translated": translated,
+        "Sentiment": label_name,
+        "Confidence": round(confidence * 100, 1),
+        "Polarity": round(polarity, 4),
+        "Subjectivity": round(subjectivity, 4),
+    }])
+    render_export_buttons(single_df, filename_prefix="reviewsense_lang_single")
+
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━ BATCH UPLOAD (unified Pattern B) ━━━
 st.markdown('<div class="section-title">📂 Batch Language Analysis</div><div class="section-subtitle">Upload CSV with non-English reviews</div>', unsafe_allow_html=True)
@@ -238,6 +294,7 @@ if batch_file is not None:
         import time as _time; _time.sleep(0.3)  # noqa: E702
         bsph.empty(); prog.empty()
 
+        # Build results DataFrame
         br = []
         for r in batch_results:
             orig = r["original"]
@@ -246,15 +303,24 @@ if batch_file is not None:
                 "Language": f"{r['flag_emoji']} {r['language_name']}",
                 "Translated": r["translated"][:80] + ("…" if len(r["translated"]) > 80 else ""),
                 "Sentiment": r["sentiment"],
-                "Confidence": f"{r['confidence']*100:.1f}%",
+                "Confidence": round(r["confidence"] * 100, 1),
                 "Polarity": round(r["polarity"], 4),
             })
         odf = pd.DataFrame(br)
+
+        # Persist in session state
+        st.session_state.lang_batch_results_df = odf
+        st.session_state.lang_batch_raw_results = batch_results
+
+    # ── Render batch results from session state (anti-flicker) ──
+    odf = st.session_state.lang_batch_results_df
+    if odf is not None:
+        import plotly.graph_objects as go  # noqa: E402
+
         st.dataframe(odf, use_container_width=True)
         st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-        import plotly.graph_objects as go  # noqa: E402
-
+        # ── Language Distribution Chart ──
         with st.container():
             st.markdown('<div class="glass-card-header"><div class="section-title">📊 Language Distribution</div><div class="section-subtitle">Detected languages</div></div>', unsafe_allow_html=True)
             lc=odf["Language"].value_counts(); tl=lc.sum()
@@ -263,26 +329,56 @@ if batch_file is not None:
             st.plotly_chart(fl,use_container_width=True,key="lang_dist")
             st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
-        ul=odf["Language"].nunique(); ac2=sum(float(r["Confidence"].replace("%","")) for r in br)/max(1,len(br))
-        k1,k2,k3,k4=st.columns(4)
-        with k1: st.markdown(f'<div class="metric-card metric-card-cyan"><div class="metric-label">TOTAL</div><div class="metric-value">{len(br):,}</div></div>', unsafe_allow_html=True)
-        with k2: st.markdown(f'<div class="metric-card metric-card-teal"><div class="metric-label">LANGUAGES</div><div class="metric-value">{ul}</div></div>', unsafe_allow_html=True)
-        with k3: st.markdown(f'<div class="metric-card metric-card-green"><div class="metric-label">TRANSLATED</div><div class="metric-value">{len(br):,}</div></div>', unsafe_allow_html=True)
-        with k4: st.markdown(f'<div class="metric-card metric-card-violet"><div class="metric-label">AVG CONF</div><div class="metric-value">{ac2:.1f}%</div></div>', unsafe_allow_html=True)
+        # ── Results Dashboard (NEW — feature parity with Bulk) ──
+        # Build a temp df with Sentiment column for compute_metrics
+        metrics = compute_metrics(odf)
+        total, pos, neg, neu = metrics["total"], metrics["pos"], metrics["neg"], metrics["neu"]
+
+        k1,k2,k3,k4,k5 = st.columns(5)
+        ul = odf["Language"].nunique()
+        avg_conf = metrics["avg_conf"]
+        with k1: st.markdown(f'<div class="metric-card metric-card-cyan"><div class="metric-label">TOTAL</div><div class="metric-value">{total:,}</div></div>', unsafe_allow_html=True)
+        with k2: st.markdown(f'<div class="metric-card metric-card-green"><div class="metric-label">POSITIVE</div><div class="metric-value">{pos:,}</div></div>', unsafe_allow_html=True)
+        with k3: st.markdown(f'<div class="metric-card metric-card-red"><div class="metric-label">NEGATIVE</div><div class="metric-value">{neg:,}</div></div>', unsafe_allow_html=True)
+        with k4: st.markdown(f'<div class="metric-card metric-card-teal"><div class="metric-label">LANGUAGES</div><div class="metric-value">{ul}</div></div>', unsafe_allow_html=True)
+        with k5: st.markdown(f'<div class="metric-card metric-card-violet"><div class="metric-label">AVG CONF</div><div class="metric-value">{avg_conf:.1f}%</div></div>', unsafe_allow_html=True)
 
         st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
+        # ── Sentiment Pie + Keywords (NEW) ──
+        ch1, ch2 = st.columns(2)
+        with ch1:
+            fp = build_sentiment_pie(pos, neg, neu, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR)
+            apply_theme(fp, title="Sentiment Distribution", height=380)
+            st.plotly_chart(fp, use_container_width=True, key="lang_batch_pie")
+        with ch2:
+            try:
+                pw = extract_keywords(odf.loc[odf["Sentiment"]=="Positive", "Translated"])
+                nw = extract_keywords(odf.loc[odf["Sentiment"]=="Negative", "Translated"])
+                fk = build_keywords_chart(pw, nw, POSITIVE_COLOR, NEGATIVE_COLOR)
+                apply_theme(fk, title="Top Keywords", height=380, margin=dict(l=120), barmode="group")
+                st.plotly_chart(fk, use_container_width=True, key="lang_batch_kw")
+            except Exception:
+                st.info("Keyword extraction unavailable.")
+
+        st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+        # ── Sentiment Trend (NEW) ──
+        ft = build_trend_chart(pos, neg, neu, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR)
+        apply_theme(ft, title="Sentiment Trend", height=350)
+        st.plotly_chart(ft, use_container_width=True, key="lang_batch_trend")
+
+        st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+        # ── AI Summary (NEW) ──
         with st.container():
-            st.markdown('<div class="glass-card-header"><div class="section-title">📥 Export</div><div class="section-subtitle">Download results</div></div>', unsafe_allow_html=True)
-            x1,x2,x3=st.columns(3)
-            with x1: st.download_button("📊 CSV",data=odf.to_csv(index=False).encode("utf-8"),file_name="reviewsense_multilingual.csv",mime="text/csv",use_container_width=True)
-            with x2:
-                import json as _json  # noqa
-                st.download_button("📋 JSON",data=odf.to_json(orient="records",indent=2),file_name="reviewsense_multilingual.json",mime="application/json",use_container_width=True)
-            with x3:
-                try:
-                    import io  # noqa
-                    buf=io.BytesIO(); odf.to_excel(buf,index=False,engine="openpyxl")
-                    st.download_button("📗 Excel",data=buf.getvalue(),file_name="reviewsense_multilingual.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
-                except Exception: st.button("📗 Excel",disabled=True,use_container_width=True,key="lang_xl_dis")
+            st.markdown('<div class="glass-card-header"><div class="section-title">🤖 AI Summary</div><div class="section-subtitle">Auto-generated insights from batch analysis</div></div>', unsafe_allow_html=True)
+            summary_html = generate_summary(odf)
+            st.markdown(f'<div style="color:#e8eaf6;line-height:2.0;margin-bottom:12px;font-size:0.92rem;">{summary_html}</div>', unsafe_allow_html=True)
+            st.markdown('<span class="tag-pill tag-violet">AI-GENERATED</span> <span class="tag-pill tag-cyan">INSTANT</span>', unsafe_allow_html=True)
             st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+        st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+        # ── Export (centralized, 4-format — upgraded from 3) ──
+        render_export_buttons(odf, filename_prefix="reviewsense_multilingual")

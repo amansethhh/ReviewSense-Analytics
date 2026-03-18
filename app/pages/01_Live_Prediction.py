@@ -31,6 +31,8 @@ html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"],
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
 from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR, ACCENT_BLUE  # noqa: E402
 from src.config import DOMAINS, MODEL_NAMES, LABEL_MAP  # noqa: E402
+from src.analytics import extract_keywords_single, generate_summary_single  # noqa: E402
+from src.exporter import render_export_buttons  # noqa: E402
 from utils import load_model  # noqa: E402
 
 load_css()
@@ -169,6 +171,43 @@ with m3:
 st.progress(confidence, text=f"Confidence Level — {confidence*100:.1f}%")
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
+# ── Keyword Extraction (NEW) ─────────────────────────────
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">🔑 Keyword Extraction</div>
+      <div class="section-subtitle">Key terms detected in the review</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    kw = extract_keywords_single(review_text_display, n=10)
+    if kw:
+        kw_html = " ".join(f'<span class="tag-pill tag-cyan" style="margin:2px;">{w} ({c})</span>' for w, c in kw)
+        st.markdown(f'<div style="padding:8px 0;">{kw_html}</div>', unsafe_allow_html=True)
+    else:
+        st.info("No significant keywords detected.")
+
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+# ── AI Summary (NEW) ─────────────────────────────────────
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">🤖 AI Summary</div>
+      <div class="section-subtitle">Single review insight</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    summary_html = generate_summary_single(result)
+    st.markdown(f'<div style="color:#e8eaf6;line-height:2.0;margin-bottom:12px;font-size:0.92rem;">{summary_html}</div>', unsafe_allow_html=True)
+    st.markdown('<span class="tag-pill tag-violet">AI-GENERATED</span> <span class="tag-pill tag-cyan">INSTANT</span>', unsafe_allow_html=True)
+
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
 # ── LIME (Pattern B) ─────────────────────────────────────
 with st.container():
     st.markdown("""
@@ -206,7 +245,7 @@ with st.container():
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── ABSA (Pattern B) ─────────────────────────────────────
+# ── ABSA (Pattern B) — with safe empty-aspects guard ─────
 with st.container():
     st.markdown("""
     <div class="glass-card-header">
@@ -219,7 +258,7 @@ with st.container():
         from src.absa import get_aspect_dataframe  # noqa: E402
         import plotly.graph_objects as go  # noqa: E402
         aspect_df = get_aspect_dataframe(review_text_display)
-        if aspect_df.empty:
+        if aspect_df is None or aspect_df.empty:
             st.info("No distinct aspects detected in this review.")
         else:
             st.dataframe(aspect_df, use_container_width=True)
@@ -263,30 +302,13 @@ with gauge_col:
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── Export (Pattern B) ───────────────────────────────────
-with st.container():
-    st.markdown('<div class="glass-card-header"><div class="section-title">📥 Export Results</div><div class="section-subtitle">Download your analysis in multiple formats</div></div>', unsafe_allow_html=True)
-
-    import json as _json  # noqa: E402
-    _export_data = {"text": review_text_display, "sentiment": label_name, "confidence": round(confidence, 4), "polarity": round(polarity, 4), "subjectivity": round(subjectivity, 4)}
-    e1, e2, e3 = st.columns(3)
-    with e1:
-        st.download_button("📊  Download CSV", data=f"text,sentiment,confidence,polarity,subjectivity\n\"{review_text_display}\",{label_name},{confidence:.4f},{polarity:.4f},{subjectivity:.4f}", file_name="reviewsense_result.csv", mime="text/csv", use_container_width=True, key="live_csv")
-    with e2:
-        st.download_button("📋  Download JSON", data=_json.dumps(_export_data, indent=2), file_name="reviewsense_result.json", mime="application/json", use_container_width=True, key="live_json")
-    with e3:
-        try:
-            from src.pdf_exporter import export_report  # noqa: E402
-            import tempfile, os  # noqa: E402
-            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as _tmp:
-                _tmp_path = _tmp.name
-            try:
-                export_report({"single_result": _export_data}, _tmp_path)
-                with open(_tmp_path, "rb") as f: _pdf = f.read()
-                st.download_button("📄  Download PDF", data=_pdf, file_name="reviewsense_result.pdf", mime="application/pdf", use_container_width=True, key="live_pdf")
-            finally:
-                if os.path.exists(_tmp_path): os.unlink(_tmp_path)
-        except Exception:
-            st.button("📄  Download PDF", disabled=True, use_container_width=True, key="live_pdf_dis")
-
-    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+# ── Export (centralized, 4-format — upgraded from 3) ─────
+import pandas as pd  # noqa: E402
+_export_df = pd.DataFrame([{
+    "Text": review_text_display,
+    "Sentiment": label_name,
+    "Confidence": round(confidence, 4),
+    "Polarity": round(polarity, 4),
+    "Subjectivity": round(subjectivity, 4),
+}])
+render_export_buttons(_export_df, filename_prefix="reviewsense_live")

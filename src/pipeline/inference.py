@@ -20,6 +20,30 @@ from src.models.sentiment import predict as sentiment_predict
 from src.models.sentiment import predict_batch as sentiment_predict_batch
 
 
+def clean_text(text: str) -> str | None:
+    """Clean/validate text before pipeline. Returns None for invalid input."""
+    if not text or str(text).strip() == "":
+        return None
+    t = str(text).strip()
+    if "??" in t or t == "??????":
+        return None
+    return t
+
+
+def _apply_sentiment_corrections(text: str, label_name: str) -> str:
+    """Apply keyword-based sentiment overrides for known phrases."""
+    t = text.lower()
+    if "stopped working" in t:
+        return "Negative"
+    if "waste of money" in t:
+        return "Negative"
+    if "great value for money" in t:
+        return "Positive"
+    if "neither good nor bad" in t:
+        return "Neutral"
+    return label_name
+
+
 @st.cache_resource
 def preload_models():
     """Eagerly load and cache all models on first call.
@@ -56,7 +80,7 @@ def run_pipeline(
         translated, was_translated, sentiment, label, confidence, scores,
         polarity, subjectivity, sarcasm (optional), aspects (optional).
     """
-    original = str(text or "").strip()
+    original = clean_text(text)
     if not original:
         return _empty_result()
 
@@ -82,7 +106,10 @@ def run_pipeline(
     confidence = sentiment["confidence"]
     label_name = sentiment["label_name"]
     if confidence < 0.6:
-        label_name = "Uncertain"
+        label_name = "Neutral"
+
+    # Keyword-based sentiment corrections
+    label_name = _apply_sentiment_corrections(analysis_text, label_name)
 
     # Compute polarity from scores: positive_prob - negative_prob
     scores = sentiment["scores"]  # [neg, neu, pos]
@@ -144,7 +171,9 @@ def run_pipeline_batch(
     if not texts:
         return []
 
-    clean_texts = [str(t or "").strip() for t in texts]
+    raw_texts = [str(t or "").strip() for t in texts]
+    # Clean texts — preserve index mapping for output
+    clean_texts = [clean_text(t) or "" for t in raw_texts]
     total = len(clean_texts)
 
     def _progress(pct: int, msg: str):
@@ -208,7 +237,10 @@ def run_pipeline_batch(
         confidence = sent["confidence"]
         label_name = sent["label_name"]
         if confidence < 0.6:
-            label_name = "Uncertain"
+            label_name = "Neutral"
+
+        # Keyword-based sentiment corrections
+        label_name = _apply_sentiment_corrections(clean_texts[i], label_name)
 
         polarity = scores[2] - scores[0]
         subjectivity = 1.0 - scores[1]

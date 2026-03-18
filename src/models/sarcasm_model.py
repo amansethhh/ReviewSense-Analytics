@@ -46,7 +46,7 @@ def predict(text: str) -> dict:
 
     probs = torch.softmax(outputs.logits[0], dim=0).numpy()
     irony_prob = float(probs[1])
-    is_sarcastic = irony_prob > 0.5
+    is_sarcastic = irony_prob > 0.80
 
     if is_sarcastic:
         reason = f"Irony detected with {irony_prob*100:.1f}% probability by RoBERTa irony classifier."
@@ -90,7 +90,7 @@ def predict_batch(texts: list[str], batch_size: int = 16) -> list[dict]:
 
         for probs in all_probs:
             irony_prob = float(probs[1])
-            is_sarcastic = irony_prob > 0.5
+            is_sarcastic = irony_prob > 0.80
             results.append({
                 "is_sarcastic": is_sarcastic,
                 "confidence": irony_prob,

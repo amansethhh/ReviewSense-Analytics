@@ -27,6 +27,8 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
 from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR  # noqa: E402
 from src.config import MODEL_NAMES, DOMAINS  # noqa: E402
+from src.analytics import compute_metrics, generate_summary, extract_keywords, build_sentiment_pie, build_keywords_chart, build_trend_chart  # noqa: E402
+from src.exporter import render_export_buttons  # noqa: E402
 from utils import load_model  # noqa: E402
 
 load_css()
@@ -118,7 +120,6 @@ with st.container():
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━ ANALYSIS SETTINGS (Pattern B) ━━━
-# Stable control panel — wrapped in container to prevent jumping
 with st.container():
     st.markdown('<div class="glass-card-header"><div class="section-title">⚙️ Analysis Settings</div><div class="section-subtitle">Choose modules and model</div></div>', unsafe_allow_html=True)
     cl,cr = st.columns([2,1])
@@ -199,10 +200,10 @@ text_column = st.session_state.bulk_text_col_used or text_column
 results = st.session_state.bulk_results_data or []
 sarcasm_was_on = st.session_state.bulk_sarcasm_was_on
 
+# ── Centralized metrics ──
 import plotly.graph_objects as go  # noqa: E402
-total=len(rdf); pos=int((rdf["Sentiment"]=="Positive").sum()); neg=int((rdf["Sentiment"]=="Negative").sum())
-neu=int((rdf["Sentiment"]=="Neutral").sum()); unc=int((rdf["Sentiment"]=="Uncertain").sum())
-sarc_count = int((rdf["Sarcasm"]=="Yes").sum()) if sarcasm_was_on else 0
+metrics = compute_metrics(rdf)
+total, pos, neg, neu, sarc_count = metrics["total"], metrics["pos"], metrics["neg"], metrics["neu"], metrics["sarc_count"]
 
 st.markdown('<div class="glass-card"><div class="section-title">📊 Results Dashboard</div><div class="section-subtitle" style="margin-bottom:0;">Analysis complete</div></div>', unsafe_allow_html=True)
 
@@ -232,122 +233,39 @@ st.dataframe(rdf[display_cols], use_container_width=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
+# ── Charts (using centralized builders) ──
 c1,c2 = st.columns(2)
 with c1:
-    fp = go.Figure(go.Pie(labels=["Positive","Negative","Neutral"],values=[pos,neg,neu],marker=dict(colors=[POSITIVE_COLOR,NEGATIVE_COLOR,NEUTRAL_COLOR]),hole=0.45,textinfo="label+percent"))
-    apply_theme(fp,title="Sentiment Distribution",height=380); st.plotly_chart(fp,use_container_width=True,key="bulk_pie")
+    fp = build_sentiment_pie(pos, neg, neu, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR)
+    apply_theme(fp, title="Sentiment Distribution", height=380)
+    st.plotly_chart(fp, use_container_width=True, key="bulk_pie")
 with c2:
     try:
-        from collections import Counter  # noqa: E402
-        def _tw(s,n=12):
-            w=" ".join(s.fillna("")).lower().split(); stops={"the","a","an","is","was","and","to","of","in","it","for","on","this","that","with","i","my","me","but"}
-            return Counter(x for x in w if x not in stops and len(x)>2).most_common(n)
-        pw=_tw(rdf.loc[rdf["Sentiment"]=="Positive",text_column]); nw=_tw(rdf.loc[rdf["Sentiment"]=="Negative",text_column])
-        fk=go.Figure()
-        if pw: fk.add_trace(go.Bar(x=[c for _,c in pw],y=[w for w,_ in pw],orientation="h",marker_color=POSITIVE_COLOR,name="Positive"))
-        if nw: fk.add_trace(go.Bar(x=[c for _,c in nw],y=[w for w,_ in nw],orientation="h",marker_color=NEGATIVE_COLOR,name="Negative"))
-        apply_theme(fk,title="Top Keywords",height=380,margin=dict(l=120),barmode="group"); fk.update_layout(yaxis=dict(autorange="reversed"))
-        st.plotly_chart(fk,use_container_width=True,key="bulk_kw")
-    except Exception: st.info("Keyword extraction unavailable.")
+        pw = extract_keywords(rdf.loc[rdf["Sentiment"]=="Positive", text_column])
+        nw = extract_keywords(rdf.loc[rdf["Sentiment"]=="Negative", text_column])
+        fk = build_keywords_chart(pw, nw, POSITIVE_COLOR, NEGATIVE_COLOR)
+        apply_theme(fk, title="Top Keywords", height=380, margin=dict(l=120), barmode="group")
+        st.plotly_chart(fk, use_container_width=True, key="bulk_kw")
+    except Exception:
+        st.info("Keyword extraction unavailable.")
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-months=["Oct","Nov","Dec","Jan","Feb","Mar"]; bp,bn,bne=max(1,int(pos/6)),max(1,int(neg/6)),max(1,int(neu/6))
-ft=go.Figure()
-ft.add_trace(go.Scatter(x=months,y=[max(1,bp+int(i*bp*0.1)) for i in range(6)],mode="lines+markers",name="Positive",line=dict(color=POSITIVE_COLOR,width=2.5)))
-ft.add_trace(go.Scatter(x=months,y=[max(1,bn-int(i*bn*0.05)) for i in range(6)],mode="lines+markers",name="Negative",line=dict(color=NEGATIVE_COLOR,width=2.5)))
-ft.add_trace(go.Scatter(x=months,y=[max(1,bne-int(i*bne*0.03)) for i in range(6)],mode="lines+markers",name="Neutral",line=dict(color=NEUTRAL_COLOR,width=2.5)))
-apply_theme(ft,title="Sentiment Trend",height=350); st.plotly_chart(ft,use_container_width=True,key="bulk_trend")
+ft = build_trend_chart(pos, neg, neu, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR)
+apply_theme(ft, title="Sentiment Trend", height=350)
+st.plotly_chart(ft, use_container_width=True, key="bulk_trend")
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── AI Summary (Pattern B) — insight-based, clean HTML formatting ──
+# ── AI Summary (centralized) ──
 with st.container():
     st.markdown('<div class="glass-card-header"><div class="section-title">🤖 AI Summary</div><div class="section-subtitle">Auto-generated insights from analysis results</div></div>', unsafe_allow_html=True)
-
-    # Generate structured insights from DataFrame stats
-    def _generate_insights(df_result, total_count, pos_count, neg_count, neu_count, sarc_on, sarc_cnt):
-        """Build a structured, insight-based summary — clean HTML, no markdown."""
-        pos_pct = pos_count / total_count * 100 if total_count else 0
-        neg_pct = neg_count / total_count * 100 if total_count else 0
-        neu_pct = neu_count / total_count * 100 if total_count else 0
-        avg_conf = df_result["Confidence"].mean() if "Confidence" in df_result.columns else 0
-        avg_pol = df_result["Polarity"].mean() if "Polarity" in df_result.columns else 0
-
-        # Determine overall sentiment trend
-        if pos_pct > 60:
-            trend = "overwhelmingly positive"
-        elif pos_pct > 45:
-            trend = "generally positive"
-        elif neg_pct > 45:
-            trend = "predominantly negative"
-        elif neu_pct > 50:
-            trend = "largely neutral"
-        else:
-            trend = "mixed"
-
-        conf_label = "high" if avg_conf > 75 else "moderate" if avg_conf > 55 else "low"
-        pol_label = "positive leaning" if avg_pol > 0.1 else "negative leaning" if avg_pol < -0.1 else "balanced"
-
-        # Build HTML lines — no markdown ** symbols
-        H = '<span style="color:#00e5cc;font-weight:600;">'  # header style
-        E = '</span>'
-        lines = []
-        lines.append(f'📈 {H}Overall Sentiment:{E} The dataset of {total_count:,} reviews shows a {trend} sentiment pattern.')
-        lines.append(f'📊 {H}Distribution:{E} {pos_pct:.1f}% positive, {neg_pct:.1f}% negative, {neu_pct:.1f}% neutral.')
-        lines.append(f'🎯 {H}Model Confidence:{E} Average confidence score is {avg_conf:.1f}%, indicating {conf_label} prediction reliability.')
-        lines.append(f'📐 {H}Polarity Score:{E} Mean polarity is {avg_pol:.3f} ({pol_label}).')
-
-        # Language diversity
-        if "Language" in df_result.columns:
-            unique_langs = df_result["Language"].nunique()
-            if unique_langs > 1:
-                top_lang = df_result["Language"].mode().iloc[0] if not df_result["Language"].mode().empty else "English"
-                lines.append(f'🌐 {H}Language Diversity:{E} {unique_langs} languages detected. Primary language: {top_lang}.')
-
-        # Sarcasm insight
-        if sarc_on and sarc_cnt > 0:
-            sarc_pct = sarc_cnt / total_count * 100
-            lines.append(f'🎭 {H}Sarcasm:{E} {sarc_cnt:,} reviews ({sarc_pct:.1f}%) flagged as sarcastic — consider manual review.')
-
-        # Actionable insight
-        if neg_pct > 30:
-            lines.append(f'⚠️ {H}Action Required:{E} {neg_count:,} negative reviews detected — recommended for priority review.')
-        elif pos_pct > 70:
-            lines.append(f'✅ {H}Key Takeaway:{E} Strong positive sentiment indicates high customer satisfaction across the dataset.')
-
-        return "<br>".join(lines)
-
-    summary_html = _generate_insights(rdf, total, pos, neg, neu, sarcasm_was_on, sarc_count)
+    summary_html = generate_summary(rdf, sarcasm_on=sarcasm_was_on)
     st.markdown(f'<div style="color:#e8eaf6;line-height:2.0;margin-bottom:12px;font-size:0.92rem;">{summary_html}</div>', unsafe_allow_html=True)
     st.markdown('<span class="tag-pill tag-violet">AI-GENERATED</span> <span class="tag-pill tag-cyan">INSTANT</span>', unsafe_allow_html=True)
     st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── Export (Pattern B) ──
-with st.container():
-    st.markdown('<div class="glass-card-header"><div class="section-title">📥 Export Results</div><div class="section-subtitle">Download in multiple formats</div></div>', unsafe_allow_html=True)
-    e1,e2,e3,e4 = st.columns(4)
-    with e1: st.download_button("📊 CSV",data=rdf.to_csv(index=False).encode("utf-8"),file_name="reviewsense_bulk.csv",mime="text/csv",use_container_width=True)
-    with e2:
-        try:
-            from src.pdf_exporter import export_report; import tempfile,os  # noqa
-            with tempfile.NamedTemporaryFile(suffix=".pdf",delete=False) as _t: _tp=_t.name
-            try:
-                export_report({"bulk_results":rdf.to_dict(orient="records")},_tp)
-                with open(_tp,"rb") as f: _pd=f.read()
-                st.download_button("📄 PDF",data=_pd,file_name="reviewsense_bulk.pdf",mime="application/pdf",use_container_width=True)
-            finally:
-                if os.path.exists(_tp): os.unlink(_tp)
-        except Exception: st.button("📄 PDF",disabled=True,use_container_width=True,key="bulk_pdf_dis")
-    with e3:
-        import json as _json  # noqa
-        st.download_button("📋 JSON",data=rdf.to_json(orient="records",indent=2),file_name="reviewsense_bulk.json",mime="application/json",use_container_width=True)
-    with e4:
-        try:
-            import io  # noqa
-            buf=io.BytesIO(); rdf.to_excel(buf,index=False,engine="openpyxl")
-            st.download_button("📗 Excel",data=buf.getvalue(),file_name="reviewsense_bulk.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
-        except Exception: st.button("📗 Excel",disabled=True,use_container_width=True,key="bulk_xl_dis")
-    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+# ── Export (centralized) ──
+render_export_buttons(rdf, filename_prefix="reviewsense_bulk")

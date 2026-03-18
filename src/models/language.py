@@ -12,7 +12,11 @@ LANGUAGE_NAMES = {
     "ur": "Urdu", "es": "Spanish", "fr": "French", "de": "German",
     "it": "Italian", "pt": "Portuguese", "ru": "Russian", "ar": "Arabic",
     "zh-cn": "Chinese (Simplified)", "zh-tw": "Chinese (Traditional)",
-    "ja": "Japanese", "ko": "Korean", "unknown": "Unknown",
+    "ja": "Japanese", "ko": "Korean", "ca": "Catalan", "nl": "Dutch",
+    "sv": "Swedish", "no": "Norwegian", "da": "Danish", "fi": "Finnish",
+    "pl": "Polish", "tr": "Turkish", "th": "Thai", "vi": "Vietnamese",
+    "id": "Indonesian", "ms": "Malay", "ro": "Romanian", "cs": "Czech",
+    "unknown": "Unknown",
 }
 
 LANGUAGE_FLAGS = {
@@ -20,6 +24,9 @@ LANGUAGE_FLAGS = {
     "bn": "🇮🇳", "gu": "🇮🇳", "pa": "🇮🇳", "ur": "🇵🇰", "es": "🇪🇸",
     "fr": "🇫🇷", "de": "🇩🇪", "it": "🇮🇹", "pt": "🇵🇹", "ru": "🇷🇺",
     "ar": "🇸🇦", "zh-cn": "🇨🇳", "zh-tw": "🇹🇼", "ja": "🇯🇵", "ko": "🇰🇷",
+    "ca": "🇪🇸", "nl": "🇳🇱", "sv": "🇸🇪", "no": "🇳🇴", "da": "🇩🇰",
+    "fi": "🇫🇮", "pl": "🇵🇱", "tr": "🇹🇷", "th": "🇹🇭", "vi": "🇻🇳",
+    "id": "🇮🇩", "ms": "🇲🇾", "ro": "🇷🇴", "cs": "🇨🇿",
 }
 
 
