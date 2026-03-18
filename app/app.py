@@ -140,30 +140,34 @@ with row2[1]:
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ━━━ QUICK ACTIONS (action-card with hidden page_link) ━━━━
+# ━━━ QUICK ACTIONS (st.button + st.switch_page navigation) ━━━━
 
 st.markdown("""
+<style>.action-card { cursor: pointer; }</style>
 <div class="section-title">🚀 Quick Actions</div>
 <div class="section-subtitle" style="margin-bottom:16px;">Jump into any feature instantly</div>
 """, unsafe_allow_html=True)
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.page_link("pages/01_Live_Prediction.py", label="⚡ Try Live Prediction")
+    if st.button("⚡ Try Live Prediction", use_container_width=True):
+        st.switch_page("pages/01_Live_Prediction.py")
     st.markdown("""
     <div class="action-card">
       <div class="action-icon action-icon-cyan">⚡</div>
       <div><div class="action-label">Try Live Prediction</div><div class="action-sublabel">Analyze a review instantly</div></div>
     </div>""", unsafe_allow_html=True)
 with col2:
-    st.page_link("pages/02_Bulk_Analysis.py", label="📂 Upload Dataset")
+    if st.button("📂 Upload Dataset", use_container_width=True):
+        st.switch_page("pages/02_Bulk_Analysis.py")
     st.markdown("""
     <div class="action-card">
       <div class="action-icon action-icon-amber">📂</div>
       <div><div class="action-label">Upload Dataset</div><div class="action-sublabel">Batch process thousands of reviews</div></div>
     </div>""", unsafe_allow_html=True)
 with col3:
-    st.page_link("pages/03_Model_Dashboard.py", label="📊 View Model Dashboard")
+    if st.button("📊 View Model Dashboard", use_container_width=True):
+        st.switch_page("pages/03_Model_Dashboard.py")
     st.markdown("""
     <div class="action-card">
       <div class="action-icon action-icon-violet">📊</div>
