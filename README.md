@@ -71,23 +71,23 @@ ReviewSense Analytics is a full-stack NLP platform that transforms raw customer 
 
 ### 🏠 Home Dashboard
 
-<img src="https://via.placeholder.com/900x500.png?text=Home+Dashboard+%E2%80%94+KPI+Cards+%2B+Capability+Overview" alt="Home Dashboard" width="900"/>
+![Home Dashboard](docs/images/home.png)
 
 ### ⚡ Live Prediction
 
-<img src="https://via.placeholder.com/900x500.png?text=Live+Prediction+%E2%80%94+Sentiment+%2B+LIME+%2B+ABSA+%2B+Sarcasm" alt="Live Prediction Page" width="900"/>
+![Live Prediction](docs/images/live_prediction.png)
 
 ### 📂 Bulk Analysis
 
-<img src="https://via.placeholder.com/900x500.png?text=Bulk+Analysis+%E2%80%94+CSV+Upload+%2B+Sentiment+Distribution+%2B+Export" alt="Bulk Analysis Page" width="900"/>
+![Bulk Analysis](docs/images/bulk_Analysis.png)
 
 ### 🌐 Language Analysis
 
-<img src="https://via.placeholder.com/900x500.png?text=Language+Analysis+%E2%80%94+Auto-Detect+%2B+Translation+%2B+Full+Pipeline" alt="Language Analysis Page" width="900"/>
+![Language Analysis](docs/images/language_analysis.png)
 
 ### 📊 Model Dashboard
 
-<img src="https://via.placeholder.com/900x500.png?text=Model+Dashboard+%E2%80%94+Accuracy+%2F+F1+%2F+Confusion+Matrix+%2F+ROC-AUC" alt="Model Performance Dashboard" width="900"/>
+![Model Dashboard](docs/images/model_dashboard.png)
 
 ---
 
@@ -432,7 +432,7 @@ For the input `"The battery lasts all day and the camera quality is exceptional.
 ## 👤 Author
 
 **Aman Seth**  
-AI Developer · NLP Engineer
+Full-Stack Python Developer
 
 ---
 
