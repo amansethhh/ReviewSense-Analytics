@@ -253,16 +253,19 @@ cd ReviewSense-Analytics
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3a. Quick demo (no dataset required)
+# 3. Download the spaCy language model (required for Aspect-Based Sentiment Analysis)
+python -m spacy download en_core_web_sm
+
+# 4a. Quick demo (no dataset required)
 #     Generates placeholder model artifacts so the dashboard runs immediately
 python scripts/generate_demo_artifacts.py
 
-# 3b. OR: Train on the full dataset
+# 4b. OR: Train on the full dataset
 #     Copy reviewsense_dataset.csv → data/processed/reviewsense_dataset.csv
 python src/preprocess.py
 python src/train_classical.py
 
-# 4. Launch the Streamlit dashboard
+# 5. Launch the Streamlit dashboard
 streamlit run app/app.py
 ```
 
