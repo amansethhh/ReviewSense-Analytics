@@ -87,7 +87,7 @@ ReviewSense Analytics is a full-stack NLP platform that transforms raw customer 
 
 ### 🌐 Language Analysis
 
-![Language Analysis](docs/images/language_analysis.png)
+![Language Analysis](docs/images/language_analysis_updated.png)
 
 ---
 
