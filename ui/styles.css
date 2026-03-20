@@ -293,6 +293,15 @@ h3 { color: var(--text) !important; font-weight: 600 !important; margin-bottom: 
 .flag-cn { background: #DE2910; }
 .flag-jp { background: #ffffff; color: #BC002D; }
 .flag-ar { background: linear-gradient(180deg, #000000 33%, #FFFFFF 33% 66%, #007A3D 66%); }
+.flag-sa { background: #006C35; }
+.flag-pt { background: linear-gradient(90deg, #006600 40%, #FF0000 40%); }
+.flag-ru { background: linear-gradient(180deg, #FFFFFF 33%, #0039A6 33% 66%, #D52B1E 66%); }
+.flag-kr { background: #FFFFFF; color: #003478; }
+.flag-it { background: linear-gradient(90deg, #009246 33%, #FFFFFF 33% 66%, #CE2B37 66%); }
+.flag-tr { background: #E30A17; }
+.flag-id { background: linear-gradient(180deg, #FF0000 50%, #FFFFFF 50%); }
+.flag-th { background: linear-gradient(180deg, #A51931 20%, #F4F5F8 20% 40%, #2D2A4A 40% 60%, #F4F5F8 60% 80%, #A51931 80%); }
+.flag-vn { background: #DA251D; }
 
 .lang-tile {
   background: rgba(20,25,40,0.7);

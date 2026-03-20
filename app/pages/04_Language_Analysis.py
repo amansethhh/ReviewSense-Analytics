@@ -53,27 +53,38 @@ st.markdown("""<div class="glass-card">
 # ━━━ SUPPORTED LANGUAGES — CSS gradient flag boxes ━━━
 st.markdown('<div class="section-title">🗺️ Supported Languages</div><div class="section-subtitle">Auto-detection across 50+ languages</div>', unsafe_allow_html=True)
 
-languages = [
-    ("gb", "English", "EN", "en"),
-    ("in", "Hindi", "HI", "hi"),
-    ("in", "Tamil", "TA", "ta"),
-    ("in", "Bengali", "BN", "bn"),
-    ("es", "Spanish", "ES", "es"),
-    ("fr", "French", "FR", "fr"),
-    ("de", "German", "DE", "de"),
-    ("cn", "Chinese", "CN", "zh-cn"),
+languages_row1 = [
+    ("gb", "English", "EN"),
+    ("in", "Hindi", "HI"),
+    ("es", "Spanish", "ES"),
+    ("fr", "French", "FR"),
+    ("de", "German", "DE"),
+    ("cn", "Chinese", "CN"),
+    ("jp", "Japanese", "JP"),
+    ("sa", "Arabic", "SA"),
 ]
 
-cols = st.columns(8)
-for i, (flag_cls, name, iso, _) in enumerate(languages):
-    with cols[i]:
-        st.markdown(f"""<div class="lang-tile">
-          <div class="flag-box flag-{flag_cls}">{iso}</div>
-          <div class="lang-name">{name}</div>
-          <div class="lang-iso">{iso}</div>
-        </div>""", unsafe_allow_html=True)
+languages_row2 = [
+    ("pt", "Portuguese", "PT"),
+    ("ru", "Russian", "RU"),
+    ("kr", "Korean", "KR"),
+    ("it", "Italian", "IT"),
+    ("tr", "Turkish", "TR"),
+    ("id", "Indonesian", "ID"),
+    ("th", "Thai", "TH"),
+    ("vn", "Vietnamese", "VN"),
+]
 
-st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+for row_langs in (languages_row1, languages_row2):
+    cols = st.columns(8)
+    for i, (flag_cls, name, iso) in enumerate(row_langs):
+        with cols[i]:
+            st.markdown(f"""<div class="lang-tile">
+              <div class="flag-box flag-{flag_cls}">{iso}</div>
+              <div class="lang-name">{name}</div>
+              <div class="lang-iso">{iso}</div>
+            </div>""", unsafe_allow_html=True)
+    st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━ ANALYZE TEXT (Pattern B — unified card) ━━━
 with st.container():
@@ -343,12 +354,11 @@ if batch_file is not None:
 
         k1,k2,k3,k4,k5 = st.columns(5)
         ul = odf["Language"].nunique()
-        avg_conf = metrics["avg_conf"]
-        with k1: st.markdown(f'<div class="metric-card metric-card-cyan"><div class="metric-label">TOTAL</div><div class="metric-value">{total:,}</div></div>', unsafe_allow_html=True)
+        with k1: st.markdown(f'<div class="metric-card metric-card-cyan"><div class="metric-label">TOTAL REVIEWS</div><div class="metric-value">{total:,}</div></div>', unsafe_allow_html=True)
         with k2: st.markdown(f'<div class="metric-card metric-card-green"><div class="metric-label">POSITIVE</div><div class="metric-value">{pos:,}</div></div>', unsafe_allow_html=True)
         with k3: st.markdown(f'<div class="metric-card metric-card-red"><div class="metric-label">NEGATIVE</div><div class="metric-value">{neg:,}</div></div>', unsafe_allow_html=True)
-        with k4: st.markdown(f'<div class="metric-card metric-card-teal"><div class="metric-label">LANGUAGES</div><div class="metric-value">{ul}</div></div>', unsafe_allow_html=True)
-        with k5: st.markdown(f'<div class="metric-card metric-card-violet"><div class="metric-label">AVG CONF</div><div class="metric-value">{avg_conf:.1f}%</div></div>', unsafe_allow_html=True)
+        with k4: st.markdown(f'<div class="metric-card metric-card-grey"><div class="metric-label">NEUTRAL</div><div class="metric-value">{neu:,}</div></div>', unsafe_allow_html=True)
+        with k5: st.markdown(f'<div class="metric-card metric-card-teal"><div class="metric-label">LANGUAGES</div><div class="metric-value">{ul}</div></div>', unsafe_allow_html=True)
 
         st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
