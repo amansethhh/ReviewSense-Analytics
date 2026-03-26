@@ -3,7 +3,11 @@
 <p align="center">
   <strong>AI-powered, multi-domain sentiment intelligence platform — transformer-based NLP, real-time explainability, and production-grade ML pipelines in a Streamlit web app.</strong>
 </p>
-
+<p align="center">
+  <a href="https://reviewsenseanalytics.streamlit.app/">
+    <img src="https://img.shields.io/badge/Live-Demo-00C853?style=for-the-badge&logo=vercel&logoColor=white" />
+  </a>
+</p>
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"/>
   <img src="https://img.shields.io/badge/NLP-Transformers%20%7C%20LIME%20%7C%20ABSA-FFD21F?style=flat-square&logo=huggingface&logoColor=black" alt="NLP"/>
@@ -474,14 +478,14 @@ For the input `"The battery lasts all day and the camera quality is exceptional.
 
 ---
 
-## 👤 Author
+## License
 
-**Aman Seth**  
-Full-Stack Python Developer
+This project is licensed under the [MIT License](./LICENSE).
 
 ---
 
-## 📄 License
+<div align="center">
+Built with ❤️ by <a href="https://github.com/amansethhh">amansethhh</a>
+</div>
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
