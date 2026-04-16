@@ -122,6 +122,16 @@ async def lifespan(app: FastAPI):
     )
     logger.info(f"[WARMUP] Complete in {warmup_ms}ms")
 
+    # ── GAP 3-E: Pre-warm Google probe cache ───────────────
+    try:
+        from backend.app.routes.metrics import (
+            _get_google_reachable)
+        await _get_google_reachable()
+        logger.info("  ✓ Google Translate probe warmed")
+    except Exception as e:
+        logger.warning(
+            f"  ✗ Google probe warmup failed: {e}")
+
     # ── O8: Start periodic job cleanup ─────────────────────
     cleanup_task = asyncio.create_task(
         _periodic_job_cleanup()

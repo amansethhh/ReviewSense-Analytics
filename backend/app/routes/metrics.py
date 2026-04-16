@@ -220,28 +220,89 @@ async def get_translation_metrics():
     """W4-1: Return translation method breakdown and
     per-language failure rates. Includes google_reachable probe."""
     stats = metrics_store.get_translation_stats()
-    stats["google_reachable"] = _probe_google_translate()
+    stats["google_reachable"] = await _get_google_reachable()
     return stats
 
 
-# ── B2-D: Cached Google Translate reachability probe ───────
+@router.post(
+    "/translations/reset",
+    summary="Reset translation metrics (dev only)",
+)
+async def reset_translation_metrics():
+    """GAP 1-E: Development-only endpoint to reset translation counters."""
+    metrics_store.reset_translation_stats()
+    return {"status": "reset", "message": "Translation stats cleared"}
+
+
+# ── GAP 3: Async Google Translate reachability probe ───────
+import asyncio
 import time as _time
+from concurrent.futures import ThreadPoolExecutor as _TPE
 
-_google_probe_cache: dict = {"result": None, "timestamp": 0.0}
-_PROBE_TTL = 60.0
+_probe_executor = _TPE(
+    max_workers=1, thread_name_prefix="google-probe")
+_google_probe_cache: dict = {
+    "result": None, "timestamp": 0.0, "refreshing": False}
+_PROBE_TTL = 300.0  # 5 minutes (was 60s)
 
 
-def _probe_google_translate() -> bool:
-    """Returns True if Google Translate is reachable. Cached for 60s."""
-    now = _time.time()
-    if now - _google_probe_cache["timestamp"] < _PROBE_TTL:
-        return _google_probe_cache["result"]
+def _probe_google_translate_sync() -> bool:
+    """Synchronous Google probe — runs in thread pool."""
     try:
         from deep_translator import GoogleTranslator
-        result = GoogleTranslator(source="es", target="en").translate("hola")
-        ok = bool(result and result.strip())
+        result = GoogleTranslator(
+            source="es", target="en").translate("hola")
+        return bool(result and result.strip())
     except Exception:
-        ok = False
-    _google_probe_cache.update({"result": ok, "timestamp": now})
-    logger.info("Google Translate probe: reachable=%s", ok)
-    return ok
+        return False
+
+
+async def _refresh_google_probe_async() -> None:
+    """Fire-and-forget background refresh of the probe cache."""
+    if _google_probe_cache["refreshing"]:
+        return
+    _google_probe_cache["refreshing"] = True
+    try:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            _probe_executor, _probe_google_translate_sync)
+        _google_probe_cache.update({
+            "result": result,
+            "timestamp": _time.time(),
+            "refreshing": False,
+        })
+        logger.info("Google Translate probe: reachable=%s", result)
+    except Exception:
+        _google_probe_cache["refreshing"] = False
+
+
+async def _get_google_reachable() -> bool:
+    """
+    Returns cached probe result immediately.
+    If cache is stale, triggers background refresh and returns
+    last known result. First call waits synchronously.
+    """
+    now = _time.time()
+
+    if _google_probe_cache["result"] is None:
+        # First call — must wait for initial probe
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            _probe_executor, _probe_google_translate_sync)
+        _google_probe_cache.update({
+            "result": result,
+            "timestamp": _time.time(),
+            "refreshing": False,
+        })
+        logger.info(
+            "Google Translate initial probe: reachable=%s",
+            result)
+        return result
+
+    cache_age = now - _google_probe_cache["timestamp"]
+    if (cache_age > _PROBE_TTL
+            and not _google_probe_cache["refreshing"]):
+        asyncio.create_task(_refresh_google_probe_async())
+
+    return _google_probe_cache["result"]
+

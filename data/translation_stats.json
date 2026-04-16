@@ -1,0 +1,42 @@
+{
+  "translation_counts": {
+    "helsinki_success": 8,
+    "google_success": 0,
+    "failed": 0,
+    "skipped_english": 5
+  },
+  "language_counts": {
+    "es": {
+      "count": 1,
+      "failed": 0
+    },
+    "fr": {
+      "count": 2,
+      "failed": 0
+    },
+    "de": {
+      "count": 1,
+      "failed": 0
+    },
+    "en": {
+      "count": 5,
+      "failed": 0
+    },
+    "it": {
+      "count": 1,
+      "failed": 0
+    },
+    "lv": {
+      "count": 1,
+      "failed": 0
+    },
+    "ca": {
+      "count": 1,
+      "failed": 0
+    },
+    "tl": {
+      "count": 1,
+      "failed": 0
+    }
+  }
+}

@@ -550,14 +550,21 @@ export function BulkAnalysisPage() {
                   </NeuralInputWrap>
                 </div>
               </div>
-              <div className="toggle-row" style={{ marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 'var(--space-4)',
+                marginTop: 'var(--space-4)',
+                width: '100%',
+                alignItems: 'center',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                   <HoloToggle label="ABSA (Slower)" checked={runAbsa} onChange={setRunAbsa} />
                 </div>
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <HoloToggle label="Enable Multilingual Analysis" checked={isMultilingual} onChange={setIsMultilingual} />
                 </div>
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <HoloToggle label="Sarcasm Detection" checked={runSarcasm} onChange={setRunSarcasm} />
                 </div>
               </div>

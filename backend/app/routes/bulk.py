@@ -794,3 +794,29 @@ async def export_bulk_results(job_id: str):
         }
     )
 
+
+@router.get("/jobs/count", summary="Job store memory stats")
+async def get_job_count():
+    """H1: Returns job store stats for production memory monitoring."""
+    now = datetime.now(timezone.utc)
+    with _store_lock:
+        active = sum(
+            1 for j in _job_store.values()
+            if j.get("status") in (
+                BulkJobStatus.queued,
+                BulkJobStatus.processing,
+            )
+        )
+        oldest_age = 0.0
+        for j in _job_store.values():
+            created = j.get("created_at")
+            if created:
+                age = (now - created).total_seconds()
+                if age > oldest_age:
+                    oldest_age = age
+        return {
+            "active_jobs": active,
+            "total_in_memory": len(_job_store),
+            "oldest_job_age_seconds": round(oldest_age, 1),
+        }
+

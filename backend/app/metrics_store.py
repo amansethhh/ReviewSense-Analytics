@@ -160,6 +160,8 @@ class MetricsStore:
         """
         W4-1: Record a translation event.
         method: "helsinki" | "google" | "failed" | "skipped"
+
+        Phase 8 / GAP 1: Persists to disk after every increment.
         """
         with self._lock:
             if method == "failed":
@@ -180,6 +182,8 @@ class MetricsStore:
             if method == "failed":
                 self._language_counts[language_code][
                     "failed"] += 1
+            # GAP 1: Persist to disk after every update
+            self._save_translation_stats()
 
     def get_translation_stats(self) -> dict:
         """W4-1: Return translation pipeline metrics."""
@@ -202,6 +206,84 @@ class MetricsStore:
                 },
             }
 
+    def reset_translation_stats(self) -> None:
+        """GAP 1: Reset all translation counters and clear disk file."""
+        with self._lock:
+            self._translation_counts = {
+                "helsinki_success": 0,
+                "google_success": 0,
+                "failed": 0,
+                "skipped_english": 0,
+            }
+            self._language_counts = {}
+            self._save_translation_stats()
+
+    # ── GAP 1: Translation stats persistence ───────────────
+    def _save_translation_stats(self) -> None:
+        """Persist translation stats to disk atomically.
+        Called with self._lock already held."""
+        import json
+        try:
+            data = {
+                "translation_counts": dict(
+                    self._translation_counts),
+                "language_counts": {
+                    k: dict(v) for k, v in
+                    self._language_counts.items()
+                },
+            }
+            _TRANSLATION_STATS_FILE.parent.mkdir(
+                parents=True, exist_ok=True)
+            tmp = _TRANSLATION_STATS_FILE.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            tmp.replace(_TRANSLATION_STATS_FILE)
+        except IOError as e:
+            logger.warning(
+                "Could not save translation stats: %s", e)
+
+    def _load_translation_stats(self) -> None:
+        """Load persisted translation stats from disk on init."""
+        import json
+        try:
+            if _TRANSLATION_STATS_FILE.exists():
+                with open(_TRANSLATION_STATS_FILE, "r",
+                          encoding="utf-8") as f:
+                    data = json.load(f)
+                counts = data.get("translation_counts", {})
+                # Merge with defaults for forward compatibility
+                for key in self._translation_counts:
+                    if key in counts:
+                        self._translation_counts[key] = (
+                            counts[key])
+                # Load any extra keys too
+                for key, val in counts.items():
+                    if key not in self._translation_counts:
+                        self._translation_counts[key] = val
+                lang = data.get("language_counts", {})
+                for code, stats in lang.items():
+                    self._language_counts[code] = {
+                        "count": stats.get("count", 0),
+                        "failed": stats.get("failed", 0),
+                    }
+                logger.info(
+                    "Loaded translation stats from disk: "
+                    "%d total",
+                    sum(self._translation_counts.values()),
+                )
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(
+                "Could not load translation stats: %s", e)
+
+
+# ── GAP 1: Stats file path ────────────────────────────────
+from pathlib import Path
+_TRANSLATION_STATS_FILE = (
+    Path(__file__).resolve().parent.parent.parent
+    / "data" / "translation_stats.json"
+)
 
 # ── Module-level singleton ─────────────────────────────────
 metrics_store = MetricsStore()
+# Load persisted stats on module import
+metrics_store._load_translation_stats()

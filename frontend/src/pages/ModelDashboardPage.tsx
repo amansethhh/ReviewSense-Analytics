@@ -240,8 +240,25 @@ export function ModelDashboardPage() {
 
   if (loading) return (
     <PageWrapper title="Model Dashboard" subtitle="Performance metrics for all 4 trained classifiers" hideTopBar>
-      <div className="card animate-in card--animated" style={{ padding: 'var(--space-4)' }}>
-        <OrbitalLoader text="Analyzing Models" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {/* Skeleton KPI cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)' }}>
+          {[0,1,2,3].map(i => (
+            <div key={i} className="card" style={{ padding: 'var(--space-4)' }}>
+              <div style={{ width: '60%', height: 12, borderRadius: 4, background: 'linear-gradient(90deg, #1c1b19 25%, #2d2c2a 50%, #1c1b19 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+              <div style={{ marginTop: 12, width: '40%', height: 28, borderRadius: 4, background: 'linear-gradient(90deg, #1c1b19 25%, #2d2c2a 50%, #1c1b19 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+            </div>
+          ))}
+        </div>
+        {/* Skeleton chart area */}
+        <div className="card" style={{ padding: 'var(--space-4)' }}>
+          <div style={{ width: '30%', height: 16, borderRadius: 4, background: 'linear-gradient(90deg, #1c1b19 25%, #2d2c2a 50%, #1c1b19 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+          <div style={{ marginTop: 16, width: '100%', height: 200, borderRadius: 4, background: 'linear-gradient(90deg, #1c1b19 25%, #2d2c2a 50%, #1c1b19 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite' }} />
+        </div>
+        {/* Centered loader */}
+        <div className="card animate-in card--animated" style={{ padding: 'var(--space-4)' }}>
+          <OrbitalLoader text="Analyzing Models" />
+        </div>
       </div>
     </PageWrapper>
   )

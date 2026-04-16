@@ -10,6 +10,7 @@ import { LivePredictionPage }  from '@/pages/LivePredictionPage'
 import { BulkAnalysisPage }    from '@/pages/BulkAnalysisPage'
 import { LanguageAnalysisPage }
   from '@/pages/LanguageAnalysisPage'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ModelDashboardPage }
   from '@/pages/ModelDashboardPage'
 
@@ -67,15 +68,21 @@ function AppContent() {
 
           <div className="main-column">
             <Routes>
-              <Route path="/"          element={<HomePage />} />
-              <Route path="/predict"
-                     element={<LivePredictionPage />} />
-              <Route path="/bulk"
-                     element={<BulkAnalysisPage />} />
-              <Route path="/language"
-                     element={<LanguageAnalysisPage />} />
-              <Route path="/dashboard"
-                     element={<ModelDashboardPage />} />
+              <Route path="/" element={
+                <ErrorBoundary pageName="Home"><HomePage /></ErrorBoundary>
+              } />
+              <Route path="/predict" element={
+                <ErrorBoundary pageName="Live Prediction"><LivePredictionPage /></ErrorBoundary>
+              } />
+              <Route path="/bulk" element={
+                <ErrorBoundary pageName="Bulk Analysis"><BulkAnalysisPage /></ErrorBoundary>
+              } />
+              <Route path="/language" element={
+                <ErrorBoundary pageName="Language Analysis"><LanguageAnalysisPage /></ErrorBoundary>
+              } />
+              <Route path="/dashboard" element={
+                <ErrorBoundary pageName="Model Dashboard"><ModelDashboardPage /></ErrorBoundary>
+              } />
             </Routes>
           </div>
         </div>
