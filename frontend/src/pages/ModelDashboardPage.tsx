@@ -528,6 +528,7 @@ interface TranslationStats {
   method_breakdown: Record<string, number>
   failure_rate_pct: number
   per_language: Record<string, { count: number; failed: number }>
+  google_reachable?: boolean
 }
 
 function TranslationDashboard() {
@@ -607,6 +608,35 @@ function TranslationDashboard() {
               {stats.method_breakdown.google_success ?? 0}
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Google</div>
+          </div>
+        </div>
+
+        {/* Google Translate availability badge */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-3)' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
+            padding: '4px 14px',
+            background: stats.google_reachable
+              ? 'rgba(34,197,94,0.08)'
+              : 'rgba(122,121,116,0.08)',
+            border: `1px solid ${stats.google_reachable
+              ? 'rgba(34,197,94,0.25)'
+              : 'rgba(122,121,116,0.25)'}`,
+            borderRadius: '9999px',
+            fontSize: 'var(--text-xs)',
+            color: stats.google_reachable
+              ? 'var(--color-positive)'
+              : 'var(--color-text-muted)',
+          }}>
+            <span style={{
+              width: 6, height: 6,
+              borderRadius: '50%',
+              background: stats.google_reachable ? 'var(--color-positive)' : '#7a7974',
+              display: 'inline-block',
+            }} />
+            Google Translate: {stats.google_reachable ? 'Reachable' : 'Unavailable (Helsinki-NLP active)'}
           </div>
         </div>
 

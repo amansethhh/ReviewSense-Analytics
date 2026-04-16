@@ -218,5 +218,30 @@ async def get_metrics():
 )
 async def get_translation_metrics():
     """W4-1: Return translation method breakdown and
-    per-language failure rates."""
-    return metrics_store.get_translation_stats()
+    per-language failure rates. Includes google_reachable probe."""
+    stats = metrics_store.get_translation_stats()
+    stats["google_reachable"] = _probe_google_translate()
+    return stats
+
+
+# ── B2-D: Cached Google Translate reachability probe ───────
+import time as _time
+
+_google_probe_cache: dict = {"result": None, "timestamp": 0.0}
+_PROBE_TTL = 60.0
+
+
+def _probe_google_translate() -> bool:
+    """Returns True if Google Translate is reachable. Cached for 60s."""
+    now = _time.time()
+    if now - _google_probe_cache["timestamp"] < _PROBE_TTL:
+        return _google_probe_cache["result"]
+    try:
+        from deep_translator import GoogleTranslator
+        result = GoogleTranslator(source="es", target="en").translate("hola")
+        ok = bool(result and result.strip())
+    except Exception:
+        ok = False
+    _google_probe_cache.update({"result": ok, "timestamp": now})
+    logger.info("Google Translate probe: reachable=%s", ok)
+    return ok

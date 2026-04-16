@@ -9,6 +9,12 @@ Wraps deep-translator's GoogleTranslator with:
 
 Import is deferred to function body per constraint C4 to prevent
 import errors on servers where the package is not installed.
+
+NOTE: GoogleTranslator (deep-translator) is used as Tier 2.
+In environments without outbound HTTP to translate.googleapis.com,
+this tier will always fail and the system degrades to Tier 3
+(raw prediction on untranslated text). This is intentional.
+To test Google reachability: python backend/tests/test_google_translate_live.py
 """
 
 import time

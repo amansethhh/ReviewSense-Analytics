@@ -257,6 +257,7 @@ export function BulkAnalysisPage() {
   const [showAll, setShowAll] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [logs, setLogs] = useState<string[]>([])
+  const [prevLogCount, setPrevLogCount] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const { jobId, result, error, columns, preview, submit, reset, previewColumns } = useBulk()
@@ -280,11 +281,14 @@ export function BulkAnalysisPage() {
     }
   }, [result?.logs, stage])
 
-  // Auto-scroll terminal to bottom on new logs
+  // Auto-scroll terminal to bottom on new logs + track prevLogCount for animation
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight
     }
+    // Delay prevLogCount update so new lines get the fade-in animation first
+    const timer = setTimeout(() => setPrevLogCount(logs.length), 250)
+    return () => clearTimeout(timer)
   }, [logs])
 
   useEffect(() => {
@@ -548,17 +552,14 @@ export function BulkAnalysisPage() {
               </div>
               <div className="toggle-row" style={{ marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center' }}>
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
-                  <HoloToggle label="LIME" checked={false} onChange={() => {}} />
+                  <HoloToggle label="ABSA (Slower)" checked={runAbsa} onChange={setRunAbsa} />
                 </div>
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                  <HoloToggle label="ABSA (Slower)" checked={runAbsa} onChange={setRunAbsa} />
+                  <HoloToggle label="Enable Multilingual Analysis" checked={isMultilingual} onChange={setIsMultilingual} />
                 </div>
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
                   <HoloToggle label="Sarcasm Detection" checked={runSarcasm} onChange={setRunSarcasm} />
                 </div>
-              </div>
-              <div className="toggle-row" style={{ marginTop: 'var(--space-3)', display: 'flex', justifyContent: 'center' }}>
-                <HoloToggle label="Enable Multilingual Analysis" checked={isMultilingual} onChange={setIsMultilingual} />
               </div>
             </div>
           </div>
@@ -620,8 +621,9 @@ export function BulkAnalysisPage() {
               }}>
                 {logs.map((log, i) => (
                   <div key={i} style={{
-                    color: i === logs.length - 1 ? 'var(--color-text)' : 'var(--color-text-faint)',
-                    opacity: i === logs.length - 1 ? 1 : 0.7,
+                    color: i >= prevLogCount ? 'var(--color-text)' : 'var(--color-text-faint)',
+                    opacity: i >= prevLogCount ? 1 : 0.7,
+                    animation: i >= prevLogCount ? 'logFadeIn 200ms ease forwards' : 'none',
                   }}>
                     <span style={{ color: '#28ca41', marginRight: '6px', fontWeight: 700 }}>❯</span>
                     {log}

@@ -91,9 +91,9 @@ export function useBulk() {
             }
             return // stop polling
           }
-          // Schedule next poll — 500ms for near-real-time
+          // Schedule next poll — 250ms for smooth per-row streaming
           if (activeRef.current) {
-            pollRef.current = setTimeout(poll, 500)
+            pollRef.current = setTimeout(poll, 250)
           }
         } catch (err) {
           // BUG-3 FIX: Don't kill polling on transient errors.
