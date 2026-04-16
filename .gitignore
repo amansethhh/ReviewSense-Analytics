@@ -233,3 +233,6 @@ reports/*.json
 # Node (root-level orchestration)
 node_modules/
 package-lock.json
+# Phase 9: Runtime-generated translation stats (not committed)
+backend/app/state/translation_stats.json
+!backend/app/state/.gitkeep

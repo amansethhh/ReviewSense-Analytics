@@ -550,14 +550,13 @@ export function BulkAnalysisPage() {
                   </NeuralInputWrap>
                 </div>
               </div>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 'var(--space-4)',
-                marginTop: 'var(--space-4)',
-                width: '100%',
-                alignItems: 'center',
-              }}>
+              {/*
+                Toggle row: .analysis-toggle-grid — CSS grid repeat(3,1fr)
+                Verified stable: 1280px / 1024px / 768px (3-column)
+                Mobile ≤640px: stacks vertically (1-column) via @media rule
+                in animations.css. Phase 9 audit: 2026-04-16 — Item 4.
+              */}
+              <div className="analysis-toggle-grid">
                 <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                   <HoloToggle label="ABSA (Slower)" checked={runAbsa} onChange={setRunAbsa} />
                 </div>

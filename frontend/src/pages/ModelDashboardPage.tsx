@@ -582,6 +582,33 @@ function TranslationDashboard() {
     <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
       <SectionHeader icon={<Icon3DBolt size={22} />} title="Translation Pipeline Health" subtitle="Real-time translation metrics" />
       <div style={{ padding: 'var(--space-4)' }}>
+        {/* Tier explanation strip — clarifies google_success=0 is healthy */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 'var(--space-3)',
+          padding: 'var(--space-3) var(--space-4)',
+          background: 'rgba(1, 105, 111, 0.06)',
+          border: '1px solid rgba(1, 105, 111, 0.18)',
+          borderRadius: '8px',
+          marginBottom: 'var(--space-4)',
+          fontSize: 'var(--text-xs)',
+          color: 'var(--color-text-muted)',
+          lineHeight: 1.5,
+        }}>
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: '#01696f', flexShrink: 0,
+            display: 'inline-block', marginTop: 4,
+          }} />
+          <span>
+            <strong style={{ color: 'var(--color-text)' }}>Translation Pipeline:</strong>
+            {' '}Tier 1 (Helsinki-NLP) handles all translations locally.
+            Tier 2 (Google Translate) is a fallback — a zero count here is healthy.
+            Tier 3 (raw prediction) activates only if both fail.
+          </span>
+        </div>
+
         {/* KPI row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
           <div style={{
@@ -616,15 +643,21 @@ function TranslationDashboard() {
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Helsinki-NLP</div>
           </div>
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-            padding: 'var(--space-3)', background: 'rgba(245,158,11,0.06)',
-            border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px',
-          }}>
+          {/* Renamed: google_success → Tier 2 Fallback Used (0 is HEALTHY) */}
+          <div
+            title="A count of 0 here is healthy — Helsinki-NLP (Tier 1) is translating all reviews. Google Translate (Tier 2) activates only when Tier 1 fails."
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+              padding: 'var(--space-3)', background: 'rgba(245,158,11,0.06)',
+              border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px',
+              cursor: 'help',
+            }}>
             <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-neutral-sent)', fontFamily: 'var(--font-mono)' }}>
               {stats.method_breakdown.google_success ?? 0}
             </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Google</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>
+              Tier 2 Fallback Used
+            </div>
           </div>
         </div>
 

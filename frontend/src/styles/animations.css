@@ -1771,3 +1771,24 @@
   0%   { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ── ANALYSIS TOGGLE GRID (Phase 9 — Item 4) ────────── */
+/* 3-column desktop → 1-column vertical stack on mobile  */
+.analysis-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  width: 100%;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .analysis-toggle-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+  .analysis-toggle-grid > div {
+    justify-content: flex-start !important;
+  }
+}

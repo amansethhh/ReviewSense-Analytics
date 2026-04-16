@@ -10,7 +10,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     app_name: str = "ReviewSense Analytics API"
-    app_version: str = "1.0.0"
+    app_version: str = "9.0.0"
     debug: bool = False
 
     # CORS — explicit origins, never wildcard in prod

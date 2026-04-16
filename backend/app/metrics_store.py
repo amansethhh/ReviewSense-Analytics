@@ -276,11 +276,12 @@ class MetricsStore:
                 "Could not load translation stats: %s", e)
 
 
-# ── GAP 1: Stats file path ────────────────────────────────
+# ── Item 1 (Phase 9): Stats file path ─────────────────────
+# Moved from data/ (gitignored risk) to backend/app/state/
+# (deployment-safe, __file__-relative works from any CWD)
 from pathlib import Path
 _TRANSLATION_STATS_FILE = (
-    Path(__file__).resolve().parent.parent.parent
-    / "data" / "translation_stats.json"
+    Path(__file__).resolve().parent / "state" / "translation_stats.json"
 )
 
 # ── Module-level singleton ─────────────────────────────────
