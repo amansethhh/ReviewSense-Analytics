@@ -1,0 +1,36 @@
+# Server
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+python-multipart>=0.0.9
+
+# Pydantic v2
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# ML (must match existing project versions)
+pandas>=2.0.0
+numpy>=1.24.0
+scikit-learn>=1.4.0
+joblib>=1.3.0
+lime>=0.2.0.1
+nltk>=3.8.0
+
+# NLP / transformers
+transformers>=4.35.0
+torch>=2.1.0
+
+# Language detection + translation
+langdetect>=1.0.9
+deep-translator>=1.11.4
+
+# Export
+fpdf2>=2.7.0
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+
+# Testing
+pytest>=8.0.0
+httpx
+
+# Production
+gunicorn>=21.0.0
