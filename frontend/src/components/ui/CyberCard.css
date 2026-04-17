@@ -1,0 +1,157 @@
+/* ── CyberCard — 3D Tilt Card ───────────────────────── */
+.cyber-card {
+  position: relative;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(0,217,255,0.05), rgba(0,217,255,0.02));
+  border: 1px solid rgba(0,217,255,0.12);
+  overflow: hidden;
+  transition: transform 200ms ease-out, box-shadow 300ms ease, border-color 300ms ease;
+  transform: perspective(800px) rotateX(0deg) rotateY(0deg);
+  will-change: transform;
+  box-shadow:
+    0 0 15px rgba(0,0,0,0.25),
+    inset 0 0 15px rgba(0,0,0,0.15);
+}
+
+.cyber-card:hover {
+  border-color: rgba(0,217,255,0.3);
+  box-shadow:
+    0 0 25px rgba(0,0,0,0.3),
+    0 0 20px rgba(0,217,255,0.08),
+    inset 0 0 20px rgba(0,0,0,0.2);
+}
+
+/* ── Content ── */
+.cyber-card__content {
+  position: relative;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  min-height: 160px;
+}
+
+/* ── Corner Brackets ── */
+.cyber-card__corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  z-index: 10;
+  transition: all 0.3s ease;
+}
+.cyber-card__corner--tl {
+  top: 6px; left: 6px;
+  border-top: 2px solid rgba(0,217,255,0.25);
+  border-left: 2px solid rgba(0,217,255,0.25);
+}
+.cyber-card__corner--tr {
+  top: 6px; right: 6px;
+  border-top: 2px solid rgba(0,217,255,0.25);
+  border-right: 2px solid rgba(0,217,255,0.25);
+}
+.cyber-card__corner--bl {
+  bottom: 6px; left: 6px;
+  border-bottom: 2px solid rgba(0,217,255,0.25);
+  border-left: 2px solid rgba(0,217,255,0.25);
+}
+.cyber-card__corner--br {
+  bottom: 6px; right: 6px;
+  border-bottom: 2px solid rgba(0,217,255,0.25);
+  border-right: 2px solid rgba(0,217,255,0.25);
+}
+
+.cyber-card:hover .cyber-card__corner {
+  border-color: rgba(0,217,255,0.7);
+  filter: drop-shadow(0 0 4px rgba(0,217,255,0.4));
+}
+
+/* ── Scan Line ── */
+.cyber-card__scan-line {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(0,217,255,0.06),
+    transparent
+  );
+  height: 100%;
+  transform: translateY(-100%);
+  animation: cyberScanMove 3s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes cyberScanMove {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* ── Cyber Lines ── */
+.cyber-card__lines {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.cyber-card__lines span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,217,255,0.15), transparent);
+  transform: scaleX(0);
+}
+.cyber-card__lines span:nth-child(1) { top: 20%; transform-origin: left;  animation: cyberLineGrow 4s linear infinite; }
+.cyber-card__lines span:nth-child(2) { top: 40%; transform-origin: right; animation: cyberLineGrow 4s linear infinite 1s; }
+.cyber-card__lines span:nth-child(3) { top: 60%; transform-origin: left;  animation: cyberLineGrow 4s linear infinite 2s; }
+.cyber-card__lines span:nth-child(4) { top: 80%; transform-origin: right; animation: cyberLineGrow 4s linear infinite 1.5s; }
+
+@keyframes cyberLineGrow {
+  0%   { transform: scaleX(0); opacity: 0; }
+  50%  { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(0); opacity: 0; }
+}
+
+/* ── Glare ── */
+.cyber-card__glare {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: linear-gradient(
+    125deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.03) 45%,
+    rgba(255,255,255,0.06) 50%,
+    rgba(255,255,255,0.03) 55%,
+    rgba(255,255,255,0) 100%
+  );
+  opacity: 0;
+  transition: opacity 300ms;
+  pointer-events: none;
+}
+.cyber-card:hover .cyber-card__glare {
+  opacity: 1;
+}
+
+/* ── Glow ── */
+.cyber-card__glow {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(0,217,255,0.2) 0%, transparent 70%);
+  filter: blur(12px);
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.cyber-card__glow--1 { top: -15px; left: -15px; }
+.cyber-card__glow--2 { bottom: -15px; right: -15px; }
+
+.cyber-card:hover .cyber-card__glow {
+  opacity: 1;
+}

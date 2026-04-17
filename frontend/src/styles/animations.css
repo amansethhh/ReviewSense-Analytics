@@ -3,6 +3,60 @@
    Must be imported AFTER components.css
    ════════════════════════════════════════════════════ */
 
+/* ── 0-PRE. RS ANIMATED LOGO ───────────────────────── */
+
+@keyframes rs-spin-cw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes rs-spin-ccw {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
+/* Inner ring opacity pulse */
+@keyframes rs-ring-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+/* Core orb scale + opacity pulse — constrained so core stays inside halo */
+@keyframes rs-core-pulse {
+  0%, 100% { opacity: 0.82; transform: scale(1);    }
+  50%      { opacity: 1;    transform: scale(1.06);  }
+}
+
+/* Halo breathe — slightly larger than core pulse but stays inside Ring 4 */
+@keyframes rs-halo-pulse {
+  0%, 100% { opacity: 0.7;  transform: scale(1);    }
+  50%      { opacity: 0.9;  transform: scale(1.06); }
+}
+
+/* Whole logo glow-breathing — subtle, doesn't overpower the text */
+@keyframes rs-glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(0,217,255,0.35)); }
+  50%      { filter: drop-shadow(0 0 5px rgba(0,217,255,0.60)); }
+}
+
+/* Apply gentle glow-pulse to the RS logo SVG in the sidebar */
+.sidebar__logo svg {
+  animation: rs-glow-pulse 3s ease-in-out infinite;
+}
+
+/* ── Auto-detect badge shimmer ──────────────────────── */
+@keyframes detect-badge-shimmer {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(0,217,255,0.10), inset 0 1px 0 rgba(255,255,255,0.05);
+    border-color: rgba(0,217,255,0.20);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(0,217,255,0.28), inset 0 1px 0 rgba(255,255,255,0.10);
+    border-color: rgba(0,217,255,0.45);
+  }
+}
+
+
 /* ── 0. NEURAL ANIMATED BUTTON ────────────────────── */
 
 .neural-btn {
@@ -20,7 +74,8 @@
   background-color: transparent;
   border: none;
   border-radius: var(--_radius);
-  transform: scale(calc(1 + (var(--_active) * 0.05)));
+  /* Scale only by 2% on hover — enough for visual feedback without overflowing card bounds */
+  transform: scale(calc(1 + (var(--_active) * 0.02)));
   transform-origin: center;
   transition: transform var(--_transition);
   font-family: var(--font-sans, inherit);
@@ -61,7 +116,8 @@
 }
 
 .neural-btn:is(:hover, :focus-visible) { --_active: 1; }
-.neural-btn:active { transform: scale(1); }
+/* Slight press-down on click — counters the hover scale so button stays within bounds */
+.neural-btn:active { transform: scale(0.98); }
 .neural-btn--disabled,
 .neural-btn:disabled {
   opacity: 0.5;
@@ -607,6 +663,11 @@
 @keyframes loader-dot-blink {
   0%, 50%  { opacity: 1; }
   51%, 100% { opacity: 0.2; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.95); }
 }
 
 /* ── 8. ORBITAL ANALYSIS LOADER ────────────────────── */

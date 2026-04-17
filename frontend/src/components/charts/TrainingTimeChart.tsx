@@ -14,7 +14,7 @@ const tooltipStyle = {
 }
 
 const DATA = [
-  { name: 'LinearSVC', time: 0.8 },
+  { name: 'Linear SVC', time: 0.8 },
   { name: 'LogReg',    time: 1.2 },
   { name: 'NaiveBayes', time: 0.3 },
   { name: 'RandomForest', time: 4.7 },

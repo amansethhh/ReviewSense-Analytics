@@ -1,4 +1,4 @@
-import { useState, useMemo, type CSSProperties } from 'react'
+import { useEffect, useMemo, type CSSProperties } from 'react'
 import { SentimentBadge } from '@/components/ui/Badge'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { NeuralButton } from '@/components/ui/NeuralButton'
@@ -8,6 +8,7 @@ import { NeuralInputWrap } from '@/components/ui/NeuralInputWrap'
 import { NeuralSelect } from '@/components/ui/NeuralSelect'
 import { LIMEChart } from '@/components/charts/LIMEChart'
 import { usePredict } from '@/hooks/usePredict'
+import { usePredictStore } from '@/hooks/usePredictStore'
 import { useApp } from '@/context/AppContext'
 import type { ModelChoice, DomainChoice, SentimentLabel } from '@/types/api.types'
 
@@ -235,9 +236,10 @@ function Icon3DExport({ size = 22 }: { size?: number }) {
 function capitalize(s: string): string {
   if (s === 'all') return 'All'
   if (s === 'best') return 'Best'
+  if (s === 'LinearSVC') return 'Linear SVC'
   return s
-    .replace(/([A-Z])/g, ' $1')       // "LinearSVC" → "Linear SVC"
-    .replace(/^./, c => c.toUpperCase()) // Capitalize first letter
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, c => c.toUpperCase())
     .trim()
 }
 
@@ -263,18 +265,25 @@ function SectionHeader({ icon, title, subtitle }: { icon: React.ReactNode; title
 }
 
 export function LivePredictionPage() {
-  const [text,       setText]       = useState('')
-  const [model,      setModel]      = useState<ModelChoice>('best')
-  const [domain,     setDomain]     = useState<DomainChoice>('all')
-  const [starRating, setStarRating] = useState<number | null>(null)
-  const [includeLime,    setIncludeLime]    = useState(true)
-  const [includeAbsa,    setIncludeAbsa]    = useState(true)
-  const [includeSarcasm, setIncludeSarcasm] = useState(true)
-  const [feedbackSent, setFeedbackSent] = useState(false)
-  const [selectedCorrection, setSelectedCorrection] = useState<SentimentLabel | null>(null)
+  const store = usePredictStore()
+  const {
+    text, setText, model, setModel, domain, setDomain,
+    starRating, setStarRating,
+    includeLime, setIncludeLime, includeAbsa, setIncludeAbsa,
+    includeSarcasm, setIncludeSarcasm,
+    feedbackSent, setFeedbackSent,
+    selectedCorrection, setSelectedCorrection,
+    data, setData,
+    reset: resetStore,
+  } = store
 
-  const { data, loading, error, run, reset } = usePredict()
+  const { data: predictData, loading, error, run, reset: _predictReset } = usePredict()
   const { showToast: _showToast } = useApp()
+
+  // Sync usePredict result into the store (persists across navigation)
+  useEffect(() => {
+    if (predictData) setData(predictData)
+  }, [predictData, setData])
 
   const handleSubmit = async () => {
     if (!text.trim()) return
@@ -430,18 +439,45 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
               />
             </NeuralInputWrap>
 
-            {/* #3: Auto-detect centered */}
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '8px', gap: '16px' }}>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-primary-bright)', textAlign: 'center' }}>
-                ● Auto-detect enabled
-              </span>
-              <span className="char-count"
-                    style={{ color:
-                      text.length > 9500 ? 'var(--color-negative)'
-                      : text.length > 8000 ? 'var(--color-warning)'
-                      : undefined }}>
-                {text.length} / 10,000
-              </span>
+            {/* #3: Auto-detect 3D badge — below textarea, centered */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '10px',
+                padding: '6px 16px',
+                background: 'linear-gradient(135deg, rgba(0,217,255,0.07), rgba(0,255,136,0.05))',
+                border: '1px solid rgba(0,217,255,0.22)',
+                borderRadius: '9999px',
+                boxShadow: '0 0 14px rgba(0,217,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06)',
+                backdropFilter: 'blur(8px)',
+                animation: 'detect-badge-shimmer 3s ease-in-out infinite',
+              }}>
+                {/* 3D Globe icon */}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                  <defs>
+                    <linearGradient id="det-glob-lp" x1="0" y1="0" x2="24" y2="24">
+                      <stop offset="0%" stopColor="#00FF88" />
+                      <stop offset="100%" stopColor="#00D9FF" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="12" cy="12" r="9" stroke="url(#det-glob-lp)" strokeWidth="1.5" fill="url(#det-glob-lp)" fillOpacity="0.1" />
+                  <ellipse cx="12" cy="12" rx="5" ry="9" stroke="url(#det-glob-lp)" strokeWidth="1" fill="none" opacity="0.5" />
+                  <path d="M3 12h18M5 7h14M5 17h14" stroke="url(#det-glob-lp)" strokeWidth="1" opacity="0.35" />
+                  <circle cx="12" cy="12" r="2" fill="url(#det-glob-lp)" opacity="0.8" />
+                </svg>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-positive)', fontWeight: 600, letterSpacing: '0.02em' }}>
+                  Auto-detect enabled
+                </span>
+                <span style={{ width: '1px', height: '12px', background: 'rgba(0,217,255,0.25)', flexShrink: 0 }} />
+                <span className="char-count" style={{
+                  fontSize: 'var(--text-xs)',
+                  fontFamily: 'var(--font-mono)',
+                  color: text.length > 9500 ? 'var(--color-negative)'
+                    : text.length > 8000 ? 'var(--color-warning)'
+                    : 'var(--color-text-muted)',
+                }}>
+                  {text.length.toLocaleString()} / 10,000
+                </span>
+              </div>
             </div>
           </div>
 
@@ -483,9 +519,9 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
             </div>
           </div>
 
-          {/* #1: Submit — reduced width, centered */}
+          {/* #1: Submit — full width, centered text */}
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-5)' }}>
-            <NeuralButton size="lg" style={{ width: '80%', maxWidth: '500px', justifyContent: 'center' }}
+            <NeuralButton size="lg" style={{ width: 'calc(100% - 8px)', justifyContent: 'center' }}
                     onClick={handleSubmit} disabled={!text.trim() || loading}>
               {loading ? 'Analyzing...' : 'Analyze Review'}
             </NeuralButton>
@@ -856,7 +892,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
 
           {/* Clear button */}
           <div className="form-actions" style={{ justifyContent: 'center' }}>
-            <NeuralButton variant="ghost" onClick={() => { reset(); setText(''); setFeedbackSent(false); setSelectedCorrection(null) }}>
+            <NeuralButton variant="ghost" onClick={() => { resetStore(); setText(''); }}>
               ← Clear & Start Over
             </NeuralButton>
           </div>

@@ -213,6 +213,19 @@ async def get_metrics():
 
 
 @router.get(
+    "/live",
+    summary="Get real-time live dashboard stats",
+    description=(
+        "Returns aggregated prediction counts, sentiment "
+        "distribution, language distribution, and pipeline "
+        "config for the live dashboard panels."
+    ),
+)
+async def get_live_stats():
+    return metrics_store.get_live_stats()
+
+
+@router.get(
     "/translations",
     summary="Get translation pipeline metrics",
 )

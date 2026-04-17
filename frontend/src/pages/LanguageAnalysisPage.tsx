@@ -4,22 +4,39 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { NeuralButton } from '@/components/ui/NeuralButton'
 import { EyebrowPill } from '@/components/ui/EyebrowPill'
 import { HoloToggle } from '@/components/ui/HoloToggle'
-import { NeuralSelect } from '@/components/ui/NeuralSelect'
 import { FolderUpload } from '@/components/ui/FolderUpload'
-import { OrbitalLoader } from '@/components/ui/OrbitalLoader'
+import { CyberLoader } from '@/components/ui/CyberLoader'
+import { CyberCard } from '@/components/ui/CyberCard'
 import { NeuralInputWrap } from '@/components/ui/NeuralInputWrap'
+import { NeuralSelect } from '@/components/ui/NeuralSelect'
 import { FlagSVG } from '@/components/ui/FlagSVG'
 import { SentimentPieChart } from '@/components/charts/SentimentPieChart'
 import { TopKeywordsChart } from '@/components/charts/TopKeywordsChart'
 import { SentimentTrendChart } from '@/components/charts/SentimentTrendChart'
 import { LanguageDistChart } from '@/components/charts/LanguageDistChart'
 import { useLanguage } from '@/hooks/useLanguage'
+import { useLanguageStore } from '@/hooks/useLanguageStore'
 import { useBulk } from '@/hooks/useBulk'
 import { useApp } from '@/context/AppContext'
-import type { ModelChoice, SentimentLabel } from '@/types/api.types'
-import { generateUniversalPDF, generateUniversalCSV, generateUniversalExcel, generateUniversalJSON, detectLang, getTranslation } from '@/utils/exportUtils'
+import { pushTrendPoint, useTrendStore } from '@/hooks/useTrendStore'
+import type { ModelChoice, DomainChoice, SentimentLabel } from '@/types/api.types'
+import { generateUniversalPDF, generateUniversalCSV, generateUniversalExcel, generateUniversalJSON } from '@/utils/exportUtils'
 
 const STOPWORDS = new Set(['a','the','is','was','and','or','but','in','on','at','it','this','that','to','of','for','with','be','are','have','i','my','me','we','they'])
+
+/* ── Capitalize helper for Model & Domain labels ── */
+function capitalize(s: string): string {
+  if (s === 'all') return 'All'
+  if (s === 'best') return 'Best'
+  if (s === 'LinearSVC') return 'Linear SVC'
+  return s
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^./, c => c.toUpperCase())
+    .trim()
+}
+
+const MODELS: ModelChoice[] = ['best','LinearSVC','LogisticRegression','NaiveBayes','RandomForest']
+const DOMAINS: DomainChoice[] = ['all','food','ecom','movie','product']
 
 const LANGUAGES = [
   { flag: '🇬🇧', name: 'English',    code: 'EN', example: 'The product quality is absolutely amazing!' },
@@ -40,7 +57,7 @@ const LANGUAGES = [
   { flag: '🇹🇭', name: 'Thai',       code: 'TH', example: 'ผลิตภัณฑ์นี้ยอดเยี่ยมมาก!' },
 ]
 
-type Tab = 'single' | 'batch'
+
 
 
 const icon3dStyle = {
@@ -239,14 +256,96 @@ function Icon3DResults({ size = 22 }: { size?: number }) {
     </svg>
   )
 }
-function Icon3DBatch({ size = 22 }: { size?: number }) {
+function Icon3DFile({ size = 22 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
-      <defs><linearGradient id="btc3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#818CF8"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
-      <rect x="10" y="4" width="28" height="12" rx="4" stroke="url(#btc3d)" strokeWidth="2" fill="url(#btc3d)" fillOpacity=".1"/>
-      <rect x="10" y="18" width="28" height="12" rx="4" stroke="url(#btc3d)" strokeWidth="2" fill="url(#btc3d)" fillOpacity=".15"/>
-      <rect x="10" y="32" width="28" height="12" rx="4" stroke="url(#btc3d)" strokeWidth="2" fill="url(#btc3d)" fillOpacity=".2"/>
+      <defs><linearGradient id="langfil3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00FF88"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
+      <path d="M12 6h16l12 12v24a4 4 0 01-4 4H12a4 4 0 01-4-4V10a4 4 0 014-4z" stroke="url(#langfil3d)" strokeWidth="2" fill="url(#langfil3d)" fillOpacity=".1"/>
+      <path d="M28 6v12h12" stroke="url(#langfil3d)" strokeWidth="2" strokeLinecap="round"/>
+      <path d="M16 28h16M16 34h10" stroke="url(#langfil3d)" strokeWidth="1.5" strokeLinecap="round" opacity=".5"/>
     </svg>
+  )
+}
+function Icon3DColumns({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="langcol3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#FDE047"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
+      <rect x="6" y="8" width="12" height="32" rx="3" stroke="url(#langcol3d)" strokeWidth="2" fill="url(#langcol3d)" fillOpacity=".1"/>
+      <rect x="22" y="8" width="12" height="32" rx="3" stroke="url(#langcol3d)" strokeWidth="2" fill="url(#langcol3d)" fillOpacity=".2"/>
+      <rect x="38" y="8" width="4" height="32" rx="2" fill="url(#langcol3d)" opacity=".15"/>
+    </svg>
+  )
+}
+function Icon3DGearSettings({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="langgsz3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
+      <path d="M24 16a8 8 0 100 16 8 8 0 000-16z" stroke="url(#langgsz3d)" strokeWidth="2" fill="url(#langgsz3d)" fillOpacity=".15"/>
+      <path d="M24 4v6M24 38v6M4 24h6M38 24h6M9.9 9.9l4.2 4.2M33.9 33.9l4.2 4.2M38.1 9.9l-4.2 4.2M14.1 33.9l-4.2 4.2" stroke="url(#langgsz3d)" strokeWidth="2.5" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function Icon3DPulse({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="lpls3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00D9FF"/><stop offset="100%" stopColor="#2dd4bf"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#lpls3d)" strokeWidth="1.5" fill="url(#lpls3d)" fillOpacity=".08" />
+      <path d="M8 24h8l4-12 4 24 4-12 4 6 4-6h8" stroke="url(#lpls3d)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Icon3DGlobePanel({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="lglp3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#F43F5E"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#lglp3d)" strokeWidth="2" fill="url(#lglp3d)" fillOpacity=".08" />
+      <ellipse cx="24" cy="24" rx="10" ry="18" stroke="url(#lglp3d)" strokeWidth="1.5" fill="none" opacity=".4" />
+      <path d="M6 24h36M8 14h32M8 34h32" stroke="url(#lglp3d)" strokeWidth="1.5" opacity=".25" />
+    </svg>
+  )
+}
+
+function Icon3DSentimentPie({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="lspie3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#F59E0B"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#lspie3d)" strokeWidth="2" fill="url(#lspie3d)" fillOpacity=".08" />
+      <path d="M24 6v18l14 10" stroke="url(#lspie3d)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M24 24L10 14" stroke="url(#lspie3d)" strokeWidth="1.5" strokeLinecap="round" opacity=".5" />
+    </svg>
+  )
+}
+
+function Icon3DGearPanel({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="lgp3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#818cf8"/></linearGradient></defs>
+      <path d="M24 16a8 8 0 100 16 8 8 0 000-16z" stroke="url(#lgp3d)" strokeWidth="2" fill="url(#lgp3d)" fillOpacity=".15" />
+      <path d="M24 4v6M24 38v6M4 24h6M38 24h6M9.9 9.9l4.2 4.2M33.9 33.9l4.2 4.2M38.1 9.9l-4.2 4.2M14.1 33.9l-4.2 4.2" stroke="url(#lgp3d)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function PanelBadge({ icon, label, bg, border, color }: {
+  icon: React.ReactNode, label: string,
+  bg: string, border: string, color: string,
+}) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: '7px', alignSelf: 'center',
+      background: bg, border: `1px solid ${border}`,
+      borderRadius: '10px', padding: '5px 14px',
+      marginBottom: '10px',
+    }}>
+      {icon}
+      <span style={{
+        fontSize: '10px', fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        color,
+      }}>{label}</span>
+    </div>
   )
 }
 
@@ -311,57 +410,117 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
 
 
 export function LanguageAnalysisPage() {
-  const [tab, setTab] = useState<Tab>('single')
-  const [text, setText] = useState('')
-  const [model] = useState<ModelChoice>('best')
-  const { data, loading, error, run, reset } = useLanguage()
-  const { showToast } = useApp()
-  const [feedbackSent, setFeedbackSent] = useState(false)
-  const [selectedCorrection, setSelectedCorrection] = useState<SentimentLabel | null>(null)
+  const langStore = useLanguageStore()
+  const {
+    tab, setTab, text, setText, model, setModel, domain, setDomain,
+    starRating, setStarRating,
+    includeLime, setIncludeLime, includeAbsa, setIncludeAbsa,
+    includeSarcasm, setIncludeSarcasm,
+    data, setData, feedbackSent, setFeedbackSent,
+    selectedCorrection, setSelectedCorrection,
+    resetSingle: _resetSingle,
+    // Batch tab
+    bFileName, setBFileName, bTextCol, setBTextCol,
+    bModel, setBModel, bRunAbsa, setBRunAbsa,
+    bRunSarcasm, setBRunSarcasm, bShowAll, setBShowAll,
+    bElapsed, setBElapsed, bStage, setBStage,
+    bJobId: storedBJobId, setBJobId: setStoredBJobId,
+    bResult: storedBResult, setBResult: setStoredBResult,
+    setBColumns: setStoredBColumns,
+    setBPreview: setStoredBPreview,
+    resetBatch,
+  } = langStore
 
-  // Batch state
+  // File object is local (can't persist in ref)
   const [bFile, setBFile] = useState<File | null>(null)
-  const [bTextCol, setBTextCol] = useState('')
-  const [bModel, setBModel] = useState('best')
-  const [bRunSarcasm, setBRunSarcasm] = useState(true)
-  const [bShowAll, setBShowAll] = useState(false)
-  const [bElapsed, setBElapsed] = useState(0)
-  const bTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const { data: langData, loading, error, run, reset: _langReset } = useLanguage()
+  const { showToast } = useApp()
   const bulk = useBulk()
-  const [bStage, setBStage] = useState<'upload' | 'configure' | 'processing' | 'results'>('upload')
+  const trendPoints = useTrendStore()
+  const bTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Sync useLanguage result into the store (single tab)
+  useEffect(() => {
+    if (langData) setData(langData)
+  }, [langData, setData])
+
+  // Effective batch result: prefer live bulk data, fall back to stored
+  const bResult = bulk.result || storedBResult
+
+  // Sync useBulk results into the store (batch tab)
+  useEffect(() => {
+    if (bulk.result) setStoredBResult(bulk.result)
+  }, [bulk.result, setStoredBResult])
+  useEffect(() => {
+    if (bulk.columns.length > 0) setStoredBColumns(bulk.columns)
+  }, [bulk.columns, setStoredBColumns])
+  useEffect(() => {
+    if (bulk.preview.length > 0) setStoredBPreview(bulk.preview)
+  }, [bulk.preview, setStoredBPreview])
+  useEffect(() => {
+    if (bulk.result?.job_id && bulk.result.job_id !== storedBJobId) {
+      setStoredBJobId(bulk.result.job_id)
+    }
+  }, [bulk.result?.job_id, storedBJobId, setStoredBJobId])
+
+  // Resume polling on remount if batch job was in-progress
+  const hasResumed = useRef(false)
+  useEffect(() => {
+    if (hasResumed.current) return
+    if (bStage === 'processing' && storedBJobId) {
+      hasResumed.current = true
+      bulk.resumePolling(storedBJobId)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (bStage === 'processing') {
-      setBElapsed(0)
+      if (!hasResumed.current || bElapsed === 0) {
+        setBElapsed(0)
+      }
       bTimerRef.current = setInterval(() => setBElapsed(e => e + 1), 1000)
     } else { if (bTimerRef.current) clearInterval(bTimerRef.current) }
     return () => { if (bTimerRef.current) clearInterval(bTimerRef.current) }
-  }, [bStage])
+  }, [bStage, setBElapsed, bElapsed])
 
   useEffect(() => {
-    if (bulk.result?.status === 'completed' && bStage === 'processing') setBStage('results')
-  }, [bulk.result?.status, bStage])
+    if (bResult?.status === 'completed' && bStage === 'processing') {
+      if (bResult.results && bResult.results.length > 0) {
+        pushTrendPoint(bResult.results)
+      }
+      setBStage('results')
+    }
+  }, [bResult?.status, bResult?.results, bStage, setBStage])
 
   const handleBFileSelect = useCallback(async (f: File) => {
     setBFile(f)
+    setBFileName(f.name)
     const cols = await bulk.previewColumns(f)
     if (cols.length > 0) { setBTextCol(cols[0]); setBStage('configure') }
-  }, [bulk])
+  }, [bulk, setBFileName, setBTextCol, setBStage])
 
   const handleBSubmit = useCallback(async () => {
     if (!bFile) return
+    hasResumed.current = false
     setBStage('processing')
-    await bulk.submit(bFile, bTextCol, bModel, false, bRunSarcasm)
-  }, [bFile, bTextCol, bModel, bRunSarcasm, bulk])
+    setStoredBJobId(null)
+    // Always pass multilingual=true — this page is the Multilingual Bulk Analysis tab
+    await bulk.submit(bFile, bTextCol, bModel, bRunAbsa, bRunSarcasm, true)
+  }, [bFile, bTextCol, bModel, bRunAbsa, bRunSarcasm, bulk, setBStage, setStoredBJobId])
 
   const handleBReset = useCallback(() => {
-    bulk.reset(); setBFile(null); setBStage('upload'); setBShowAll(false)
-  }, [bulk])
+    bulk.reset()
+    resetBatch()
+    setBFile(null)
+    hasResumed.current = false
+  }, [bulk, resetBatch])
 
   const bTopKeywords = useMemo(() => {
-    if (!bulk.result?.results) return []
+    if (!bResult?.results) return []
     const wordCounts: Record<string, { positive: number; negative: number }> = {}
-    bulk.result.results.forEach(r => {
+    bResult.results.forEach(r => {
       r.text.split(/\s+/).forEach(w => {
         const clean = w.toLowerCase().replace(/[^a-z]/g, '')
         if (clean.length > 3 && !STOPWORDS.has(clean)) {
@@ -375,17 +534,36 @@ export function LanguageAnalysisPage() {
       .map(([word, counts]) => ({ word, ...counts }))
       .sort((a, b) => (b.positive + b.negative) - (a.positive + a.negative))
       .slice(0, 10)
-  }, [bulk.result?.results])
+  }, [bResult?.results])
 
-  // Build language distribution data for bar chart (single source of truth)
+  // Compute batch-based trend data from bulk results (mirrors BulkAnalysisPage logic)
+  const bTrendData = useMemo(() => {
+    if (!bResult?.results || bResult.results.length < 5) return undefined
+    const batchSize = Math.max(1, Math.floor(bResult.results.length / 6))
+    const batches = []
+    for (let i = 0; i < bResult.results.length; i += batchSize) {
+      const batch = bResult.results.slice(i, i + batchSize)
+      const total = batch.length || 1
+      batches.push({
+        month: `Batch ${batches.length + 1}`,
+        positive: Math.round(batch.filter(r => r.sentiment === 'positive').length / total * 100),
+        negative: Math.round(batch.filter(r => r.sentiment === 'negative').length / total * 100),
+        neutral: Math.round(batch.filter(r => r.sentiment === 'neutral').length / total * 100),
+      })
+    }
+    return batches.slice(0, 6)
+  }, [bResult?.results])
+
+  // Build language distribution data for bar chart using real server-detected language
   const bLangDistData = useMemo(() => {
-    if (!bulk.result?.results) return []
+    if (!bResult?.results) return []
     const counts: Record<string, number> = {}
-    bulk.result.results.forEach(r => {
-      const lang = detectLang(r.text)
+    bResult.results.forEach(r => {
+      // Use backend-detected language; fall back to 'Unknown' only if missing
+      const lang = r.detected_language ?? 'Unknown'
       counts[lang] = (counts[lang] || 0) + 1
     })
-    const total = bulk.result.results.length
+    const total = bResult.results.length
     return Object.entries(counts)
       .map(([language, count]) => ({
         language,
@@ -393,7 +571,7 @@ export function LanguageAnalysisPage() {
         percentage: Math.round((count / total) * 100),
       }))
       .sort((a, b) => b.count - a.count)
-  }, [bulk.result?.results])
+  }, [bResult?.results])
 
   // Derive language count from the distribution data (same source of truth)
   const bLanguageCount = bLangDistData.length
@@ -473,26 +651,108 @@ export function LanguageAnalysisPage() {
           <div className="card animate-in animate-in--d2 card--animated" style={{ marginTop: 'var(--space-4)' }}>
             <SectionHeader icon={<Icon3DText size={22} />} title="Analyze Text" subtitle="Enter text in any language for analysis" />
             <div className="card-body">
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-2)', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-positive)' }}>● Auto-detect enabled</span>
-                <span className="char-count" style={{ color:
-                  text.length > 4750 ? 'var(--color-negative)'
-                  : text.length > 4000 ? 'var(--color-warning)'
-                  : undefined, fontSize: 'var(--text-xs)' }}>
-                  {text.length} / 5,000
-                </span>
-              </div>
               <div className="form-group">
                 <NeuralInputWrap>
                   <textarea id="lang-text" className="form-textarea"
-                    style={{ minHeight: '120px' }}
+                    style={{ minHeight: '160px' }}
                     placeholder="Enter a review in any language..."
                     value={text} onChange={e => setText(e.target.value)} maxLength={5000} />
                 </NeuralInputWrap>
+
+                {/* Auto-detect badge — below textarea, centered, 3D pill */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '10px',
+                    padding: '6px 16px',
+                    background: 'linear-gradient(135deg, rgba(0,217,255,0.07), rgba(0,255,136,0.05))',
+                    border: '1px solid rgba(0,217,255,0.22)',
+                    borderRadius: '9999px',
+                    boxShadow: '0 0 14px rgba(0,217,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06)',
+                    backdropFilter: 'blur(8px)',
+                    animation: 'detect-badge-shimmer 3s ease-in-out infinite',
+                  }}>
+                    {/* 3D Globe icon */}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                      <defs>
+                        <linearGradient id="det-glob" x1="0" y1="0" x2="24" y2="24">
+                          <stop offset="0%" stopColor="#00FF88" />
+                          <stop offset="100%" stopColor="#00D9FF" />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="12" cy="12" r="9" stroke="url(#det-glob)" strokeWidth="1.5" fill="url(#det-glob)" fillOpacity="0.1" />
+                      <ellipse cx="12" cy="12" rx="5" ry="9" stroke="url(#det-glob)" strokeWidth="1" fill="none" opacity="0.5" />
+                      <path d="M3 12h18M5 7h14M5 17h14" stroke="url(#det-glob)" strokeWidth="1" opacity="0.35" />
+                      <circle cx="12" cy="12" r="2" fill="url(#det-glob)" opacity="0.8" />
+                    </svg>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-positive)', fontWeight: 600, letterSpacing: '0.02em' }}>
+                      Auto-detect enabled
+                    </span>
+                    <span style={{ width: '1px', height: '12px', background: 'rgba(0,217,255,0.25)', flexShrink: 0 }} />
+                    <span className="char-count" style={{
+                      fontSize: 'var(--text-xs)',
+                      fontFamily: 'var(--font-mono)',
+                      color: text.length > 4750 ? 'var(--color-negative)'
+                        : text.length > 4000 ? 'var(--color-warning)'
+                        : 'var(--color-text-muted)',
+                    }}>
+                      {text.length.toLocaleString()} / 5,000
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                <NeuralButton size="lg" style={{ justifyContent: 'center', width: '80%', maxWidth: '500px' }}
-                        onClick={() => { setFeedbackSent(false); setSelectedCorrection(null); run({ text, model }) }} disabled={!text.trim() || loading}>
+
+              {/* Model / Domain / Star Rating — same as LivePredictionPage */}
+              <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
+                <div className="form-group" style={{ textAlign: 'center' }}>
+                  <label className="form-label" htmlFor="lang-model-select" style={{ display: 'block', textAlign: 'center' }}>Model</label>
+                  <NeuralSelect id="lang-model-select" value={model}
+                    onChange={e => setModel(e.target.value as ModelChoice)}
+                    options={MODELS.map(m => ({ label: capitalize(m), value: m }))} />
+                </div>
+                <div className="form-group" style={{ textAlign: 'center' }}>
+                  <label className="form-label" htmlFor="lang-domain-select" style={{ display: 'block', textAlign: 'center' }}>Domain</label>
+                  <NeuralSelect id="lang-domain-select" value={domain}
+                    onChange={e => setDomain(e.target.value as DomainChoice)}
+                    options={DOMAINS.map(d => ({ label: capitalize(d), value: d }))} />
+                </div>
+                <div className="form-group" style={{ textAlign: 'center' }}>
+                  <label className="form-label" htmlFor="lang-star-select" style={{ display: 'block', textAlign: 'center' }}>Star Rating</label>
+                  <NeuralSelect id="lang-star-select" value={starRating ?? ''}
+                    onChange={e => setStarRating(e.target.value ? Number(e.target.value) : null)}
+                    options={[
+                      { label: 'None', value: '' },
+                      ...[1,2,3,4,5].map(n => ({ label: '★'.repeat(n), value: n }))
+                    ]} />
+                </div>
+              </div>
+
+              {/* Toggles — LIME / ABSA / Sarcasm, same as LivePredictionPage */}
+              <div className="toggle-row" style={{ marginTop: 'var(--space-4)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', alignItems: 'center', padding: '0 var(--space-2)' }}>
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                  <HoloToggle label="LIME Explanation" checked={includeLime} onChange={setIncludeLime} />
+                </div>
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                  <HoloToggle label="ABSA" checked={includeAbsa} onChange={setIncludeAbsa} />
+                </div>
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+                  <HoloToggle label="Sarcasm Detection" checked={includeSarcasm} onChange={setIncludeSarcasm} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-5)' }}>
+                <NeuralButton size="lg" style={{ justifyContent: 'center', width: 'calc(100% - 8px)' }}
+                    onClick={() => {
+                      setFeedbackSent(false)
+                      setSelectedCorrection(null)
+                      run({
+                        text, model,
+                        domain,
+                        star_rating: starRating,
+                        include_lime: includeLime,
+                        include_absa: includeAbsa,
+                        include_sarcasm: includeSarcasm,
+                      })
+                    }} disabled={!text.trim() || loading}>
                   {loading ? 'Analyzing...' : 'Detect & Analyze'}
                 </NeuralButton>
               </div>
@@ -797,7 +1057,7 @@ export function LanguageAnalysisPage() {
 
               {/* Clear */}
               <div className="form-actions" style={{ justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                <NeuralButton variant="ghost" onClick={() => { reset(); setText(''); setFeedbackSent(false); setSelectedCorrection(null) }}>
+                <NeuralButton variant="ghost" onClick={() => { _resetSingle(); setText(''); }}>
                   ← Clear &amp; Start Over
                 </NeuralButton>
               </div>
@@ -817,125 +1077,414 @@ export function LanguageAnalysisPage() {
             </div>
           )}
 
-          {bStage === 'configure' && bFile && (
+          {bStage === 'configure' && (bFile ? (
             <>
+              {/* ── Card 1: File Uploaded ── */}
               <div className="card animate-in card--animated">
-                <SectionHeader icon={<Icon3DBatch size={22} />} title="Batch Settings" subtitle="Configure multilingual analysis parameters" />
-                <div className="card-body">
-                  <div className="form-row">
-                    <div className="form-group" style={{ textAlign: 'center' }}>
-                      <label className="form-label" style={{ textAlign: 'center', display: 'block' }}>Text Column</label>
-                      <NeuralSelect value={bTextCol}
-                               onChange={e => setBTextCol(e.target.value)}
-                               options={bulk.columns.map(c => ({ label: c, value: c }))} />
-                    </div>
-                    <div className="form-group" style={{ textAlign: 'center' }}>
-                      <label className="form-label" style={{ textAlign: 'center', display: 'block' }}>Model</label>
-                      <NeuralSelect value={bModel}
-                               onChange={e => setBModel(e.target.value)}
-                               options={[
-                                 { label: 'Best', value: 'best' },
-                                 { label: 'Linear SVC', value: 'LinearSVC' },
-                                 { label: 'Logistic Regression', value: 'LogisticRegression' },
-                                 { label: 'Naive Bayes', value: 'NaiveBayes' },
-                                 { label: 'Random Forest', value: 'RandomForest' },
-                               ]} />
+                <SectionHeader icon={<Icon3DFile size={22} />} title="File Uploaded" subtitle="Review your uploaded dataset" />
+                <div className="card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px', textAlign: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{bFile.name}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                      {(bFile.size / 1024).toFixed(0)} KB · {bulk.columns.length} columns detected · Ready
                     </div>
                   </div>
-                  <div className="toggle-row" style={{ marginTop: 'var(--space-3)', display: 'flex', justifyContent: 'center' }}>
-                    <HoloToggle label="Sarcasm Detection" checked={bRunSarcasm} onChange={setBRunSarcasm} />
+                  <NeuralButton variant="ghost" size="sm"
+                          onClick={() => { setBFile(null); setBStage('upload'); bulk.reset() }}>
+                    Change File
+                  </NeuralButton>
+                </div>
+              </div>
+
+              {/* ── Card 2: Column Mapping ── */}
+              <div className="card animate-in animate-in--d1 card--animated" style={{ marginTop: 'var(--space-4)' }}>
+                <SectionHeader icon={<Icon3DColumns size={22} />} title="Column Mapping" subtitle="Select the text column for analysis" />
+                <div className="card-body">
+                  <div className="form-group" style={{ textAlign: 'center' }}>
+                    <label className="form-label" htmlFor="lang-text-col" style={{ textAlign: 'center', display: 'block' }}>Text Column</label>
+                    <NeuralInputWrap>
+                      <select id="lang-text-col" className="form-select" value={bTextCol}
+                              onChange={e => setBTextCol(e.target.value)}>
+                        {bulk.columns.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </NeuralInputWrap>
+                  </div>
+                  {bulk.preview.length > 0 && (
+                    <div className="preview-table-wrap" style={{ marginTop: 'var(--space-4)' }}>
+                      <table className="preview-table">
+                        <thead><tr><th style={{ textAlign: 'center' }}>Row</th><th style={{ textAlign: 'center' }}>{bTextCol}</th></tr></thead>
+                        <tbody>
+                          {bulk.preview.slice(0, 5).map((row, i) => (
+                            <tr key={i}><td style={{ textAlign: 'center' }}>{i + 1}</td><td style={{ textAlign: 'center' }}>{String(row[bTextCol] ?? '').slice(0, 100)}</td></tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Card 3: Analysis Settings ── */}
+              <div className="card animate-in animate-in--d2 card--animated" style={{ marginTop: 'var(--space-4)' }}>
+                <SectionHeader icon={<Icon3DGearSettings size={22} />} title="Analysis Settings" subtitle="Configure model and detection options" />
+                <div className="card-body">
+                  <div className="form-group" style={{ textAlign: 'center' }}>
+                    <label className="form-label" htmlFor="lang-bulk-model" style={{ textAlign: 'center', display: 'block' }}>Model</label>
+                    <NeuralInputWrap>
+                      <select id="lang-bulk-model" className="form-select" value={bModel}
+                              onChange={e => setBModel(e.target.value)}>
+                        {['best','LinearSVC','LogisticRegression','NaiveBayes','RandomForest'].map(m =>
+                          <option key={m} value={m}>{m === 'best' ? 'Best' : m.replace(/([A-Z])/g, ' $1').trim()}</option>)}
+                      </select>
+                    </NeuralInputWrap>
+                  </div>
+                  <div className="analysis-toggle-grid">
+                    <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                      <HoloToggle label="ABSA (Slower)" checked={bRunAbsa} onChange={setBRunAbsa} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <HoloToggle label="Enable Multilingual Analysis" checked={true} onChange={() => {}} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <HoloToggle label="Sarcasm Detection" checked={bRunSarcasm} onChange={setBRunSarcasm} />
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* ── Analyze button ── */}
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                <NeuralButton size="lg" style={{ justifyContent: 'center', width: '80%', maxWidth: '500px' }}
+                <NeuralButton size="lg" style={{ width: 'calc(100% - 8px)', justifyContent: 'center' }}
                         onClick={handleBSubmit}>
                   Translate &amp; Analyze All
                 </NeuralButton>
               </div>
             </>
-          )}
+          ) : (
+            /* Scenario B: configure stage but file lost after navigation */
+            <div className="card animate-in card--animated">
+              <SectionHeader icon={<Icon3DFile size={22} />} title="File Selection Lost" subtitle="Your previous file selection was lost. Please re-upload your file." />
+              <div className="card-body" style={{ textAlign: 'center' }}>
+                {bFileName && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-3)' }}>Previous file: {bFileName}</div>}
+                <FolderUpload onFileSelect={handleBFileSelect} />
+              </div>
+            </div>
+          ))}
 
-          {bStage === 'processing' && (
-            <div className="card animate-in" style={{ padding: 'var(--space-4)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)' }}>
-                <OrbitalLoader text="" />
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '10px',
-                  background: 'rgba(0, 217, 255, 0.06)', border: '1px solid rgba(0, 217, 255, 0.15)',
-                  borderRadius: '12px', padding: '8px 20px',
-                  whiteSpace: 'nowrap', flexWrap: 'nowrap',
-                }}>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-primary-bright)', fontWeight: 600, flexShrink: 0 }}>
-                    Translating &amp; Analyzing
-                  </span>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                    {bulk.result?.processed ?? 0}/{bulk.result?.total_rows ?? '?'} · {Math.floor(bElapsed / 60)}m {bElapsed % 60}s
-                  </span>
-                </div>
-                {/* Terminal logs */}
-                <div style={{
-                  width: '100%', maxWidth: '520px',
-                  background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(0, 217, 255, 0.1)',
-                  borderRadius: '10px', overflow: 'hidden',
-                }}>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    background: 'rgba(0,0,0,0.3)',
-                  }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff5f57' }} />
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffbd2e' }} />
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#28ca41' }} />
-                    <span style={{ flex: 1, textAlign: 'center', fontSize: '10px', color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>
-                      ANALYSIS TERMINAL
-                    </span>
-                  </div>
-                  <div style={{
-                    padding: '10px 14px', maxHeight: '180px', overflowY: 'auto',
-                    display: 'flex', flexDirection: 'column', gap: '3px',
-                    fontFamily: 'var(--font-mono)', fontSize: '11px', lineHeight: '1.6',
-                  }}>
-                    {(bulk.result?.logs ?? ['Starting multilingual analysis pipeline...']).map((line, i) => (
-                      <div key={i} style={{ color: i === 0 ? 'var(--color-text-faint)' : 'var(--color-text)' }}>
-                        <span style={{ color: '#28ca41', marginRight: '6px', fontWeight: 700 }}>❯</span>
-                        {line}
+          {bStage === 'processing' && (() => {
+            // ── Live stats from streaming results (bResult updates every 250ms poll) ──
+            const rows = bResult?.results ?? []
+            const processed = bResult?.processed ?? 0
+            const total = bResult?.total_rows ?? 0
+            const progressPct = total > 0 ? Math.round((processed / total) * 100) : 0
+            const speed = bElapsed > 0 ? (processed / bElapsed).toFixed(1) : '0.0'
+            const avgConf = rows.length > 0 ? (rows.reduce((s, r) => s + r.confidence, 0) / rows.length).toFixed(1) : '—'
+            const errorCount = rows.filter(r => r.sentiment === 'error' || r.sentiment === 'unknown').length
+
+            // ── Live sentiment distribution ──
+            const posCount = rows.filter(r => r.sentiment === 'positive').length
+            const negCount = rows.filter(r => r.sentiment === 'negative').length
+            const neuCount = rows.filter(r => r.sentiment === 'neutral').length
+            const sentRealTotal = posCount + negCount + neuCount
+            const hasSentimentData = sentRealTotal > 0
+            const sentTotal = sentRealTotal || 1
+            const posPct = Math.round((posCount / sentTotal) * 100)
+            const negPct = Math.round((negCount / sentTotal) * 100)
+            const neuPct = 100 - posPct - negPct
+
+            // ── Live language counts (top 4) ──
+            const langMap: Record<string, number> = {}
+            rows.forEach(r => { const l = r.detected_language ?? 'Unknown'; langMap[l] = (langMap[l] || 0) + 1 })
+            const topLangs = Object.entries(langMap).sort((a, b) => b[1] - a[1]).slice(0, 4)
+            const langMax = topLangs[0]?.[1] ?? 1
+
+            // ── Shared styles ──
+            const statLabel: React.CSSProperties = {
+              fontSize: '10px', color: 'var(--color-text-faint)',
+              textTransform: 'uppercase', letterSpacing: '0.06em',
+            }
+            const statValue: React.CSSProperties = {
+              fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-mono)',
+              color: 'var(--color-text)', transition: 'all 0.3s ease',
+            }
+
+            return (
+            <div className="card animate-in" style={{ padding: '16px' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '190px 1fr 190px',
+                gridTemplateRows: '1fr 1fr',
+                gap: '12px',
+              }}>
+
+                {/* ── TOP-LEFT: Live Stats ── */}
+                <CyberCard style={{ gridColumn: 1, gridRow: 1 }}>
+                  <PanelBadge icon={<Icon3DPulse />} label="Live Stats"
+                    bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1, justifyContent: 'center' }}>
+                    {[
+                      { label: 'Processed', value: `${processed} / ${total || '?'}`, color: 'var(--color-primary-bright)' },
+                      { label: 'Speed', value: `${speed} r/s`, color: '#2dd4bf' },
+                      { label: 'Avg Conf', value: avgConf === '—' ? '—' : `${avgConf}%`, color: '#a78bfa' },
+                      { label: 'Errors', value: String(errorCount), color: errorCount > 0 ? 'var(--color-negative)' : 'var(--color-positive)' },
+                      { label: 'Progress', value: `${progressPct}%`, color: '#fde047' },
+                    ].map(s => (
+                      <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={statLabel}>{s.label}</span>
+                        <span style={{ ...statValue, color: s.color }}>{s.value}</span>
                       </div>
                     ))}
                   </div>
+                </CyberCard>
+
+                {/* ── TOP-RIGHT: Sentiment ── */}
+                <CyberCard style={{ gridColumn: 3, gridRow: 1 }}>
+                  <PanelBadge icon={<Icon3DSentimentPie />} label="Sentiment"
+                    bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center' }}>
+                    {hasSentimentData ? (
+                      <>
+                        {/* CSS donut */}
+                        <div style={{
+                          width: '68px', height: '68px', borderRadius: '50%',
+                          background: `conic-gradient(
+                            #22c55e 0% ${posPct}%,
+                            #f59e0b ${posPct}% ${posPct + neuPct}%,
+                            #f43f5e ${posPct + neuPct}% 100%
+                          )`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.3s ease',
+                        }}>
+                          <div style={{
+                            width: '44px', height: '44px', borderRadius: '50%',
+                            background: 'var(--color-bg-card, #0f1923)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '11px', fontWeight: 700, color: 'var(--color-text)',
+                            fontFamily: 'var(--font-mono)',
+                          }}>
+                            {sentRealTotal}
+                          </div>
+                        </div>
+                        {/* Legend */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+                          {[
+                            { label: 'Positive', pct: posPct, color: '#22c55e' },
+                            { label: 'Neutral', pct: neuPct, color: '#f59e0b' },
+                            { label: 'Negative', pct: negPct, color: '#f43f5e' },
+                          ].map(s => (
+                            <div key={s.label}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '2px' }}>
+                                <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
+                                <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>{s.pct}%</span>
+                              </div>
+                              <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                                <div style={{
+                                  height: '100%', borderRadius: '2px', background: s.color,
+                                  width: `${s.pct}%`, transition: 'width 0.4s ease', opacity: 0.8,
+                                }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
+                        <div style={{
+                          width: '48px', height: '48px', borderRadius: '50%',
+                          border: '2px dashed rgba(34,197,94,0.3)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          animation: 'pulse 2s ease-in-out infinite',
+                        }}>
+                          <div style={{
+                            fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                            fontFamily: 'var(--font-mono)',
+                          }}>0</div>
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
+                          Awaiting data…
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CyberCard>
+
+                {/* ── BOTTOM-LEFT: Config ── */}
+                <CyberCard style={{ gridColumn: 1, gridRow: 2, opacity: 0.85 }}>
+                  <PanelBadge icon={<Icon3DGearPanel />} label="Config"
+                    bg="rgba(167,139,250,0.06)" border="rgba(167,139,250,0.18)" color="#a78bfa" />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
+                    {[
+                      ['Model', bModel === 'best' ? 'Best' : bModel],
+                      ['Multi', 'ON'],
+                      ['ABSA', bRunAbsa ? 'ON' : 'OFF'],
+                      ['Sarcasm', bRunSarcasm ? 'ON' : 'OFF'],
+                    ].map(([k, v]) => (
+                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--color-text-faint)' }}>{k}</span>
+                        <span style={{
+                          fontWeight: 600, fontFamily: 'var(--font-mono)',
+                          color: v === 'ON' ? 'var(--color-positive)' : v === 'OFF' ? 'var(--color-text-faint)' : 'var(--color-primary-bright)',
+                        }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CyberCard>
+
+                {/* ── BOTTOM-RIGHT: Languages ── */}
+                <CyberCard style={{ gridColumn: 3, gridRow: 2, opacity: 0.85 }}>
+                  <PanelBadge icon={<Icon3DGlobePanel />} label="Languages"
+                    bg="rgba(244,63,94,0.06)" border="rgba(244,63,94,0.18)" color="#f43f5e" />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    {topLangs.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {topLangs.map(([lang, cnt]) => (
+                          <div key={lang}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '2px' }}>
+                              <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>{lang}</span>
+                              <span style={{ color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)' }}>{cnt}</span>
+                            </div>
+                            <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                              <div style={{
+                                height: '100%', borderRadius: '2px',
+                                background: 'linear-gradient(90deg, #a78bfa, #00d9ff)',
+                                width: `${Math.round((cnt / langMax) * 100)}%`,
+                                transition: 'width 0.4s ease', opacity: 0.7,
+                              }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
+                        <div style={{
+                          width: '48px', height: '48px', borderRadius: '50%',
+                          border: '2px dashed rgba(244,63,94,0.3)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          animation: 'pulse 2s ease-in-out infinite',
+                        }}>
+                          <div style={{
+                            fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                            fontFamily: 'var(--font-mono)',
+                          }}>0</div>
+                        </div>
+                        <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
+                          Awaiting data…
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CyberCard>
+
+                {/* ── CENTER: Loader + Terminal (spans both rows) ── */}
+                <div style={{
+                  gridColumn: 2, gridRow: '1 / 3',
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  gap: '6px',
+                }}>
+                  {/* Cyber loader — scaled to fit center */}
+                  <div style={{ margin: '-85px 0 -40px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <CyberLoader scale={0.85} />
+                  </div>
+
+                  {/* Progress bar */}
+                  <div style={{ width: '80%', maxWidth: '300px', alignSelf: 'center' }}>
+                    <div style={{
+                      height: '4px', borderRadius: '2px',
+                      background: 'rgba(255,255,255,0.06)',
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        height: '100%', borderRadius: '2px',
+                        background: 'linear-gradient(90deg, #00d9ff, #00ff88)',
+                        width: `${progressPct}%`,
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Status pill */}
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    background: 'rgba(0, 217, 255, 0.06)', border: '1px solid rgba(0, 217, 255, 0.15)',
+                    borderRadius: '12px', padding: '5px 14px',
+                    whiteSpace: 'nowrap', marginTop: '6px',
+                  }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-primary-bright)', fontWeight: 600 }}>
+                      Translating &amp; Analyzing
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      {processed}/{total || '?'} · {Math.floor(bElapsed / 60)}m {bElapsed % 60}s
+                    </span>
+                  </div>
+
+                  {/* Terminal logs */}
+                  <div style={{
+                    width: '90%', maxWidth: '380px',
+                    background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(0, 217, 255, 0.1)',
+                    borderRadius: '10px', overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '5px',
+                      padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+                      background: 'rgba(0,0,0,0.3)',
+                    }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ff5f57' }} />
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffbd2e' }} />
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#28ca41' }} />
+                      <span style={{ flex: 1, textAlign: 'center', fontSize: '8px', color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>
+                        ANALYSIS TERMINAL
+                      </span>
+                    </div>
+                    <div style={{
+                      padding: '6px 10px', height: '90px', overflowY: 'auto',
+                      display: 'flex', flexDirection: 'column', gap: '2px',
+                      fontFamily: 'var(--font-mono)', fontSize: '9px', lineHeight: '1.5',
+                    }}>
+                      {(bResult?.logs ?? ['Starting multilingual analysis pipeline...']).map((line, i) => (
+                        <div key={i} style={{ color: i === 0 ? 'var(--color-text-faint)' : 'var(--color-text)' }}>
+                          <span style={{ color: '#28ca41', marginRight: '4px', fontWeight: 700 }}>❯</span>
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <NeuralButton variant="ghost" size="sm" onClick={handleBReset}>Cancel</NeuralButton>
                 </div>
-                <NeuralButton variant="ghost" onClick={handleBReset}>Cancel</NeuralButton>
+
               </div>
             </div>
-          )}
+            )
+          })()}
 
-          {bStage === 'results' && bulk.result?.summary && (
+          {bStage === 'results' && bResult?.summary && (
             <>
               {/* KPI Cards */}
               <div className="kpi-grid">
                 <div className="card kpi-card kpi-card--total" style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}><Icon3DTotal size={20} /></div>
                   <div className="kpi-card__tag" style={{ textAlign: 'center' }}>Total</div>
-                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bulk.result.summary.total_analyzed}</div>
+                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bResult.summary.total_analyzed}</div>
                   <div className="kpi-card__sub" style={{ textAlign: 'center' }}>reviews</div>
                 </div>
                 <div className="card kpi-card kpi-card--positive" style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}><Icon3DPositive size={20} /></div>
                   <div className="kpi-card__tag" style={{ textAlign: 'center' }}>Positive</div>
-                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bulk.result.summary.positive_pct}%</div>
-                  <div className="kpi-card__sub" style={{ textAlign: 'center' }}>{bulk.result.summary.positive} reviews</div>
+                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bResult.summary.positive_pct}%</div>
+                  <div className="kpi-card__sub" style={{ textAlign: 'center' }}>{bResult.summary.positive} reviews</div>
                 </div>
                 <div className="card kpi-card kpi-card--negative" style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}><Icon3DNegative size={20} /></div>
                   <div className="kpi-card__tag" style={{ textAlign: 'center' }}>Negative</div>
-                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bulk.result.summary.negative_pct}%</div>
-                  <div className="kpi-card__sub" style={{ textAlign: 'center' }}>{bulk.result.summary.negative} reviews</div>
+                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bResult.summary.negative_pct}%</div>
+                  <div className="kpi-card__sub" style={{ textAlign: 'center' }}>{bResult.summary.negative} reviews</div>
                 </div>
                 <div className="card kpi-card kpi-card--neutral" style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}><Icon3DNeutral size={20} /></div>
                   <div className="kpi-card__tag" style={{ textAlign: 'center' }}>Neutral</div>
-                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bulk.result.summary.neutral_pct}%</div>
-                  <div className="kpi-card__sub" style={{ textAlign: 'center' }}>{bulk.result.summary.neutral} reviews</div>
+                  <div className="kpi-card__value" style={{ textAlign: 'center' }}>{bResult.summary.neutral_pct}%</div>
+                  <div className="kpi-card__sub" style={{ textAlign: 'center' }}>{bResult.summary.neutral} reviews</div>
                 </div>
                 <div className="card kpi-card kpi-card--teal" style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '6px' }}><Icon3DLangCount size={20} /></div>
@@ -964,9 +1513,10 @@ export function LanguageAnalysisPage() {
                       <th style={{ textAlign: 'center' }}>Confidence</th>
                     </tr></thead>
                     <tbody>
-                      {(bShowAll ? bulk.result.results ?? [] : (bulk.result.results ?? []).slice(0, 10)).map(row => {
-                        const lang = detectLang(row.text)
-                        const translation = getTranslation(row.text, lang, row.sentiment)
+                      {(bShowAll ? bResult.results ?? [] : (bResult.results ?? []).slice(0, 10)).map(row => {
+                        // Use real server-detected language and translation — same as BulkAnalysisPage
+                        const detectedLang = row.detected_language ?? '—'
+                        const translationText = row.translated_text ?? row.text
                         return (
                           <tr key={row.row_index}>
                             <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-faint)', textAlign: 'center' }}>{row.row_index}</td>
@@ -974,10 +1524,10 @@ export function LanguageAnalysisPage() {
                               {row.text.slice(0, 50)}{row.text.length > 50 ? '…' : ''}
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <span className="badge badge-info" style={{ fontSize: '10px' }}>{lang}</span>
+                              <span className="badge badge-info" style={{ fontSize: '10px' }}>{detectedLang}</span>
                             </td>
-                            <td style={{ textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }} title={translation}>
-                              {translation.slice(0, 45)}{translation.length > 45 ? '…' : ''}
+                            <td style={{ textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }} title={translationText}>
+                              {translationText.slice(0, 45)}{translationText.length > 45 ? '…' : ''}
                             </td>
                             <td style={{ textAlign: 'center' }}><SentimentBadge sentiment={row.sentiment} confidence={row.confidence} showConfidence={false} /></td>
                             <td className="col-num" style={{ textAlign: 'center' }}>{row.confidence.toFixed(1)}%</td>
@@ -987,7 +1537,7 @@ export function LanguageAnalysisPage() {
                     </tbody>
                   </table>
                 </div>
-                {bulk.result.results && <AnalysisErrorSummary results={bulk.result.results} />}
+                {bResult.results && <AnalysisErrorSummary results={bResult.results} />}
               </div>
 
               {/* Charts */}
@@ -996,9 +1546,9 @@ export function LanguageAnalysisPage() {
                   <SectionHeader icon={<Icon3DChart size={22} />} title="Sentiment Distribution" subtitle="Proportion of sentiments across reviews" />
                   <div className="card-body">
                     <SentimentPieChart
-                      positive={bulk.result.summary.positive_pct}
-                      negative={bulk.result.summary.negative_pct}
-                      neutral={bulk.result.summary.neutral_pct} />
+                      positive={bResult.summary.positive_pct}
+                      negative={bResult.summary.negative_pct}
+                      neutral={bResult.summary.neutral_pct} />
                   </div>
                 </div>
                 <div className="card animate-in">
@@ -1025,9 +1575,9 @@ export function LanguageAnalysisPage() {
 
               {/* Sentiment Trend */}
               <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
-                <SectionHeader icon={<Icon3DTrend size={22} />} title="Sentiment Trend" subtitle="Simulated monthly sentiment distribution" />
+                <SectionHeader icon={<Icon3DTrend size={22} />} title="Sentiment Trend" subtitle="Batch processing sentiment distribution" />
                 <div className="card-body">
-                  <SentimentTrendChart />
+                  <SentimentTrendChart data={trendPoints.length > 0 ? trendPoints : bTrendData} />
                 </div>
               </div>
 
@@ -1037,11 +1587,11 @@ export function LanguageAnalysisPage() {
                 <div className="ai-summary" style={{ textAlign: 'center' }}>
                   <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
                     <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}><Icon3DTotal size={16} /></span>
-                    <span><strong>Overall:</strong> {bulk.result.summary.total_analyzed} reviews analyzed with multilingual support.</span>
+                    <span><strong>Overall:</strong> {bResult.summary.total_analyzed} reviews analyzed with multilingual support.</span>
                   </div>
                   <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
                     <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}><Icon3DChart size={16} /></span>
-                    <span><strong>Distribution:</strong> {bulk.result.summary.positive_pct}% positive, {bulk.result.summary.negative_pct}% negative, {bulk.result.summary.neutral_pct}% neutral.</span>
+                    <span><strong>Distribution:</strong> {bResult.summary.positive_pct}% positive, {bResult.summary.negative_pct}% negative, {bResult.summary.neutral_pct}% neutral.</span>
                   </div>
                   <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
                     <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}><Icon3DGlobe size={16} /></span>
@@ -1049,7 +1599,7 @@ export function LanguageAnalysisPage() {
                   </div>
                   <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
                     <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}><Icon3DSentiment size={16} /></span>
-                    <span><strong>Sarcasm:</strong> {bulk.result.summary.sarcasm_count} reviews flagged as sarcastic.</span>
+                    <span><strong>Sarcasm:</strong> {bResult.summary.sarcasm_count} reviews flagged as sarcastic.</span>
                   </div>
                 </div>
               </div>
@@ -1059,17 +1609,17 @@ export function LanguageAnalysisPage() {
                 <SectionHeader icon={<Icon3DExport size={22} />} title="Export Results" subtitle="Download analysis in multiple formats" />
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
                   <NeuralButton variant="secondary" size="sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => {
-                    if (!bulk.result?.results) return
-                    generateUniversalCSV({ rows: bulk.result.results, mode: 'language', filename: 'language-batch.csv' })
+                    if (!bResult?.results) return
+                    generateUniversalCSV({ rows: bResult.results, mode: 'language', filename: 'language-batch.csv' })
                     showToast('success', 'CSV exported successfully')
                   }}>📄 CSV</NeuralButton>
                   <NeuralButton variant="secondary" size="sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => {
-                    if (!bulk.result?.results || !bulk.result.summary) return
+                    if (!bResult?.results || !bResult.summary) return
                     generateUniversalPDF({
                       title: 'ReviewSense Analytics',
-                      subtitle: `Multilingual Bulk Analysis Report — ${bulk.result.summary.total_analyzed} Reviews`,
-                      rows: bulk.result.results,
-                      summary: bulk.result.summary,
+                      subtitle: `Multilingual Bulk Analysis Report — ${bResult.summary.total_analyzed} Reviews`,
+                      rows: bResult.results,
+                      summary: bResult.summary,
                       mode: 'language',
                       topKeywords: bTopKeywords,
                       filename: 'language-batch.html',
@@ -1077,26 +1627,17 @@ export function LanguageAnalysisPage() {
                     showToast('success', 'PDF report exported successfully')
                   }}>📑 PDF</NeuralButton>
                   <NeuralButton variant="secondary" size="sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => {
-                    if (!bulk.result?.results || !bulk.result.summary) return
-                    generateUniversalJSON({ rows: bulk.result.results, summary: bulk.result.summary, mode: 'language', filename: 'language-batch.json' })
+                    if (!bResult?.results || !bResult.summary) return
+                    generateUniversalJSON({ rows: bResult.results, summary: bResult.summary, mode: 'language', filename: 'language-batch.json' })
                     showToast('success', 'JSON exported successfully')
                   }}>{'{ }'} JSON</NeuralButton>
                   <NeuralButton variant="secondary" size="sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => {
-                    if (!bulk.result?.results) return
-                    generateUniversalExcel({ rows: bulk.result.results, mode: 'language', filename: 'language-batch.xls' })
+                    if (!bResult?.results) return
+                    generateUniversalExcel({ rows: bResult.results, mode: 'language', filename: 'language-batch.xls' })
                     showToast('success', 'Excel exported successfully')
                   }}>📊 Excel</NeuralButton>
                 </div>
-                {bulk.jobId && (
-                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-3)' }}>
-                    <NeuralButton variant="ghost" size="sm" onClick={() => {
-                      window.open(`http://localhost:8000/bulk/export/${bulk.jobId}`, '_blank')
-                      showToast('success', 'Server CSV download started')
-                    }}>
-                      ⬇ Download Full Results CSV (Server)
-                    </NeuralButton>
-                  </div>
-                )}
+
               </div>
 
               <div className="form-actions" style={{ justifyContent: 'center', marginTop: 'var(--space-4)' }}>

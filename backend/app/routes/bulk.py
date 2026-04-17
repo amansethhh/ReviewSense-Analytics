@@ -173,6 +173,7 @@ def _process_bulk_job(
             _job_store[job_id]["status"] = (
                 BulkJobStatus.processing)
             _job_store[job_id]["total_rows"] = total
+            _job_store[job_id]["results"] = []  # init for streaming
 
         _append_log(
             job_id,
@@ -373,6 +374,16 @@ def _process_bulk_job(
                 )
                 results.append(row_result)
                 processed_count += 1
+
+                # Stream result to job store for real-time panels
+                with _store_lock:
+                    if job_id in _job_store:
+                        _job_store[job_id]["results"].append(
+                            row_result.model_dump())
+
+                # Record prediction for live dashboard stats
+                metrics_store.record_prediction(
+                    sentiment_raw, det_lang)
 
                 # Thread-safe progress update
                 _update_progress(
@@ -692,12 +703,11 @@ async def get_bulk_status(job_id: str):
         # serialization
         job["logs"] = list(job.get("logs", []))
 
+    # Return results during both processing AND completed
+    # so the frontend panels update in real-time
     return BulkJobResult(**{
         **job,
-        "results": job["results"] if (
-            job["status"] == BulkJobStatus.completed
-            and job["results"]
-        ) else None,
+        "results": job["results"] if job["results"] else None,
     })
 
 

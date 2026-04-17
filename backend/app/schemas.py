@@ -141,6 +141,14 @@ class LanguageRequest(BaseModel):
         ..., min_length=1, max_length=10000
     )
     model: ModelChoice = ModelChoice.best
+    domain: DomainChoice = DomainChoice.all
+    star_rating: Optional[int] = Field(
+        None, ge=1, le=5,
+        description="Optional user-provided star rating"
+    )
+    include_lime: bool = True
+    include_absa: bool = True
+    include_sarcasm: bool = True
 
     @field_validator("text")
     @classmethod
@@ -163,6 +171,9 @@ class LanguageResponse(BaseModel):
     subjectivity:           float
     model_used:             str
     processing_ms:          int
+    lime_features:          Optional[list[LIMEFeature]] = None
+    absa:                   Optional[list[ABSAItem]] = None
+    sarcasm:                Optional[SarcasmResult] = None
 
 
 # ── /metrics ───────────────────────────────────────────────

@@ -100,6 +100,8 @@ const ICON_MAP: Record<NeuralIconType, (() => JSX.Element) | null> = {
 // Auto-detect icon from button text
 function detectIcon(text: string, variant: string): NeuralIconType {
   const t = text.toLowerCase()
+  // Sentiment feedback buttons — emoji already in child text, no extra icon
+  if (t.includes('positive') || t.includes('negative') || t.includes('neutral')) return 'none'
   if (t.includes('analyz') || t.includes('detect') || t.includes('translate')) return 'sparkle'
   if (t.includes('csv') || t.includes('json') || t.includes('export')) return 'download'
   if (t.includes('pdf') || t.includes('excel')) return 'file'

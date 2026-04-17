@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AppProvider, useApp } from '@/context/AppContext'
 import { SidebarProvider, useSidebar } from '@/context/SidebarContext'
+import { PageStateProvider } from '@/context/PageStateContext'
 import { Sidebar }     from '@/components/layout/Sidebar'
 import { ToastContainer } from '@/components/ui/Toast'
 import { getHealth } from '@/api/api'
@@ -96,7 +97,9 @@ export default function App() {
   return (
     <AppProvider>
       <SidebarProvider>
-        <AppContent />
+        <PageStateProvider>
+          <AppContent />
+        </PageStateProvider>
       </SidebarProvider>
     </AppProvider>
   )

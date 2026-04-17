@@ -398,4 +398,7 @@ async def predict(
         cache_data.pop("cache_hit", None)
         prediction_cache.set(cache_key, cache_data)
 
+    # Record prediction for live dashboard stats
+    metrics_store.record_prediction(sentiment_raw, "English")
+
     return response

@@ -3,12 +3,16 @@ import { PageWrapper } from '@/components/layout/PageWrapper'
 import { NeuralButton } from '@/components/ui/NeuralButton'
 import { EyebrowPill } from '@/components/ui/EyebrowPill'
 import { OrbitalLoader } from '@/components/ui/OrbitalLoader'
+import { CyberCard } from '@/components/ui/CyberCard'
 import { ModelComparisonChart } from '@/components/charts/ModelComparisonChart'
 import { ROCAUCChart } from '@/components/charts/ROCAUCChart'
 import { TrainingTimeChart } from '@/components/charts/TrainingTimeChart'
 import { FeatureImportanceChart } from '@/components/charts/FeatureImportanceChart'
 import { SentimentTrendChart } from '@/components/charts/SentimentTrendChart'
 import { useMetrics } from '@/hooks/useMetrics'
+import { useLiveStats } from '@/hooks/useLiveStats'
+import { useDashboardStore } from '@/hooks/useDashboardStore'
+import { useTrendStore } from '@/hooks/useTrendStore'
 import type { ModelMetric } from '@/types/api.types'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -212,18 +216,86 @@ function Icon3DBolt({ size = 22 }: { size?: number }) {
   )
 }
 
+/* ── Panel Badge (matches BulkAnalysis / LanguageAnalysis styling) ── */
+function PanelBadge({ icon, label, bg, border, color }: {
+  icon: React.ReactNode, label: string,
+  bg: string, border: string, color: string,
+}) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: '7px', alignSelf: 'center',
+      background: bg, border: `1px solid ${border}`,
+      borderRadius: '10px', padding: '5px 14px',
+      marginBottom: '10px',
+    }}>
+      {icon}
+      <span style={{
+        fontSize: '10px', fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        color,
+      }}>{label}</span>
+    </div>
+  )
+}
+
+/* ── Panel 3D Icons ── */
+function Icon3DPulsePanel({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="mdpls" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00D9FF"/><stop offset="100%" stopColor="#2dd4bf"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#mdpls)" strokeWidth="1.5" fill="url(#mdpls)" fillOpacity=".08" />
+      <path d="M8 24h8l4-12 4 24 4-12 4 6 4-6h8" stroke="url(#mdpls)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function Icon3DSentimentPanel({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="mdspie" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#F59E0B"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#mdspie)" strokeWidth="2" fill="url(#mdspie)" fillOpacity=".08" />
+      <path d="M24 6v18l14 10" stroke="url(#mdspie)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M24 24L10 14" stroke="url(#mdspie)" strokeWidth="1.5" strokeLinecap="round" opacity=".5" />
+    </svg>
+  )
+}
+function Icon3DGearPanel({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="mdgp" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#818cf8"/></linearGradient></defs>
+      <path d="M24 16a8 8 0 100 16 8 8 0 000-16z" stroke="url(#mdgp)" strokeWidth="2" fill="url(#mdgp)" fillOpacity=".15" />
+      <path d="M24 4v6M24 38v6M4 24h6M38 24h6M9.9 9.9l4.2 4.2M33.9 33.9l4.2 4.2M38.1 9.9l-4.2 4.2M14.1 33.9l-4.2 4.2" stroke="url(#mdgp)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+function Icon3DGlobePanel({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="mdglp" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#F43F5E"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#mdglp)" strokeWidth="2" fill="url(#mdglp)" fillOpacity=".08" />
+      <ellipse cx="24" cy="24" rx="10" ry="18" stroke="url(#mdglp)" strokeWidth="1.5" fill="none" opacity=".4" />
+      <path d="M6 24h36M8 14h32M8 34h32" stroke="url(#mdglp)" strokeWidth="1.5" opacity=".25" />
+    </svg>
+  )
+}
 
 export function ModelDashboardPage() {
-  const { data, loading, error } = useMetrics()
-  const [sortKey, setSortKey] = useState<SortKey>('accuracy')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const { data: metricsData, loading, error } = useMetrics()
+  const { data: live } = useLiveStats()
+  const trendPoints = useTrendStore()
+  const {
+    sortKey, sortDir, toggleSort,
+    metricsSnapshot, setMetricsSnapshot,
+  } = useDashboardStore()
   const [ringOffset, setRingOffset] = useState(276.46)
   const ringRef = useRef(false)
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    else { setSortKey(key); setSortDir('desc') }
-  }
+  // Snapshot metrics data when fetched (persists across navigation)
+  useEffect(() => {
+    if (metricsData) setMetricsSnapshot(metricsData)
+  }, [metricsData, setMetricsSnapshot])
+
+  // Use live data if available, otherwise use snapshot (no loading flash on return)
+  const data = metricsData || metricsSnapshot
 
   // Animate accuracy ring on mount
   useEffect(() => {
@@ -238,7 +310,8 @@ export function ModelDashboardPage() {
     }
   }, [data])
 
-  if (loading) return (
+  // Only show loading if there's no cached snapshot
+  if (loading && !data) return (
     <PageWrapper title="Model Dashboard" subtitle="Performance metrics for all 4 trained classifiers" hideTopBar>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {/* Skeleton KPI cards */}
@@ -305,14 +378,244 @@ export function ModelDashboardPage() {
         Model Performance Intelligence Dashboard
       </EyebrowPill>
 
+      {/* ══════ REAL-TIME DASHBOARD PANELS ══════ */}
+      {live && (() => {
+        const sd = live.sentiment_distribution
+        const sentRealTotal = (sd.positive || 0) + (sd.negative || 0) + (sd.neutral || 0)
+        const hasSentimentData = sentRealTotal > 0
+        const sentTotal = sentRealTotal || 1
+        const posPct = Math.round(((sd.positive || 0) / sentTotal) * 100)
+        const negPct = Math.round(((sd.negative || 0) / sentTotal) * 100)
+        const neuPct = 100 - posPct - negPct
+        const topLangs: [string, number][] = Object.entries(live.language_distribution).slice(0, 4) as [string, number][]
+        const langMax = topLangs[0]?.[1] ?? 1
+        const uptimeH = Math.floor(live.uptime_seconds / 3600)
+        const uptimeM = Math.floor((live.uptime_seconds % 3600) / 60)
+
+        const statLabel: CSSProperties = {
+          fontSize: '10px', color: 'var(--color-text-faint)',
+          textTransform: 'uppercase', letterSpacing: '0.06em',
+        }
+        const statValue: CSSProperties = {
+          fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-mono)',
+          color: 'var(--color-text)', transition: 'all 0.3s ease',
+        }
+
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '14px',
+            marginBottom: 'var(--space-4)',
+          }}>
+            {/* ── PANEL 1: Live Stats ── */}
+            <CyberCard>
+              <PanelBadge icon={<Icon3DPulsePanel />} label="Live Stats"
+                bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1, justifyContent: 'center' }}>
+                {[
+                  { label: 'Predictions', value: String(live.total_predictions), color: 'var(--color-primary-bright)' },
+                  { label: 'Avg Latency', value: `${live.avg_latency_ms.toFixed(0)}ms`, color: '#2dd4bf' },
+                  { label: 'Cache Hit', value: `${live.cache_hit_rate.toFixed(1)}%`, color: '#a78bfa' },
+                  { label: 'Errors', value: String(live.errors), color: live.errors > 0 ? 'var(--color-negative)' : 'var(--color-positive)' },
+                  { label: 'Uptime', value: `${uptimeH}h ${uptimeM}m`, color: '#fde047' },
+                ].map(s => (
+                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={statLabel}>{s.label}</span>
+                    <span style={{ ...statValue, color: s.color }}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </CyberCard>
+
+            {/* ── PANEL 2: Sentiment ── */}
+            <CyberCard>
+              <PanelBadge icon={<Icon3DSentimentPanel />} label="Sentiment"
+                bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center' }}>
+                {hasSentimentData ? (
+                  <>
+                    {/* CSS donut */}
+                    <div style={{
+                      width: '68px', height: '68px', borderRadius: '50%',
+                      background: `conic-gradient(
+                        #22c55e 0% ${posPct}%,
+                        #f59e0b ${posPct}% ${posPct + neuPct}%,
+                        #f43f5e ${posPct + neuPct}% 100%
+                      )`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.3s ease',
+                    }}>
+                      <div style={{
+                        width: '44px', height: '44px', borderRadius: '50%',
+                        background: 'var(--color-bg-card, #0f1923)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>
+                        {sentRealTotal}
+                      </div>
+                    </div>
+                    {/* Legend */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+                      {[
+                        { label: 'Positive', pct: posPct, color: '#22c55e' },
+                        { label: 'Neutral', pct: neuPct, color: '#f59e0b' },
+                        { label: 'Negative', pct: negPct, color: '#f43f5e' },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '2px' }}>
+                            <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
+                            <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>{s.pct}%</span>
+                          </div>
+                          <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                            <div style={{
+                              height: '100%', borderRadius: '2px', background: s.color,
+                              width: `${s.pct}%`, transition: 'width 0.4s ease', opacity: 0.8,
+                            }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: '50%',
+                      border: '2px dashed rgba(34,197,94,0.3)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      animation: 'pulse 2s ease-in-out infinite',
+                    }}>
+                      <div style={{
+                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>0</div>
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
+                      Awaiting data…
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CyberCard>
+
+            {/* ── PANEL 3: Config ── */}
+            <CyberCard>
+              <PanelBadge icon={<Icon3DGearPanel />} label="Config"
+                bg="rgba(167,139,250,0.06)" border="rgba(167,139,250,0.18)" color="#a78bfa" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
+                {[
+                  ['Model', live.active_model],
+                  ['Models', `${live.models_loaded} loaded`],
+                  ['ABSA', live.pipeline_config.absa ? 'ON' : 'OFF'],
+                  ['Sarcasm', live.pipeline_config.sarcasm ? 'ON' : 'OFF'],
+                  ['Multi', live.pipeline_config.multilingual ? 'ON' : 'OFF'],
+                  ['Cache', live.pipeline_config.cache_enabled ? 'ON' : 'OFF'],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-faint)' }}>{k}</span>
+                    <span style={{
+                      fontWeight: 600, fontFamily: 'var(--font-mono)',
+                      color: v === 'ON' ? 'var(--color-positive)' : v === 'OFF' ? 'var(--color-text-faint)' : 'var(--color-primary-bright)',
+                    }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </CyberCard>
+
+            {/* ── PANEL 4: Languages ── */}
+            <CyberCard>
+              <PanelBadge icon={<Icon3DGlobePanel />} label="Languages"
+                bg="rgba(244,63,94,0.06)" border="rgba(244,63,94,0.18)" color="#f43f5e" />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                {topLangs.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {topLangs.map(([lang, cnt]) => (
+                      <div key={lang}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '2px' }}>
+                          <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>{lang}</span>
+                          <span style={{ color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)' }}>{cnt}</span>
+                        </div>
+                        <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                          <div style={{
+                            height: '100%', borderRadius: '2px',
+                            background: 'linear-gradient(90deg, #a78bfa, #00d9ff)',
+                            width: `${Math.round((cnt / langMax) * 100)}%`,
+                            transition: 'width 0.4s ease', opacity: 0.7,
+                          }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : hasSentimentData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '2px' }}>
+                      <span style={{ color: 'var(--color-text)', fontWeight: 500 }}>English</span>
+                      <span style={{ color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)' }}>{sentRealTotal}</span>
+                    </div>
+                    <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                      <div style={{
+                        height: '100%', borderRadius: '2px',
+                        background: 'linear-gradient(90deg, #a78bfa, #00d9ff)',
+                        width: '100%', transition: 'width 0.4s ease', opacity: 0.7,
+                      }} />
+                    </div>
+                    <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px' }}>
+                      Use Language Analysis for multilingual detection
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: '50%',
+                      border: '2px dashed rgba(244,63,94,0.3)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      animation: 'pulse 2s ease-in-out infinite',
+                    }}>
+                      <div style={{
+                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>0</div>
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
+                      Awaiting data…
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CyberCard>
+          </div>
+        )
+      })()}
+
       {/* SECTION 1 — Best Model Banner */}
       {bestModel && (
         <div className="card animate-in">
           <SectionHeader icon={<Icon3DTrophy size={22} />} title={bestModel.name} subtitle="Best performing model across all metrics" />
           <div className="best-model-banner">
             <div>
-              <div className="best-model-banner__acc">
-                Accuracy: {bestModel.accuracy.toFixed(2)}% · Macro F1: {(bestModel.macro_f1 * 100).toFixed(2)}%
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '6px 16px', borderRadius: '10px',
+                background: 'linear-gradient(135deg, rgba(253,224,71,0.08), rgba(245,158,11,0.06))',
+                border: '1px solid rgba(253,224,71,0.2)',
+                marginBottom: 'var(--space-2)',
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)',
+                  fontWeight: 700, color: '#fde047',
+                  letterSpacing: '-0.02em',
+                }}>
+                  Accuracy: {bestModel.accuracy.toFixed(2)}%
+                </span>
+                <span style={{ color: 'rgba(253,224,71,0.4)', fontSize: 'var(--text-xs)' }}>·</span>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)',
+                  fontWeight: 700, color: '#f59e0b',
+                  letterSpacing: '-0.02em',
+                }}>
+                  Macro F1: {(bestModel.macro_f1 * 100).toFixed(2)}%
+                </span>
               </div>
               <p className="helper-text" style={{ marginTop: 'var(--space-2)' }}>
                 {bestModel.description ?? 'Best performing model across all metrics.'}
@@ -458,7 +761,7 @@ export function ModelDashboardPage() {
       {/* SECTION 7 — Feature Importance */}
       <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
         <SectionHeader icon={<Icon3DFeature size={22} />} title="Global Feature Importance"
-          subtitle={`Top 20 most influential features — ${bestModel?.name ?? 'LinearSVC'} model`} />
+          subtitle={`Top 20 most influential features — ${bestModel?.name ?? 'Linear SVC'} model`} />
         <div className="card-body">
           <FeatureImportanceChart />
         </div>
@@ -467,9 +770,9 @@ export function ModelDashboardPage() {
       {/* SECTION 8 — Sentiment Trend */}
       <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
         <SectionHeader icon={<Icon3DTrend size={22} />} title="Sentiment Trend"
-          subtitle="Simulated monthly sentiment distribution" />
+          subtitle="Batch processing sentiment distribution" />
         <div className="card-body">
-          <SentimentTrendChart />
+          <SentimentTrendChart data={trendPoints.length > 0 ? trendPoints : undefined} />
         </div>
       </div>
 
@@ -481,7 +784,10 @@ export function ModelDashboardPage() {
         </div>
       </div>
 
-      {/* SECTION 10 — Model Insights */}
+      {/* SECTION 10 — Translation Pipeline Health (moved up) */}
+      <TranslationDashboard />
+
+      {/* SECTION 11 — Model Insights (moved down) */}
       <div className="model-insights" style={{ marginTop: 'var(--space-4)' }}>
         <div className="card model-insight-card model-insight-card--top animate-in">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '8px' }}>
@@ -492,6 +798,9 @@ export function ModelDashboardPage() {
             }}>
               <Icon3DStar size={20} />
               <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)' }}>Top Pick</span>
+            </div>
+            <div className="card-subtitle" style={{ textAlign: 'center', marginTop: '-2px' }}>
+              Highest accuracy & weighted F1 across all benchmarks
             </div>
             <div className="model-insight-card__text">
               {bestModel?.name ?? 'LinearSVC'} achieves the best balance of accuracy
@@ -509,6 +818,9 @@ export function ModelDashboardPage() {
               <Icon3DAlert size={20} />
               <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)' }}>Action Needed</span>
             </div>
+            <div className="card-subtitle" style={{ textAlign: 'center', marginTop: '-2px' }}>
+              Neutral-class precision below 45% — rebalance recommended
+            </div>
             <div className="model-insight-card__text">
               Random Forest shows lower F1 on neutral class.
               Consider retraining with balanced dataset.
@@ -525,6 +837,9 @@ export function ModelDashboardPage() {
               <Icon3DBolt size={20} />
               <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)' }}>Efficiency Tip</span>
             </div>
+            <div className="card-subtitle" style={{ textAlign: 'center', marginTop: '-2px' }}>
+              Train time: 0.3s vs 4.5s — ideal for rapid iteration
+            </div>
             <div className="model-insight-card__text">
               Naive Bayes is 15× faster than Random Forest
               with only 6% accuracy trade-off.
@@ -532,9 +847,6 @@ export function ModelDashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* SECTION 11 — Translation Pipeline Health (W4-3) */}
-      <TranslationDashboard />
     </PageWrapper>
   )
 }

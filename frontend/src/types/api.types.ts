@@ -104,8 +104,13 @@ export interface BulkSummary {
 // ── /language ───────────────────────────────────────
 
 export interface LanguageRequest {
-  text:   string
-  model?: ModelChoice
+  text:             string
+  model?:           ModelChoice
+  domain?:          DomainChoice
+  star_rating?:     number | null
+  include_lime?:    boolean
+  include_absa?:    boolean
+  include_sarcasm?: boolean
 }
 
 export interface LanguageResponse {
@@ -120,6 +125,9 @@ export interface LanguageResponse {
   subjectivity:         number
   model_used:           string
   processing_ms:        number
+  lime_features?:       LIMEFeature[] | null
+  absa?:                ABSAItem[]   | null
+  sarcasm?:             SarcasmResult | null
 }
 
 // ── /metrics ────────────────────────────────────────
@@ -189,4 +197,27 @@ export interface FeedbackResponse {
   feedback_id:              string
   message:                  string
   total_feedback_collected:  number
+}
+
+// ── /metrics/live ──────────────────────────────────────
+
+export interface LiveStatsResponse {
+  total_predictions:      number
+  total_requests:         number
+  avg_latency_ms:         number
+  cache_hit_rate:         number
+  uptime_seconds:         number
+  errors:                 number
+  inference_timeouts:     number
+  sentiment_distribution: Record<string, number>
+  sentiment_total:        number
+  language_distribution:  Record<string, number>
+  active_model:           string
+  models_loaded:          number
+  pipeline_config: {
+    sarcasm:        boolean
+    absa:           boolean
+    multilingual:   boolean
+    cache_enabled:  boolean
+  }
 }

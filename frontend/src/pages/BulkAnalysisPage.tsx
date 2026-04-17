@@ -6,15 +6,16 @@ import { NeuralButton } from '@/components/ui/NeuralButton'
 import { EyebrowPill } from '@/components/ui/EyebrowPill'
 import { HoloToggle } from '@/components/ui/HoloToggle'
 import { FolderUpload } from '@/components/ui/FolderUpload'
-import { OrbitalLoader } from '@/components/ui/OrbitalLoader'
+import { CyberLoader } from '@/components/ui/CyberLoader'
+import { CyberCard } from '@/components/ui/CyberCard'
 import { SentimentPieChart } from '@/components/charts/SentimentPieChart'
 import { TopKeywordsChart } from '@/components/charts/TopKeywordsChart'
 import { SentimentTrendChart } from '@/components/charts/SentimentTrendChart'
 import { useBulk } from '@/hooks/useBulk'
+import { useBulkStore } from '@/hooks/useBulkStore'
 import { useApp } from '@/context/AppContext'
+import { pushTrendPoint } from '@/hooks/useTrendStore'
 import { generateUniversalPDF, generateUniversalCSV, generateUniversalExcel, generateUniversalJSON } from '@/utils/exportUtils'
-
-type BulkStage = 'upload' | 'configure' | 'processing' | 'results'
 
 const STOPWORDS = new Set(['a','the','is','was','and','or','but','in','on','at','it','this','that','to','of','for','with','be','are','have','i','my','me','we','they'])
 
@@ -81,6 +82,60 @@ function Icon3DGearSettings({ size = 22 }: { size?: number }) {
   )
 }
 
+function Icon3DPulse({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="pls3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00D9FF"/><stop offset="100%" stopColor="#2dd4bf"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#pls3d)" strokeWidth="1.5" fill="url(#pls3d)" fillOpacity=".08" />
+      <path d="M8 24h8l4-12 4 24 4-12 4 6 4-6h8" stroke="url(#pls3d)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+
+
+function Icon3DSentimentPie({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="spie3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#F59E0B"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#spie3d)" strokeWidth="2" fill="url(#spie3d)" fillOpacity=".08" />
+      <path d="M24 6v18l14 10" stroke="url(#spie3d)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M24 24L10 14" stroke="url(#spie3d)" strokeWidth="1.5" strokeLinecap="round" opacity=".5" />
+    </svg>
+  )
+}
+
+function Icon3DGearPanel({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="gp3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#818cf8"/></linearGradient></defs>
+      <path d="M24 16a8 8 0 100 16 8 8 0 000-16z" stroke="url(#gp3d)" strokeWidth="2" fill="url(#gp3d)" fillOpacity=".15" />
+      <path d="M24 4v6M24 38v6M4 24h6M38 24h6M9.9 9.9l4.2 4.2M33.9 33.9l4.2 4.2M38.1 9.9l-4.2 4.2M14.1 33.9l-4.2 4.2" stroke="url(#gp3d)" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Styled sub-box panel header with icon + title */
+function PanelBadge({ icon, label, bg, border, color }: {
+  icon: React.ReactNode, label: string,
+  bg: string, border: string, color: string,
+}) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: '7px', alignSelf: 'center',
+      background: bg, border: `1px solid ${border}`,
+      borderRadius: '10px', padding: '5px 14px',
+      marginBottom: '10px',
+    }}>
+      {icon}
+      <span style={{
+        fontSize: '10px', fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        color,
+      }}>{label}</span>
+    </div>
+  )
+}
 
 
 function Icon3DResults({ size = 22 }: { size?: number }) {
@@ -221,8 +276,10 @@ function SectionHeader({ icon, title, subtitle }: { icon: React.ReactNode; title
 /* ── Capitalize helper ── */
 function formatModelName(s: string): string {
   if (s === 'best') return 'Best'
+  if (s === 'LinearSVC') return 'Linear SVC'
+  // Only split at camelCase boundaries: uppercase preceded by lowercase
   return s
-    .replace(/([A-Z])/g, ' $1')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/^./, c => c.toUpperCase())
     .trim()
 }
@@ -247,39 +304,84 @@ function Icon3DBulkStack({ size = 22 }: { size?: number }) {
 
 export function BulkAnalysisPage() {
   const { showToast } = useApp()
-  const [stage, setStage] = useState<BulkStage>('upload')
+  const store = useBulkStore()
+  const {
+    stage, setStage, fileName, setFileName, textColumn, setTextColumn,
+    model, setModel, runAbsa, setRunAbsa, runSarcasm, setRunSarcasm,
+    isMultilingual, setIsMultilingual, showAll, setShowAll,
+    elapsed, setElapsed, logs, setLogs,
+    jobId: storedJobId, setJobId: setStoredJobId,
+    result: storedResult, setResult: setStoredResult,
+    columns: storedColumns, setColumns: setStoredColumns,
+    preview: storedPreview, setPreview: setStoredPreview,
+    reset: resetStore,
+  } = store
+
+  // File object is local (can't persist in ref) — only fileName is persisted
   const [file, setFile] = useState<File | null>(null)
-  const [textColumn, setTextColumn] = useState('')
-  const [model, setModel] = useState('best')
-  const [runAbsa, setRunAbsa] = useState(false)
-  const [runSarcasm, setRunSarcasm] = useState(true)
-  const [isMultilingual, setIsMultilingual] = useState(false)
-  const [showAll, setShowAll] = useState(false)
-  const [elapsed, setElapsed] = useState(0)
-  const [logs, setLogs] = useState<string[]>([])
   const [prevLogCount, setPrevLogCount] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const { jobId, result, error, columns, preview, submit, reset, previewColumns } = useBulk()
+  const {
+    result: bulkResult, error, columns: bulkColumns,
+    preview: bulkPreview, submit, reset: bulkReset,
+    previewColumns, resumePolling,
+  } = useBulk()
   const terminalRef = useRef<HTMLDivElement>(null)
+
+  // Effective values: prefer live bulk hook data, fall back to stored
+  const result = bulkResult || storedResult
+  const columns = bulkColumns.length > 0 ? bulkColumns : storedColumns
+  const preview = bulkPreview.length > 0 ? bulkPreview : storedPreview
+  const jobId = storedJobId
+
+  // Sync useBulk results into the store
+  useEffect(() => {
+    if (bulkResult) setStoredResult(bulkResult)
+  }, [bulkResult, setStoredResult])
+  useEffect(() => {
+    if (bulkColumns.length > 0) setStoredColumns(bulkColumns)
+  }, [bulkColumns, setStoredColumns])
+  useEffect(() => {
+    if (bulkPreview.length > 0) setStoredPreview(bulkPreview)
+  }, [bulkPreview, setStoredPreview])
+
+  // Resume polling on remount if job was in-progress (Scenario A)
+  const hasResumed = useRef(false)
+  useEffect(() => {
+    if (hasResumed.current) return
+    if (stage === 'processing' && storedJobId) {
+      hasResumed.current = true
+      resumePolling(storedJobId)
+    }
+    // Scenario B: was in configure but file is gone
+    if (stage === 'configure' && !file && !storedJobId) {
+      // Keep stage as configure — the UI will show a notice to re-upload
+    }
+    // Scenario C: results stage — storedResult is already loaded, nothing to do
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (stage === 'processing') {
-      setElapsed(0)
-      setLogs(['Starting analysis pipeline...'])
+      // Only reset elapsed/logs if this is a fresh start (not a resume)
+      if (!hasResumed.current || elapsed === 0) {
+        setElapsed(0)
+        setLogs(['Starting analysis pipeline...'])
+      }
       timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
     } else {
       if (timerRef.current) clearInterval(timerRef.current)
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [stage])
+  }, [stage, setElapsed, setLogs, elapsed])
 
   // Use real backend logs — delivered per-row via polling
   useEffect(() => {
     if (stage === 'processing' && result?.logs && result.logs.length > 0) {
       setLogs(result.logs)
     }
-  }, [result?.logs, stage])
+  }, [result?.logs, stage, setLogs])
 
   // Auto-scroll terminal to bottom on new logs + track prevLogCount for animation
   useEffect(() => {
@@ -292,28 +394,46 @@ export function BulkAnalysisPage() {
   }, [logs])
 
   useEffect(() => {
-    if (result?.status === 'completed' && stage === 'processing') setStage('results')
+    if (result?.status === 'completed' && stage === 'processing') {
+      // Push completed batch to the global trend store
+      if (result.results && result.results.length > 0) {
+        pushTrendPoint(result.results)
+      }
+      setStage('results')
+    }
     if (result?.status === 'failed' && stage === 'processing') {
       // Keep showing processing view with error — don't transition
-      // The error is shown inline in the processing state
     }
-  }, [result?.status, stage])
+  }, [result?.status, result?.results, stage, setStage])
 
   const handleFileSelect = useCallback(async (f: File) => {
     setFile(f)
+    setFileName(f.name)
     const cols = await previewColumns(f)
     if (cols.length > 0) { setTextColumn(cols[0]); setStage('configure') }
-  }, [previewColumns])
+  }, [previewColumns, setFileName, setTextColumn, setStage])
 
   const handleSubmit = useCallback(async () => {
     if (!file) return
+    hasResumed.current = false
     setStage('processing')
+    setStoredJobId(null)  // will be set by useBulk
     await submit(file, textColumn, model, runAbsa, runSarcasm, isMultilingual)
-  }, [file, textColumn, model, runAbsa, runSarcasm, isMultilingual, submit])
+  }, [file, textColumn, model, runAbsa, runSarcasm, isMultilingual, submit, setStage, setStoredJobId])
+
+  // Sync jobId from useBulk into store
+  useEffect(() => {
+    if (bulkResult?.job_id && bulkResult.job_id !== storedJobId) {
+      setStoredJobId(bulkResult.job_id)
+    }
+  }, [bulkResult?.job_id, storedJobId, setStoredJobId])
 
   const handleReset = useCallback(() => {
-    reset(); setFile(null); setStage('upload'); setShowAll(false); setLogs([])
-  }, [reset])
+    bulkReset()
+    resetStore()
+    setFile(null)
+    hasResumed.current = false
+  }, [bulkReset, resetStore])
 
   // Compute keywords from results
   const topKeywords = useMemo(() => {
@@ -487,7 +607,7 @@ export function BulkAnalysisPage() {
       )}
 
       {/* STATE 2: CONFIGURE */}
-      {stage === 'configure' && file && (
+      {stage === 'configure' && (file ? (
         <>
           {/* File Uploaded */}
           <div className="card animate-in card--animated">
@@ -571,91 +691,316 @@ export function BulkAnalysisPage() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-            <NeuralButton size="lg" style={{ width: '80%', maxWidth: '500px', justifyContent: 'center' }}
+            <NeuralButton size="lg" style={{ width: 'calc(100% - 8px)', justifyContent: 'center' }}
                     onClick={handleSubmit}>
               Analyze All Reviews
             </NeuralButton>
           </div>
         </>
-      )}
+      ) : (
+        /* Scenario B: configure stage but file lost after navigation */
+        <div className="card animate-in card--animated">
+          <SectionHeader icon={<Icon3DFile size={22} />} title="File Selection Lost" subtitle="Your previous file selection was lost. Please re-upload your file." />
+          <div className="card-body" style={{ textAlign: 'center' }}>
+            {fileName && <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', marginBottom: 'var(--space-3)' }}>Previous file: {fileName}</div>}
+            <FolderUpload onFileSelect={handleFileSelect} />
+          </div>
+        </div>
+      ))}
 
-      {/* STATE 3: PROCESSING — Single unified loading */}
-      {stage === 'processing' && (
-        <div className="card animate-in" style={{ padding: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)' }}>
-            {/* Chip loader animation */}
-            <OrbitalLoader text="" />
+      {/* STATE 3: PROCESSING — 2×2 corner grid + centered loader */}
+      {stage === 'processing' && (() => {
+        // ── Live stats from streaming results (updates every 250ms poll) ──
+        const rows = result?.results ?? []
+        const processed = result?.processed ?? 0
+        const total = result?.total_rows ?? 0
+        const progressPct = total > 0 ? Math.round((processed / total) * 100) : 0
+        const speed = elapsed > 0 ? (processed / elapsed).toFixed(1) : '0.0'
+        const avgConf = rows.length > 0 ? (rows.reduce((s, r) => s + r.confidence, 0) / rows.length).toFixed(1) : '—'
+        const errorCount = rows.filter(r => r.sentiment === 'error' || r.sentiment === 'unknown').length
 
-            {/* Status sub-box */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: '10px',
-              background: 'rgba(0, 217, 255, 0.06)', border: '1px solid rgba(0, 217, 255, 0.15)',
-              borderRadius: '12px', padding: '8px 20px', textAlign: 'center',
-            }}>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-primary-bright)', fontWeight: 600 }}>
-                {result?.status === 'failed' ? 'Analysis Failed' : 'Analyzing Reviews'}
-              </span>
-              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                {result?.processed ?? 0}/{result?.total_rows ?? '?'} · {Math.floor(elapsed / 60)}m {elapsed % 60}s
-              </span>
-            </div>
+        // ── Live sentiment distribution ──
+        const posCount = rows.filter(r => r.sentiment === 'positive').length
+        const negCount = rows.filter(r => r.sentiment === 'negative').length
+        const neuCount = rows.filter(r => r.sentiment === 'neutral').length
+        const sentRealTotal = posCount + negCount + neuCount
+        const hasSentimentData = sentRealTotal > 0
+        const sentTotal = sentRealTotal || 1
+        const posPct = Math.round((posCount / sentTotal) * 100)
+        const negPct = Math.round((negCount / sentTotal) * 100)
+        const neuPct = 100 - posPct - negPct
+        const sarcasmCount = rows.filter(r => r.sarcasm_detected).length
 
-            {/* Terminal logs sub-box */}
-            <div style={{
-              width: '100%', maxWidth: '520px',
-              background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(0, 217, 255, 0.1)',
-              borderRadius: '10px', overflow: 'hidden',
-            }}>
-              {/* Terminal header */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-                background: 'rgba(0,0,0,0.3)',
-              }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff5f57' }} />
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffbd2e' }} />
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#28ca41' }} />
-                <span style={{ flex: 1, textAlign: 'center', fontSize: '10px', color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>
-                  ANALYSIS TERMINAL
-                </span>
-              </div>
-              {/* Terminal body */}
-              <div ref={terminalRef} style={{
-                padding: '10px 14px', maxHeight: '180px', overflowY: 'auto',
-                display: 'flex', flexDirection: 'column', gap: '3px',
-                fontFamily: 'var(--font-mono)', fontSize: '11px', lineHeight: '1.6',
-              }}>
-                {logs.map((log, i) => (
-                  <div key={i} style={{
-                    color: i >= prevLogCount ? 'var(--color-text)' : 'var(--color-text-faint)',
-                    opacity: i >= prevLogCount ? 1 : 0.7,
-                    animation: i >= prevLogCount ? 'logFadeIn 200ms ease forwards' : 'none',
-                  }}>
-                    <span style={{ color: '#28ca41', marginRight: '6px', fontWeight: 700 }}>❯</span>
-                    {log}
+
+
+        // ── Shared styles ──
+        const statLabel: React.CSSProperties = {
+          fontSize: '10px', color: 'var(--color-text-faint)',
+          textTransform: 'uppercase', letterSpacing: '0.06em',
+        }
+        const statValue: React.CSSProperties = {
+          fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-mono)',
+          color: 'var(--color-text)', transition: 'all 0.3s ease',
+        }
+
+        return (
+        <div className="card animate-in" style={{ padding: '16px' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '190px 1fr 190px',
+            gridTemplateRows: '1fr 1fr',
+            gap: '12px',
+          }}>
+
+            {/* ── TOP-LEFT: Live Stats ── */}
+            <CyberCard style={{ gridColumn: 1, gridRow: 1 }}>
+              <PanelBadge icon={<Icon3DPulse />} label="Live Stats"
+                bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1, justifyContent: 'center' }}>
+                {[
+                  { label: 'Processed', value: `${processed} / ${total || '?'}`, color: 'var(--color-primary-bright)' },
+                  { label: 'Speed', value: `${speed} r/s`, color: '#2dd4bf' },
+                  { label: 'Avg Conf', value: avgConf === '—' ? '—' : `${avgConf}%`, color: '#a78bfa' },
+                  { label: 'Errors', value: String(errorCount), color: errorCount > 0 ? 'var(--color-negative)' : 'var(--color-positive)' },
+                  { label: 'Progress', value: `${progressPct}%`, color: '#fde047' },
+                ].map(s => (
+                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={statLabel}>{s.label}</span>
+                    <span style={{ ...statValue, color: s.color }}>{s.value}</span>
                   </div>
                 ))}
-                {logs.length === 0 && (
-                  <div style={{ color: 'var(--color-text-faint)' }}>
-                    <span style={{ color: '#28ca41', marginRight: '6px', fontWeight: 700 }}>❯</span>
-                    Initializing analysis pipeline...
+              </div>
+            </CyberCard>
+
+            {/* ── TOP-RIGHT: Sentiment ── */}
+            <CyberCard style={{ gridColumn: 3, gridRow: 1 }}>
+              <PanelBadge icon={<Icon3DSentimentPie />} label="Sentiment"
+                bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center' }}>
+                {hasSentimentData ? (
+                  <>
+                    <div style={{
+                      width: '68px', height: '68px', borderRadius: '50%',
+                      background: `conic-gradient(
+                        #22c55e 0% ${posPct}%,
+                        #f59e0b ${posPct}% ${posPct + neuPct}%,
+                        #f43f5e ${posPct + neuPct}% 100%
+                      )`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.3s ease',
+                    }}>
+                      <div style={{
+                        width: '44px', height: '44px', borderRadius: '50%',
+                        background: 'var(--color-bg-card, #0f1923)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>
+                        {sentRealTotal}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+                      {[
+                        { label: 'Positive', pct: posPct, color: '#22c55e' },
+                        { label: 'Neutral', pct: neuPct, color: '#f59e0b' },
+                        { label: 'Negative', pct: negPct, color: '#f43f5e' },
+                      ].map(s => (
+                        <div key={s.label}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '2px' }}>
+                            <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
+                            <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>{s.pct}%</span>
+                          </div>
+                          <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
+                            <div style={{
+                              height: '100%', borderRadius: '2px', background: s.color,
+                              width: `${s.pct}%`, transition: 'width 0.4s ease', opacity: 0.8,
+                            }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: '50%',
+                      border: '2px dashed rgba(34,197,94,0.3)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      animation: 'pulse 2s ease-in-out infinite',
+                    }}>
+                      <div style={{
+                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>0</div>
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
+                      Awaiting data…
+                    </div>
                   </div>
                 )}
               </div>
+            </CyberCard>
+
+            {/* ── BOTTOM-LEFT: Config ── */}
+            <CyberCard style={{ gridColumn: 1, gridRow: 2, opacity: 0.85 }}>
+              <PanelBadge icon={<Icon3DGearPanel />} label="Config"
+                bg="rgba(167,139,250,0.06)" border="rgba(167,139,250,0.18)" color="#a78bfa" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
+                {[
+                  ['Model', model === 'best' ? 'Best' : formatModelName(model)],
+                  ['Multi', isMultilingual ? 'ON' : 'OFF'],
+                  ['ABSA', runAbsa ? 'ON' : 'OFF'],
+                  ['Sarcasm', runSarcasm ? 'ON' : 'OFF'],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-faint)' }}>{k}</span>
+                    <span style={{
+                      fontWeight: 600, fontFamily: 'var(--font-mono)',
+                      color: v === 'ON' ? 'var(--color-positive)' : v === 'OFF' ? 'var(--color-text-faint)' : 'var(--color-primary-bright)',
+                    }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </CyberCard>
+
+            {/* ── BOTTOM-RIGHT: Pipeline (with real-time counts) ── */}
+            <CyberCard style={{ gridColumn: 3, gridRow: 2, opacity: 0.85 }}>
+              <PanelBadge icon={<Icon3DPulse />} label="Pipeline"
+                bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
+                {hasSentimentData ? (
+                  [
+                    { label: 'Positive', value: posCount, color: '#22c55e' },
+                    { label: 'Neutral', value: neuCount, color: '#f59e0b' },
+                    { label: 'Negative', value: negCount, color: '#f43f5e' },
+                    { label: 'Sarcasm', value: sarcasmCount, color: '#a78bfa' },
+                  ].map(s => (
+                    <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--color-text-faint)' }}>{s.label}</span>
+                      <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: s.color, transition: 'all 0.3s ease' }}>{s.value}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: '50%',
+                      border: '2px dashed rgba(0,217,255,0.3)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      animation: 'pulse 2s ease-in-out infinite',
+                    }}>
+                      <div style={{
+                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                        fontFamily: 'var(--font-mono)',
+                      }}>0</div>
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
+                      Awaiting data…
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CyberCard>
+
+            {/* ── CENTER: Loader + Terminal (spans both rows) ── */}
+            <div style={{
+              gridColumn: 2, gridRow: '1 / 3',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              gap: '6px',
+            }}>
+              {/* Cyber loader — scaled to fit center */}
+              <div style={{ margin: '-85px 0 -40px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <CyberLoader scale={0.85} />
+              </div>
+
+              {/* Progress bar */}
+              <div style={{ width: '80%', maxWidth: '300px', alignSelf: 'center' }}>
+                <div style={{
+                  height: '4px', borderRadius: '2px',
+                  background: 'rgba(255,255,255,0.06)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: '2px',
+                    background: 'linear-gradient(90deg, #00d9ff, #00ff88)',
+                    width: `${progressPct}%`,
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+              </div>
+
+              {/* Status pill */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                background: 'rgba(0, 217, 255, 0.06)', border: '1px solid rgba(0, 217, 255, 0.15)',
+                borderRadius: '12px', padding: '5px 14px',
+                whiteSpace: 'nowrap', marginTop: '6px',
+              }}>
+                <span style={{ fontSize: '11px', color: 'var(--color-primary-bright)', fontWeight: 600 }}>
+                  {result?.status === 'failed' ? 'Analysis Failed' : 'Analyzing Reviews'}
+                </span>
+                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  {processed}/{total || '?'} · {Math.floor(elapsed / 60)}m {elapsed % 60}s
+                </span>
+              </div>
+
+              {/* Terminal logs */}
+              <div style={{
+                width: '90%', maxWidth: '380px',
+                background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(0, 217, 255, 0.1)',
+                borderRadius: '10px', overflow: 'hidden',
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '5px',
+                  padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(0,0,0,0.3)',
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ff5f57' }} />
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffbd2e' }} />
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#28ca41' }} />
+                  <span style={{ flex: 1, textAlign: 'center', fontSize: '8px', color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>
+                    ANALYSIS TERMINAL
+                  </span>
+                </div>
+                <div ref={terminalRef} style={{
+                  padding: '6px 10px', height: '90px', overflowY: 'auto',
+                  display: 'flex', flexDirection: 'column', gap: '2px',
+                  fontFamily: 'var(--font-mono)', fontSize: '9px', lineHeight: '1.5',
+                }}>
+                  {logs.map((log, i) => (
+                    <div key={i} style={{
+                      color: i >= prevLogCount ? 'var(--color-text)' : 'var(--color-text-faint)',
+                      opacity: i >= prevLogCount ? 1 : 0.7,
+                      animation: i >= prevLogCount ? 'logFadeIn 200ms ease forwards' : 'none',
+                    }}>
+                      <span style={{ color: '#28ca41', marginRight: '4px', fontWeight: 700 }}>❯</span>
+                      {log}
+                    </div>
+                  ))}
+                  {logs.length === 0 && (
+                    <div style={{ color: 'var(--color-text-faint)' }}>
+                      <span style={{ color: '#28ca41', marginRight: '4px', fontWeight: 700 }}>❯</span>
+                      Initializing analysis pipeline...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {result?.status === 'failed' && (
+                <>
+                  <p className="error-msg">{result.error ?? 'Job failed'}</p>
+                  <NeuralButton onClick={handleReset}>Retry</NeuralButton>
+                </>
+              )}
+              {result?.status !== 'failed' && (
+                <NeuralButton variant="ghost" size="sm" onClick={handleReset}>Cancel</NeuralButton>
+              )}
             </div>
 
-            {result?.status === 'failed' && (
-              <>
-                <p className="error-msg">{result.error ?? 'Job failed'}</p>
-                <NeuralButton onClick={handleReset}>Retry</NeuralButton>
-              </>
-            )}
-            {result?.status !== 'failed' && (
-              <NeuralButton variant="ghost" onClick={handleReset}>Cancel</NeuralButton>
-            )}
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* STATE 4: RESULTS */}
       {stage === 'results' && result?.summary && (

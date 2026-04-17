@@ -135,6 +135,55 @@ export function useBulk() {
     }
   }, [showToast])
 
+  /**
+   * Resume polling for an existing job (e.g. after navigating back).
+   * The server stores job state permanently, so we can pick up where we left off.
+   */
+  const resumePolling = useCallback((existingJobId: string) => {
+    if (activeRef.current) return   // already polling
+    setJobId(existingJobId)
+    setLoading(true)
+    setError(null)
+    activeRef.current = true
+    errorCountRef.current = 0
+
+    const poll = async () => {
+      if (!activeRef.current) return
+      try {
+        const status = await getBulkStatus(existingJobId)
+        setResult(status)
+        errorCountRef.current = 0
+        if (status.status === 'completed' || status.status === 'failed') {
+          activeRef.current = false
+          setLoading(false)
+          if (status.status === 'completed') {
+            showToast('success', `Analysis complete: ${status.processed} rows processed`)
+          } else {
+            showToast('error', `Job failed: ${status.error ?? 'Unknown'}`)
+          }
+          return
+        }
+        if (activeRef.current) {
+          pollRef.current = setTimeout(poll, 250)
+        }
+      } catch (err) {
+        errorCountRef.current += 1
+        console.error(`[useBulk] Resume poll error (${errorCountRef.current}/3):`, err)
+        if (errorCountRef.current >= 3) {
+          activeRef.current = false
+          setLoading(false)
+          showToast('error', 'Lost contact with server')
+          return
+        }
+        if (activeRef.current) {
+          pollRef.current = setTimeout(poll, 1000 * errorCountRef.current)
+        }
+      }
+    }
+
+    poll()
+  }, [showToast])
+
   const reset = useCallback(() => {
     activeRef.current = false
     if (pollRef.current) clearTimeout(pollRef.current)
@@ -149,6 +198,6 @@ export function useBulk() {
 
   return {
     jobId, result, loading, error, columns, preview,
-    submit, reset, previewColumns,
+    submit, reset, previewColumns, resumePolling,
   }
 }

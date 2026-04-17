@@ -7,6 +7,7 @@ import type {
   BulkJobSubmitResponse, BulkJobResult,
   LanguageRequest, LanguageResponse,
   MetricsResponse, ApiError,
+  LiveStatsResponse,
 } from '@/types/api.types'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -213,6 +214,12 @@ export async function analyzeLanguage(
 
 export async function getMetrics(): Promise<MetricsResponse> {
   return request<MetricsResponse>('/metrics')
+}
+
+// ── Live Stats ──────────────────────────────────────
+
+export async function getLiveStats(): Promise<LiveStatsResponse> {
+  return request<LiveStatsResponse>('/metrics/live')
 }
 
 // ── Health ──────────────────────────────────────────

@@ -773,7 +773,10 @@ async def analyze_language(
     logger.info(
         f"Language request: "
         f"model={request.model.value} "
-        f"text_len={len(request.text)}"
+        f"text_len={len(request.text)} "
+        f"lime={request.include_lime} "
+        f"absa={request.include_absa} "
+        f"sarcasm={request.include_sarcasm}"
     )
 
     try:
@@ -805,6 +808,85 @@ async def analyze_language(
         raise HTTPException(status_code=500,
                             detail=str(e))
 
+    # ── The text to run optional analyses on (English) ────
+    # Use translated text if available, else original
+    analysis_text = (
+        result.get("translated_text") or request.text
+    )
+
+    # ── Import shared helpers from predict route ──────────
+    from backend.app.routes.predict import (
+        _run_lime, _run_absa, _run_sarcasm,
+    )
+    from backend.app.schemas import (
+        LIMEFeature, ABSAItem, SentimentLabel, SarcasmResult,
+    )
+
+    # ── LIME (optional) ───────────────────────────────────
+    lime_features = None
+    if request.include_lime:
+        async with inference_throttler:
+            try:
+                raw_lime = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        primary_pool.executor, _run_lime,
+                        analysis_text, request.model.value,
+                        model, vectorizer,
+                    ),
+                    timeout=_INFERENCE_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                metrics_store.record_timeout()
+                logger.warning("LIME timed out in language route")
+                raw_lime = []
+        lime_features = [LIMEFeature(**f) for f in raw_lime]
+
+    # ── ABSA (optional) ───────────────────────────────────
+    absa_results = None
+    if request.include_absa:
+        async with inference_throttler:
+            try:
+                raw_absa = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        primary_pool.executor, _run_absa,
+                        analysis_text,
+                    ),
+                    timeout=_INFERENCE_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                metrics_store.record_timeout()
+                logger.warning("ABSA timed out in language route")
+                raw_absa = []
+        absa_results = []
+        for item in raw_absa:
+            sentiment_val = item.get("sentiment", "neutral")
+            if sentiment_val not in ["positive", "negative", "neutral"]:
+                sentiment_val = "neutral"
+            absa_results.append(ABSAItem(
+                aspect=item["aspect"],
+                sentiment=SentimentLabel(sentiment_val),
+                polarity=item["polarity"],
+                subjectivity=item["subjectivity"],
+            ))
+
+    # ── Sarcasm (optional) ────────────────────────────────
+    sarcasm_result = None
+    if request.include_sarcasm:
+        async with inference_throttler:
+            try:
+                raw_sarcasm = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        primary_pool.executor, _run_sarcasm,
+                        analysis_text,
+                    ),
+                    timeout=_INFERENCE_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                metrics_store.record_timeout()
+                logger.warning("Sarcasm timed out in language route")
+                raw_sarcasm = {"detected": False, "confidence": 0.0}
+        sarcasm_result = SarcasmResult(**raw_sarcasm)
+
     elapsed_ms = int(
         (time.perf_counter() - start_ms) * 1000
     )
@@ -826,7 +908,16 @@ async def analyze_language(
     )
     prediction_cache.set(cache_key, result)
 
+    # Record prediction for live dashboard stats
+    metrics_store.record_prediction(
+        result.get("sentiment", "unknown"),
+        result.get("detected_language", None),
+    )
+
     return LanguageResponse(
         **result,
         processing_ms=elapsed_ms,
+        lime_features=lime_features,
+        absa=absa_results,
+        sarcasm=sarcasm_result,
     )

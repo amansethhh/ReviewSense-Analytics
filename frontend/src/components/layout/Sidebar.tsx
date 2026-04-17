@@ -4,6 +4,7 @@ import { useApp } from '@/context/AppContext'
 import { useSidebar } from '@/context/SidebarContext'
 import { SystemStatus } from '@/components/ui/SystemStatus'
 import { NeuralInputWrap } from '@/components/ui/NeuralInputWrap'
+import { RSLogo } from '@/components/ui/RSLogo'
 import {
   HomeIcon,
   PredictIcon,
@@ -34,30 +35,13 @@ export function Sidebar() {
       aria-label="Main navigation"
     >
       {/* Logo */}
-      <div className="sidebar__logo">
-        <svg width="28" height="28" viewBox="0 0 28 28"
-             fill="none" xmlns="http://www.w3.org/2000/svg"
-             aria-label="ReviewSense logo">
-          <rect width="28" height="28" rx="8" fill="url(#logo-grad)"/>
-          <path d="M7 14 C7 10 10 7 14 7 C18 7 21 10 21 14
-                   C21 16 20 17.5 18.5 18.5 L21 21 L18 21
-                   L16 19 C15.4 19.3 14.7 19.5 14 19.5
-                   C10 19.5 7 17 7 14 Z"
-                fill="white" opacity="0.9"/>
-          <circle cx="11" cy="13.5" r="1.2" fill="#0d1117"/>
-          <circle cx="14" cy="13.5" r="1.2" fill="#0d1117"/>
-          <circle cx="17" cy="13.5" r="1.2" fill="#0d1117"/>
-          <defs>
-            <linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28">
-              <stop offset="0%" stopColor="#006d80"/>
-              <stop offset="100%" stopColor="#004d5a"/>
-            </linearGradient>
-          </defs>
-        </svg>
-        <span className="sidebar__logo-text">
+      <div className="sidebar__logo" style={{ alignItems: 'center' }}>
+        <RSLogo size={28} />
+        <span className="sidebar__logo-text" style={{ fontSize: '18px', lineHeight: 1, letterSpacing: '-0.04em', fontWeight: 700 }}>
           Review<span>Sense</span>
         </span>
       </div>
+
 
       {/* Navigation */}
       <div className="sidebar__section">

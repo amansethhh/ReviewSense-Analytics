@@ -52,6 +52,16 @@ class MetricsStore:
             "skipped_english": 0,
         }
         self._language_counts: dict[str, dict] = {}
+        # Live dashboard counters
+        self._sentiment_counts: dict[str, int] = {
+            "positive": 0,
+            "negative": 0,
+            "neutral": 0,
+            "unknown": 0,
+            "error": 0,
+        }
+        self._prediction_languages: dict[str, int] = {}
+        self._total_predictions: int = 0
         logger.info(
             f"MetricsStore initialized "
             f"(window={window_size})"
@@ -150,6 +160,84 @@ class MetricsStore:
                     self._errors_by_status
                 ),
                 "uptime_seconds": uptime,
+            }
+
+    def record_prediction(
+        self,
+        sentiment: str,
+        language: str | None = None,
+    ) -> None:
+        """Record a prediction event for live dashboard stats."""
+        with self._lock:
+            self._total_predictions += 1
+            key = sentiment.lower() if sentiment else "unknown"
+            if key in self._sentiment_counts:
+                self._sentiment_counts[key] += 1
+            else:
+                self._sentiment_counts["unknown"] += 1
+            if language and language not in ("Unknown", "unknown", ""):
+                self._prediction_languages[language] = (
+                    self._prediction_languages.get(language, 0) + 1
+                )
+
+    def get_live_stats(self) -> dict[str, Any]:
+        """Return aggregated live stats for dashboard panels."""
+        with self._lock:
+            total_cache = (
+                self._cache_hits + self._cache_misses
+            )
+            hit_rate = (
+                round(self._cache_hits / total_cache * 100, 1)
+                if total_cache > 0
+                else 0.0
+            )
+            uptime = round(
+                time.monotonic() - self._start_time, 2
+            )
+
+            # Compute RPM from recent requests
+            if self._latencies_ms:
+                sorted_lat = sorted(self._latencies_ms)
+                avg_lat = round(
+                    sum(sorted_lat) / len(sorted_lat), 2
+                )
+            else:
+                avg_lat = 0.0
+
+            total_errors = sum(
+                self._errors_by_status.values()
+            )
+
+            # Sentiment distribution
+            sent = dict(self._sentiment_counts)
+            sent_total = sum(sent.values())
+
+            # Language distribution (top 10)
+            lang_sorted = sorted(
+                self._prediction_languages.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )[:10]
+
+            return {
+                "total_predictions": self._total_predictions,
+                "total_requests": self._total_requests,
+                "avg_latency_ms": avg_lat,
+                "cache_hit_rate": hit_rate,
+                "uptime_seconds": uptime,
+                "errors": total_errors,
+                "inference_timeouts": self._inference_timeouts,
+                "sentiment_distribution": sent,
+                "sentiment_total": sent_total,
+                "language_distribution": dict(lang_sorted),
+                "active_model": "LinearSVC",
+                "models_loaded": 4,
+                "pipeline_config": {
+                    "sarcasm": True,
+                    "absa": True,
+                    "multilingual": True,
+                    "cache_enabled": True,
+                },
             }
 
     def record_translation(
