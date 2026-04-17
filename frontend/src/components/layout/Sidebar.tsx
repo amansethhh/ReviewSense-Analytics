@@ -46,7 +46,6 @@ function ActiveJobsDot({ count }: { count: number }) {
           borderRadius: '50%',
           background: 'var(--color-primary, #00d9be)',
           animation: 'rs-active-pulse 1.5s ease-in-out infinite',
-          marginLeft: '6px',
           flexShrink: 0,
           cursor: 'default',
         }}
@@ -83,7 +82,15 @@ export function Sidebar() {
 
       {/* Navigation */}
       <div className="sidebar__section">
-        <span className="sidebar__section-label" style={{ display: 'flex', alignItems: 'center' }}>
+        <span
+          className="sidebar__section-label"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+          }}
+        >
           Navigation
           <ActiveJobsDot count={activeCount} />
         </span>
@@ -102,6 +109,7 @@ export function Sidebar() {
           </NavLink>
         ))}
       </div>
+
 
       {/* Model Configuration */}
       <div className="sidebar__config">
