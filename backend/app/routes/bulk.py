@@ -23,7 +23,7 @@ from concurrent.futures import (
 import pandas as pd
 from fastapi import (
     APIRouter, Depends, HTTPException,
-    UploadFile, File, Form,
+    UploadFile, File, Form, Query,
 )
 from fastapi.responses import StreamingResponse
 
@@ -561,6 +561,7 @@ async def submit_bulk(
     run_absa: bool = Form(False),
     run_sarcasm: bool = Form(False),
     multilingual: bool = Form(False),
+    page: str = Query("bulk", description="Originating page: 'bulk' or 'language'"),
     ml_model=Depends(get_model),
     vectorizer=Depends(get_vectorizer),
 ):
@@ -638,6 +639,7 @@ async def submit_bulk(
                 f"starting pipeline..."
             ],
             "created_at": datetime.now(timezone.utc),
+            "page":       page if page in ("bulk", "language") else "bulk",
         }
     _job_expiry[job_id] = (
         datetime.now(timezone.utc) +
@@ -830,3 +832,30 @@ async def get_job_count():
             "oldest_job_age_seconds": round(oldest_age, 1),
         }
 
+
+@router.get("/active", summary="List all active (queued/processing) bulk jobs")
+async def get_active_jobs():
+    """
+    Returns all jobs currently queued or processing.
+    Used by the frontend nav bar active-jobs indicator.
+    Completed and failed jobs are excluded.
+    """
+    active = []
+    with _store_lock:
+        for job in _job_store.values():
+            status = job.get("status")
+            if status not in (
+                BulkJobStatus.queued,
+                BulkJobStatus.processing,
+            ):
+                continue
+            created = job.get("created_at")
+            active.append({
+                "job_id":     job["job_id"],
+                "page":       job.get("page", "bulk"),
+                "status":     status.value if hasattr(status, "value") else str(status),
+                "processed":  job.get("processed", 0),
+                "total":      job.get("total_rows", 0),
+                "created_at": created.isoformat() if created else "",
+            })
+    return {"active_jobs": active}

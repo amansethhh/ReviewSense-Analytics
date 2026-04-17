@@ -1,39 +1,35 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { submitBulk, getBulkStatus, getBulkColumns,
-  ApiClientError } from '@/api/api'
+import { useState, useCallback } from 'react'
+import { submitBulk, getBulkColumns, ApiClientError } from '@/api/api'
 import { useApp } from '@/context/AppContext'
+import { jobPoller } from '@/hooks/useJobPoller'
 import type { BulkJobResult } from '@/types/api.types'
 
 /**
- * BUG-3 FIX: Polling uses resp.job_id (local const from submit
- * response) directly in the closure — NOT useState which has
- * async updates. The poll chain uses setTimeout with the job_id
- * captured at submit time, ensuring no null-reference polls.
+ * useBulk — bulk job submission + polling, now backed by jobPoller singleton.
  *
- * Additional fix: catch handler no longer kills polling on
- * transient network errors. It logs the error and retries
- * next tick. Only permanent failures (3 consecutive errors)
- * stop polling.
+ * Key changes from Phase 10:
+ * - submit() / resumePolling() delegate to jobPoller.start() instead of
+ *   maintaining their own setTimeout chains.
+ * - Polling survives component unmount (no cleanup on unmount).
+ * - reset() calls jobPoller.stop(jobId) to cancel an active poll.
+ * - resumePolling() calls jobPoller.stop() before start() to replace
+ *   stale callbacks from a previous mount with fresh ones.
+ *
+ * Two simultaneous jobs (Bulk + Language Batch) each call jobPoller.start()
+ * with different jobIds → the singleton registry keeps them isolated.
  */
 export function useBulk() {
   const { showToast } = useApp()
-  const [jobId,    setJobId]    = useState<string | null>(null)
-  const [result,   setResult]   = useState<BulkJobResult | null>(null)
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState<string | null>(null)
-  const [columns,  setColumns]  = useState<string[]>([])
-  const [preview,  setPreview]  = useState<Record<string, unknown>[]>([])
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const activeRef = useRef(false)
-  const errorCountRef = useRef(0)
+  const [jobId,   setJobId]   = useState<string | null>(null)
+  const [result,  setResult]  = useState<BulkJobResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState<string | null>(null)
+  const [columns, setColumns] = useState<string[]>([])
+  const [preview, setPreview] = useState<Record<string, unknown>[]>([])
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      activeRef.current = false
-      if (pollRef.current) clearTimeout(pollRef.current)
-    }
-  }, [])
+  // Note: NO cleanup useEffect on unmount.
+  // jobPoller is a singleton — polling intentionally survives navigation.
+  // The user's job runs in the background until complete or reset() is called.
 
   const previewColumns = useCallback(async (file: File) => {
     try {
@@ -58,66 +54,28 @@ export function useBulk() {
     setLoading(true)
     setError(null)
     setResult(null)
-    activeRef.current = true
-    errorCountRef.current = 0
+
     try {
       const resp = await submitBulk(
         file, textColumn, model, runAbsa, runSarcasm, multilingual)
-      // BUG-3 FIX: Use resp.job_id (local const) directly.
-      // This is captured by the poll closure and is NEVER null
-      // because it comes directly from the server response.
       const capturedJobId = resp.job_id
       setJobId(capturedJobId)
 
-      // Polling loop: setTimeout chain prevents overlapping
-      // requests. Uses capturedJobId (local const), not state.
-      const poll = async () => {
-        if (!activeRef.current) return
-        try {
-          const status = await getBulkStatus(capturedJobId)
+      jobPoller.start({
+        jobId: capturedJobId,
+        onUpdate: (status) => setResult(status),
+        onComplete: (status) => {
           setResult(status)
-          errorCountRef.current = 0  // reset on success
-          if (status.status === 'completed' ||
-              status.status === 'failed') {
-            activeRef.current = false
-            setLoading(false)
-            if (status.status === 'completed') {
-              showToast('success',
-                `Analysis complete: ${status.processed
-                } rows processed`)
-            } else {
-              showToast('error',
-                `Job failed: ${status.error ?? 'Unknown'}`)
-            }
-            return // stop polling
-          }
-          // Schedule next poll — 250ms for smooth per-row streaming
-          if (activeRef.current) {
-            pollRef.current = setTimeout(poll, 250)
-          }
-        } catch (err) {
-          // BUG-3 FIX: Don't kill polling on transient errors.
-          // Log and retry. Only stop after 3 consecutive fails.
-          errorCountRef.current += 1
-          console.error(
-            '[useBulk] Polling error '
-            + `(${errorCountRef.current}/3):`, err)
-          if (errorCountRef.current >= 3) {
-            activeRef.current = false
-            setLoading(false)
-            showToast('error', 'Lost contact with server')
-            return
-          }
-          // Retry with backoff
-          if (activeRef.current) {
-            pollRef.current = setTimeout(
-              poll, 1000 * errorCountRef.current)
-          }
-        }
-      }
-
-      // Fire first poll immediately
-      poll()
+          setLoading(false)
+          showToast('success',
+            `Analysis complete: ${status.processed} rows processed`)
+        },
+        onError: (msg) => {
+          setLoading(false)
+          setError(msg)
+          showToast('error', msg)
+        },
+      })
     } catch (err) {
       const msg =
         err instanceof ApiClientError
@@ -130,71 +88,50 @@ export function useBulk() {
           : 'Upload failed'
       setError(msg)
       setLoading(false)
-      activeRef.current = false
       showToast('error', msg)
     }
   }, [showToast])
 
   /**
    * Resume polling for an existing job (e.g. after navigating back).
-   * The server stores job state permanently, so we can pick up where we left off.
+   * Stops any stale poll (old callbacks from previous mount) before
+   * starting fresh with the current hook instance's callbacks.
    */
   const resumePolling = useCallback((existingJobId: string) => {
-    if (activeRef.current) return   // already polling
+    // Stop stale poll (if still running from previous mount)
+    jobPoller.stop(existingJobId)
+
     setJobId(existingJobId)
     setLoading(true)
     setError(null)
-    activeRef.current = true
-    errorCountRef.current = 0
 
-    const poll = async () => {
-      if (!activeRef.current) return
-      try {
-        const status = await getBulkStatus(existingJobId)
+    jobPoller.start({
+      jobId: existingJobId,
+      onUpdate: (status) => setResult(status),
+      onComplete: (status) => {
         setResult(status)
-        errorCountRef.current = 0
-        if (status.status === 'completed' || status.status === 'failed') {
-          activeRef.current = false
-          setLoading(false)
-          if (status.status === 'completed') {
-            showToast('success', `Analysis complete: ${status.processed} rows processed`)
-          } else {
-            showToast('error', `Job failed: ${status.error ?? 'Unknown'}`)
-          }
-          return
-        }
-        if (activeRef.current) {
-          pollRef.current = setTimeout(poll, 250)
-        }
-      } catch (err) {
-        errorCountRef.current += 1
-        console.error(`[useBulk] Resume poll error (${errorCountRef.current}/3):`, err)
-        if (errorCountRef.current >= 3) {
-          activeRef.current = false
-          setLoading(false)
-          showToast('error', 'Lost contact with server')
-          return
-        }
-        if (activeRef.current) {
-          pollRef.current = setTimeout(poll, 1000 * errorCountRef.current)
-        }
-      }
-    }
-
-    poll()
+        setLoading(false)
+        showToast('success',
+          `Analysis complete: ${status.processed} rows processed`)
+      },
+      onError: (msg) => {
+        setLoading(false)
+        setError(msg)
+        showToast('error', msg)
+      },
+    })
   }, [showToast])
 
   const reset = useCallback(() => {
-    activeRef.current = false
-    if (pollRef.current) clearTimeout(pollRef.current)
-    errorCountRef.current = 0
+    // Stop any active poll for the current job
+    if (jobId) jobPoller.stop(jobId)
     setJobId(null)
     setResult(null)
     setLoading(false)
     setError(null)
     setColumns([])
     setPreview([])
-  }, [])
+  }, [jobId])
 
   return {
     jobId, result, loading, error, columns, preview,

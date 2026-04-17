@@ -12,6 +12,7 @@ import {
   DashboardIcon,
   LanguageIcon,
 } from '@/components/icons/NavIcons'
+import { useActiveJobs } from '@/hooks/useActiveJobs'
 
 const NAV_ITEMS = [
   { path: '/',          label: 'Home',              Icon: HomeIcon      },
@@ -21,12 +22,49 @@ const NAV_ITEMS = [
   { path: '/language',  label: 'Language Analysis',  Icon: LanguageIcon  },
 ]
 
+/** Pulsing dot shown in the nav bar when any bulk/language job is running. */
+function ActiveJobsDot({ count }: { count: number }) {
+  if (count === 0) return null
+  const label = `${count} job${count !== 1 ? 's' : ''} running`
+  return (
+    <>
+      {/* Keyframes defined inline to avoid modifying global CSS */}
+      <style>{`
+        @keyframes rs-active-pulse {
+          0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 217, 190, 0.5); }
+          50%       { opacity: 0.75; box-shadow: 0 0 0 5px rgba(0, 217, 190, 0); }
+        }
+      `}</style>
+      <span
+        id="nav-active-jobs-dot"
+        title={label}
+        aria-label={label}
+        style={{
+          display: 'inline-block',
+          width: '8px',
+          height: '8px',
+          borderRadius: '50%',
+          background: 'var(--color-primary, #00d9be)',
+          animation: 'rs-active-pulse 1.5s ease-in-out infinite',
+          marginLeft: '6px',
+          flexShrink: 0,
+          cursor: 'default',
+        }}
+      />
+    </>
+  )
+}
+
 export function Sidebar() {
   const { state } = useApp()
   const { collapsed } = useSidebar()
   const [activeModel, setActiveModel] = useState('best')
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.75)
   const [domainFilter, setDomainFilter] = useState('All Domains')
+
+  // Nav bar active-jobs indicator (polls /bulk/active every 3s)
+  const activeJobs = useActiveJobs()
+  const activeCount = activeJobs.length
 
   return (
     <aside
@@ -45,7 +83,10 @@ export function Sidebar() {
 
       {/* Navigation */}
       <div className="sidebar__section">
-        <span className="sidebar__section-label">Navigation</span>
+        <span className="sidebar__section-label" style={{ display: 'flex', alignItems: 'center' }}>
+          Navigation
+          <ActiveJobsDot count={activeCount} />
+        </span>
         {NAV_ITEMS.map(item => (
           <NavLink
             key={item.path}
@@ -150,7 +191,7 @@ export function Sidebar() {
       <div className="sidebar__footer">
         <SystemStatus online={state.apiConnected} />
         <div style={{ marginTop: '8px' }}>
-          <div>ReviewSense v1.0.0</div>
+          <div>ReviewSense v11.0.0</div>
           <div>&copy; 2026 ReviewSense Analytics</div>
         </div>
       </div>

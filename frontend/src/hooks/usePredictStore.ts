@@ -26,6 +26,7 @@ export function usePredictStore() {
   const [data,       _setData]       = useState<PredictResponse | null>(r.data)
   const [feedbackSent, _setFeedbackSent] = useState(r.feedbackSent)
   const [selectedCorrection, _setSelectedCorrection] = useState<SentimentLabel | null>(r.selectedCorrection)
+  const [serverError, _setServerError] = useState<string | null>(r.serverError)
 
   // Wrapped setters: update local state + ref
   const setText = useCallback((v: string) => {
@@ -58,13 +59,17 @@ export function usePredictStore() {
   const setSelectedCorrection = useCallback((v: SentimentLabel | null) => {
     _setSelectedCorrection(v); predictRef.current.selectedCorrection = v
   }, [predictRef])
+  const setServerError = useCallback((v: string | null) => {
+    _setServerError(v); predictRef.current.serverError = v
+  }, [predictRef])
 
-  /** Reset: clears result + feedback, preserves form inputs */
+  /** Reset: clears result + feedback + serverError, preserves form inputs */
   const reset = useCallback(() => {
     setData(null)
     setFeedbackSent(false)
     setSelectedCorrection(null)
-  }, [setData, setFeedbackSent, setSelectedCorrection])
+    setServerError(null)
+  }, [setData, setFeedbackSent, setSelectedCorrection, setServerError])
 
   /** Full reset: everything back to defaults */
   const fullReset = useCallback(() => {
@@ -88,6 +93,7 @@ export function usePredictStore() {
     includeSarcasm, setIncludeSarcasm,
     data, setData, feedbackSent, setFeedbackSent,
     selectedCorrection, setSelectedCorrection,
+    serverError, setServerError,
     reset, fullReset,
   }
 }

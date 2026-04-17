@@ -222,6 +222,21 @@ export async function getLiveStats(): Promise<LiveStatsResponse> {
   return request<LiveStatsResponse>('/metrics/live')
 }
 
+// ── Active Jobs ─────────────────────────────────────
+
+export interface ActiveJob {
+  job_id:     string
+  page:       'bulk' | 'language'
+  status:     'queued' | 'processing'
+  processed:  number
+  total:      number
+  created_at: string
+}
+
+export async function getActiveJobs(): Promise<{ active_jobs: ActiveJob[] }> {
+  return request<{ active_jobs: ActiveJob[] }>('/bulk/active')
+}
+
 // ── Health ──────────────────────────────────────────
 
 export async function getHealth(): Promise<{

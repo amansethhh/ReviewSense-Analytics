@@ -274,10 +274,11 @@ export function LivePredictionPage() {
     feedbackSent, setFeedbackSent,
     selectedCorrection, setSelectedCorrection,
     data, setData,
+    serverError, setServerError,
     reset: resetStore,
   } = store
 
-  const { data: predictData, loading, error, run, reset: _predictReset } = usePredict()
+  const { data: predictData, loading, error: _error, run, reset: _predictReset } = usePredict()
   const { showToast: _showToast } = useApp()
 
   // Sync usePredict result into the store (persists across navigation)
@@ -287,16 +288,22 @@ export function LivePredictionPage() {
 
   const handleSubmit = async () => {
     if (!text.trim()) return
-    // C2: Reset feedback on new submission
+    // C2: Reset feedback + serverError on new submission
     setFeedbackSent(false)
     setSelectedCorrection(null)
-    await run({
-      text, model, domain,
-      star_rating: starRating,
-      include_lime: includeLime,
-      include_absa: includeAbsa,
-      include_sarcasm: includeSarcasm,
-    })
+    setServerError(null)
+    try {
+      await run({
+        text, model, domain,
+        star_rating: starRating,
+        include_lime: includeLime,
+        include_absa: includeAbsa,
+        include_sarcasm: includeSarcasm,
+      })
+    } catch {
+      // 504 / 503 — server under bulk load
+      setServerError('Server is under load. Please wait a moment and try again.')
+    }
   }
 
   // Computed values
@@ -527,7 +534,24 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
             </NeuralButton>
           </div>
 
-          {error && <p className="error-msg" role="alert">{error}</p>}
+          {/* Inline server-load error (504 / under bulk load) */}
+          {serverError && (
+            <div
+              role="alert"
+              style={{
+                marginTop: 'var(--space-3)',
+                padding: 'var(--space-3) var(--space-4)',
+                background: 'rgba(244,63,94,0.08)',
+                border: '1px solid rgba(244,63,94,0.25)',
+                borderRadius: '8px',
+                color: 'var(--color-negative, #f43f5e)',
+                fontSize: '0.875rem',
+                textAlign: 'center',
+              }}
+            >
+              {serverError}
+            </div>
+          )}
         </div>
       </div>
 

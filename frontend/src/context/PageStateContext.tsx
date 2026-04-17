@@ -29,6 +29,7 @@ export interface PredictPageState {
   data: PredictResponse | null
   feedbackSent: boolean
   selectedCorrection: SentimentLabel | null
+  serverError: string | null
 }
 
 export interface BulkPageState {
@@ -88,6 +89,7 @@ export const PREDICT_DEFAULTS: PredictPageState = {
   text: '', model: 'best', domain: 'all', starRating: null,
   includeLime: true, includeAbsa: true, includeSarcasm: true,
   data: null, feedbackSent: false, selectedCorrection: null,
+  serverError: null,
 }
 
 export const BULK_DEFAULTS: BulkPageState = {
