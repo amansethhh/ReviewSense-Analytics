@@ -1,8 +1,12 @@
 /**
  * useBulkStore — persists Bulk Analysis page state across navigation.
  *
- * reset() clears: stage→'upload', jobId, result, logs, elapsed, fileName, columns, preview
+ * reset() clears: stage→'upload', jobId, result, logs, startedAt, fileName, columns, preview
  * reset() preserves: model, runAbsa, runSarcasm, isMultilingual (user preferences)
+ *
+ * Timer fix (Phase 11): replaced `elapsed` counter (froze on unmount)
+ * with `startedAt` timestamp. Elapsed is now derived as
+ * Math.floor((Date.now() - startedAt) / 1000) — always accurate.
  *
  * File Object note: File objects cannot be persisted in refs (they're opaque).
  * Only `fileName` (string) is stored for display. If the user returns to
@@ -24,7 +28,7 @@ export function useBulkStore() {
   const [runSarcasm,     _setRunSarcasm]     = useState(r.runSarcasm)
   const [isMultilingual, _setIsMultilingual] = useState(r.isMultilingual)
   const [showAll,        _setShowAll]        = useState(r.showAll)
-  const [elapsed,        _setElapsed]        = useState(r.elapsed)
+  const [startedAt,      _setStartedAt]      = useState<number | null>(r.startedAt)
   const [logs,           _setLogs]           = useState<string[]>(r.logs)
   const [jobId,          _setJobId]          = useState<string | null>(r.jobId)
   const [result,         _setResult]         = useState<BulkJobResult | null>(r.result)
@@ -56,12 +60,8 @@ export function useBulkStore() {
   const setShowAll = useCallback((v: boolean) => {
     _setShowAll(v); bulkRef.current.showAll = v
   }, [bulkRef])
-  const setElapsed = useCallback((v: number | ((prev: number) => number)) => {
-    _setElapsed(prev => {
-      const next = typeof v === 'function' ? v(prev) : v
-      bulkRef.current.elapsed = next
-      return next
-    })
+  const setStartedAt = useCallback((v: number | null) => {
+    _setStartedAt(v); bulkRef.current.startedAt = v
   }, [bulkRef])
   const setLogs = useCallback((v: string[] | ((prev: string[]) => string[])) => {
     _setLogs(prev => {
@@ -91,11 +91,11 @@ export function useBulkStore() {
     setJobId(null)
     setResult(null)
     setLogs([])
-    setElapsed(0)
+    setStartedAt(null)
     setShowAll(false)
     setColumns([])
     setPreview([])
-  }, [setStage, setFileName, setTextColumn, setJobId, setResult, setLogs, setElapsed, setShowAll, setColumns, setPreview])
+  }, [setStage, setFileName, setTextColumn, setJobId, setResult, setLogs, setStartedAt, setShowAll, setColumns, setPreview])
 
   /** Full reset: everything back to defaults */
   const fullReset = useCallback(() => {
@@ -108,7 +108,7 @@ export function useBulkStore() {
     _setRunSarcasm(BULK_DEFAULTS.runSarcasm)
     _setIsMultilingual(BULK_DEFAULTS.isMultilingual)
     _setShowAll(false)
-    _setElapsed(0)
+    _setStartedAt(null)
     _setLogs([])
     _setJobId(null)
     _setResult(null)
@@ -120,7 +120,7 @@ export function useBulkStore() {
     stage, setStage, fileName, setFileName, textColumn, setTextColumn,
     model, setModel, runAbsa, setRunAbsa, runSarcasm, setRunSarcasm,
     isMultilingual, setIsMultilingual, showAll, setShowAll,
-    elapsed, setElapsed, logs, setLogs,
+    startedAt, setStartedAt, logs, setLogs,
     jobId, setJobId, result, setResult,
     columns, setColumns, preview, setPreview,
     reset, fullReset,

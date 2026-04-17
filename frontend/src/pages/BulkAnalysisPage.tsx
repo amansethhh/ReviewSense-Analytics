@@ -309,7 +309,7 @@ export function BulkAnalysisPage() {
     stage, setStage, fileName, setFileName, textColumn, setTextColumn,
     model, setModel, runAbsa, setRunAbsa, runSarcasm, setRunSarcasm,
     isMultilingual, setIsMultilingual, showAll, setShowAll,
-    elapsed, setElapsed, logs, setLogs,
+    startedAt, setStartedAt, logs, setLogs,
     jobId: storedJobId, setJobId: setStoredJobId,
     result: storedResult, setResult: setStoredResult,
     columns: storedColumns, setColumns: setStoredColumns,
@@ -320,7 +320,17 @@ export function BulkAnalysisPage() {
   // File object is local (can't persist in ref) — only fileName is persisted
   const [file, setFile] = useState<File | null>(null)
   const [prevLogCount, setPrevLogCount] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Timer: tick a local `now` state every second while processing.
+  // Elapsed is derived from the persisted startedAt timestamp,
+  // so it is always accurate — even after navigating away and back.
+  const [_now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (stage !== 'processing') return
+    const h = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(h)
+  }, [stage])
+  const elapsed = startedAt ? Math.floor((_now - startedAt) / 1000) : 0
 
   const {
     result: bulkResult, error, columns: bulkColumns,
@@ -364,17 +374,14 @@ export function BulkAnalysisPage() {
 
   useEffect(() => {
     if (stage === 'processing') {
-      // Only reset elapsed/logs if this is a fresh start (not a resume)
-      if (!hasResumed.current || elapsed === 0) {
-        setElapsed(0)
+      // Only reset logs if this is a fresh start (not a resume)
+      if (!hasResumed.current || !startedAt) {
         setLogs(['Starting analysis pipeline...'])
       }
-      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current)
+      // startedAt is set in handleSubmit — no timer to manage here
     }
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [stage, setElapsed, setLogs, elapsed])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage])
 
   // Use real backend logs — delivered per-row via polling
   useEffect(() => {
@@ -417,9 +424,10 @@ export function BulkAnalysisPage() {
     if (!file) return
     hasResumed.current = false
     setStage('processing')
+    setStartedAt(Date.now())
     setStoredJobId(null)  // will be set by useBulk
     await submit(file, textColumn, model, runAbsa, runSarcasm, isMultilingual)
-  }, [file, textColumn, model, runAbsa, runSarcasm, isMultilingual, submit, setStage, setStoredJobId])
+  }, [file, textColumn, model, runAbsa, runSarcasm, isMultilingual, submit, setStage, setStartedAt, setStoredJobId])
 
   // Sync jobId from useBulk into store
   useEffect(() => {

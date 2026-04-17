@@ -41,7 +41,7 @@ export interface BulkPageState {
   runSarcasm: boolean
   isMultilingual: boolean
   showAll: boolean
-  elapsed: number
+  startedAt: number | null         // Date.now() when processing began — survives navigation
   logs: string[]
   jobId: string | null
   result: BulkJobResult | null
@@ -69,7 +69,7 @@ export interface LangPageState {
   bRunAbsa: boolean
   bRunSarcasm: boolean
   bShowAll: boolean
-  bElapsed: number
+  bStartedAt: number | null         // Date.now() when batch processing began
   bStage: 'upload' | 'configure' | 'processing' | 'results'
   bJobId: string | null
   bResult: BulkJobResult | null
@@ -95,7 +95,7 @@ export const PREDICT_DEFAULTS: PredictPageState = {
 export const BULK_DEFAULTS: BulkPageState = {
   stage: 'upload', fileName: null, textColumn: '', model: 'best',
   runAbsa: false, runSarcasm: true, isMultilingual: false,
-  showAll: false, elapsed: 0, logs: [], jobId: null, result: null,
+  showAll: false, startedAt: null, logs: [], jobId: null, result: null,
   columns: [], preview: [],
 }
 
@@ -106,7 +106,7 @@ export const LANG_DEFAULTS: LangPageState = {
   data: null, feedbackSent: false, selectedCorrection: null,
   bFileName: null, bTextCol: '', bModel: 'best',
   bRunAbsa: false, bRunSarcasm: true, bShowAll: false,
-  bElapsed: 0, bStage: 'upload', bJobId: null, bResult: null,
+  bStartedAt: null, bStage: 'upload', bJobId: null, bResult: null,
   bColumns: [], bPreview: [],
 }
 

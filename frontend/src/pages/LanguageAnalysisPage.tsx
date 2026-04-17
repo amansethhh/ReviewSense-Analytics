@@ -423,7 +423,7 @@ export function LanguageAnalysisPage() {
     bFileName, setBFileName, bTextCol, setBTextCol,
     bModel, setBModel, bRunAbsa, setBRunAbsa,
     bRunSarcasm, setBRunSarcasm, bShowAll, setBShowAll,
-    bElapsed, setBElapsed, bStage, setBStage,
+    bStartedAt, setBStartedAt, bStage, setBStage,
     bJobId: storedBJobId, setBJobId: setStoredBJobId,
     bResult: storedBResult, setBResult: setStoredBResult,
     setBColumns: setStoredBColumns,
@@ -438,7 +438,17 @@ export function LanguageAnalysisPage() {
   const { showToast } = useApp()
   const bulk = useBulk()
   const trendPoints = useTrendStore()
-  const bTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Timer: tick a local `now` state every second while batch is processing.
+  // bElapsed is derived from the persisted bStartedAt timestamp,
+  // so it is always accurate — even after navigating away and back.
+  const [_bNow, setBNow] = useState(Date.now())
+  useEffect(() => {
+    if (bStage !== 'processing') return
+    const h = setInterval(() => setBNow(Date.now()), 1000)
+    return () => clearInterval(h)
+  }, [bStage])
+  const bElapsed = bStartedAt ? Math.floor((_bNow - bStartedAt) / 1000) : 0
 
   // Sync useLanguage result into the store (single tab)
   useEffect(() => {
@@ -477,13 +487,13 @@ export function LanguageAnalysisPage() {
 
   useEffect(() => {
     if (bStage === 'processing') {
-      if (!hasResumed.current || bElapsed === 0) {
-        setBElapsed(0)
+      if (!hasResumed.current || !bStartedAt) {
+        // logs are reset in handleBSubmit
       }
-      bTimerRef.current = setInterval(() => setBElapsed(e => e + 1), 1000)
-    } else { if (bTimerRef.current) clearInterval(bTimerRef.current) }
-    return () => { if (bTimerRef.current) clearInterval(bTimerRef.current) }
-  }, [bStage, setBElapsed, bElapsed])
+      // bStartedAt is set in handleBSubmit — no timer to manage here
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bStage])
 
   useEffect(() => {
     if (bResult?.status === 'completed' && bStage === 'processing') {
@@ -505,10 +515,11 @@ export function LanguageAnalysisPage() {
     if (!bFile) return
     hasResumed.current = false
     setBStage('processing')
+    setBStartedAt(Date.now())
     setStoredBJobId(null)
     // Always pass multilingual=true — this page is the Multilingual Bulk Analysis tab
     await bulk.submit(bFile, bTextCol, bModel, bRunAbsa, bRunSarcasm, true)
-  }, [bFile, bTextCol, bModel, bRunAbsa, bRunSarcasm, bulk, setBStage, setStoredBJobId])
+  }, [bFile, bTextCol, bModel, bRunAbsa, bRunSarcasm, bulk, setBStage, setBStartedAt, setStoredBJobId])
 
   const handleBReset = useCallback(() => {
     bulk.reset()

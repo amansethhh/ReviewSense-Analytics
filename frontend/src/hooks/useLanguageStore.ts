@@ -5,7 +5,10 @@
  * Tab switching does NOT clear either tab's state.
  *
  * Single tab reset: clears result, feedbackSent, selectedCorrection. Preserves text + settings.
- * Batch tab reset: clears bStage→'upload', bJobId, bResult, bElapsed, bFileName. Preserves bModel.
+ * Batch tab reset: clears bStage→'upload', bJobId, bResult, bStartedAt, bFileName. Preserves bModel.
+ *
+ * Timer fix (Phase 11): replaced `bElapsed` counter with `bStartedAt` timestamp.
+ * Elapsed is now derived as Math.floor((Date.now() - bStartedAt) / 1000).
  */
 import { useState, useCallback } from 'react'
 import { usePageState } from '@/context/PageStateContext'
@@ -35,7 +38,7 @@ export function useLanguageStore() {
   const [bRunAbsa,   _setBRunAbsa]   = useState(r.bRunAbsa)
   const [bRunSarcasm, _setBRunSarcasm] = useState(r.bRunSarcasm)
   const [bShowAll,   _setBShowAll]   = useState(r.bShowAll)
-  const [bElapsed,   _setBElapsed]   = useState(r.bElapsed)
+  const [bStartedAt, _setBStartedAt] = useState<number | null>(r.bStartedAt)
   const [bStage,     _setBStage]     = useState<'upload' | 'configure' | 'processing' | 'results'>(r.bStage)
   const [bJobId,     _setBJobId]     = useState<string | null>(r.bJobId)
   const [bResult,    _setBResult]    = useState<BulkJobResult | null>(r.bResult)
@@ -96,12 +99,8 @@ export function useLanguageStore() {
   const setBShowAll = useCallback((v: boolean) => {
     _setBShowAll(v); langRef.current.bShowAll = v
   }, [langRef])
-  const setBElapsed = useCallback((v: number | ((prev: number) => number)) => {
-    _setBElapsed(prev => {
-      const next = typeof v === 'function' ? v(prev) : v
-      langRef.current.bElapsed = next
-      return next
-    })
+  const setBStartedAt = useCallback((v: number | null) => {
+    _setBStartedAt(v); langRef.current.bStartedAt = v
   }, [langRef])
   const setBStage = useCallback((v: 'upload' | 'configure' | 'processing' | 'results') => {
     _setBStage(v); langRef.current.bStage = v
@@ -133,11 +132,11 @@ export function useLanguageStore() {
     setBTextCol('')
     setBJobId(null)
     setBResult(null)
-    setBElapsed(0)
+    setBStartedAt(null)
     setBShowAll(false)
     setBColumns([])
     setBPreview([])
-  }, [setBStage, setBFileName, setBTextCol, setBJobId, setBResult, setBElapsed, setBShowAll, setBColumns, setBPreview])
+  }, [setBStage, setBFileName, setBTextCol, setBJobId, setBResult, setBStartedAt, setBShowAll, setBColumns, setBPreview])
 
   return {
     // Single tab
@@ -152,7 +151,7 @@ export function useLanguageStore() {
     bFileName, setBFileName, bTextCol, setBTextCol,
     bModel, setBModel, bRunAbsa, setBRunAbsa,
     bRunSarcasm, setBRunSarcasm, bShowAll, setBShowAll,
-    bElapsed, setBElapsed, bStage, setBStage,
+    bStartedAt, setBStartedAt, bStage, setBStage,
     bJobId, setBJobId, bResult, setBResult,
     bColumns, setBColumns, bPreview, setBPreview,
     resetBatch,
