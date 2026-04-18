@@ -3,10 +3,13 @@
  *
  * On remount: if metricsSnapshot exists, render it immediately (no loading flash).
  * useMetrics will still re-fetch in the background via AppContext's metricsCache.
+ *
+ * liveSnapshot caches the last /metrics/live response so the 4 corner panels
+ * render instantly on return visits (no flicker from null → data).
  */
 import { useState, useCallback } from 'react'
 import { usePageState } from '@/context/PageStateContext'
-import type { MetricsResponse } from '@/types/api.types'
+import type { MetricsResponse, LiveStatsResponse } from '@/types/api.types'
 
 type SortKey = 'accuracy' | 'macro_f1' | 'weighted_f1' | 'macro_prec' | 'auc' | 'train_time_s'
 
@@ -17,6 +20,7 @@ export function useDashboardStore() {
   const [sortKey, _setSortKey] = useState<SortKey>(r.sortKey as SortKey)
   const [sortDir, _setSortDir] = useState<'asc' | 'desc'>(r.sortDir)
   const [metricsSnapshot, _setMetricsSnapshot] = useState<MetricsResponse | null>(r.metricsSnapshot)
+  const [liveSnapshot, _setLiveSnapshot] = useState<LiveStatsResponse | null>(r.liveSnapshot)
 
   const setSortKey = useCallback((v: SortKey) => {
     _setSortKey(v); dashboardRef.current.sortKey = v
@@ -26,6 +30,9 @@ export function useDashboardStore() {
   }, [dashboardRef])
   const setMetricsSnapshot = useCallback((v: MetricsResponse | null) => {
     _setMetricsSnapshot(v); dashboardRef.current.metricsSnapshot = v
+  }, [dashboardRef])
+  const setLiveSnapshot = useCallback((v: LiveStatsResponse | null) => {
+    _setLiveSnapshot(v); dashboardRef.current.liveSnapshot = v
   }, [dashboardRef])
 
   const toggleSort = useCallback((key: SortKey) => {
@@ -41,6 +48,7 @@ export function useDashboardStore() {
   return {
     sortKey, setSortKey, sortDir, setSortDir,
     metricsSnapshot, setMetricsSnapshot,
+    liveSnapshot, setLiveSnapshot,
     toggleSort,
   }
 }

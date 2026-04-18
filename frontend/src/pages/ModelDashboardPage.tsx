@@ -280,12 +280,16 @@ function Icon3DGlobePanel({ size = 16 }: { size?: number }) {
 
 export function ModelDashboardPage() {
   const { data: metricsData, loading, error } = useMetrics()
-  const { data: live } = useLiveStats()
   const trendPoints = useTrendStore()
   const {
     sortKey, sortDir, toggleSort,
     metricsSnapshot, setMetricsSnapshot,
+    liveSnapshot, setLiveSnapshot,
   } = useDashboardStore()
+
+  // Pass cached snapshot so the hook starts with real data on revisit (never null)
+  const { data: live } = useLiveStats(liveSnapshot)
+
   const [ringOffset, setRingOffset] = useState(276.46)
   const ringRef = useRef(false)
 
@@ -293,6 +297,11 @@ export function ModelDashboardPage() {
   useEffect(() => {
     if (metricsData) setMetricsSnapshot(metricsData)
   }, [metricsData, setMetricsSnapshot])
+
+  // Cache live stats so the 4 corner panels render instantly on revisit
+  useEffect(() => {
+    if (live) setLiveSnapshot(live)
+  }, [live, setLiveSnapshot])
 
   // Use live data if available, otherwise use snapshot (no loading flash on return)
   const data = metricsData || metricsSnapshot

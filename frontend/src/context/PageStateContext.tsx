@@ -13,7 +13,7 @@ import { createContext, useContext, useRef } from 'react'
 import type {
   ModelChoice, DomainChoice, SentimentLabel,
   PredictResponse, LanguageResponse, BulkJobResult,
-  MetricsResponse,
+  MetricsResponse, LiveStatsResponse,
 } from '@/types/api.types'
 
 /* ─── Per-page State Shapes ─────────────────────────── */
@@ -81,6 +81,7 @@ export interface DashboardPageState {
   sortKey: string
   sortDir: 'asc' | 'desc'
   metricsSnapshot: MetricsResponse | null
+  liveSnapshot: LiveStatsResponse | null    // cached live stats — prevents panel flicker on revisit
 }
 
 /* ─── Defaults ──────────────────────────────────────── */
@@ -111,7 +112,7 @@ export const LANG_DEFAULTS: LangPageState = {
 }
 
 export const DASHBOARD_DEFAULTS: DashboardPageState = {
-  sortKey: 'accuracy', sortDir: 'desc', metricsSnapshot: null,
+  sortKey: 'accuracy', sortDir: 'desc', metricsSnapshot: null, liveSnapshot: null,
 }
 
 /* ─── Context Value ─────────────────────────────────── */
