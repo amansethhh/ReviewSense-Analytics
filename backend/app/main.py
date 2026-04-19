@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 import time
 import asyncio
 from contextlib import asynccontextmanager
@@ -66,61 +66,11 @@ async def lifespan(app: FastAPI):
     load_artifacts()
 
     # ── O1: Cold-start warmup ──────────────────────────────
-    # Pre-warm the full ML pipeline with a dummy prediction
-    # so the first real user request hits a warm model.
-    # Each call is wrapped in try/except so a single failure
-    # does not prevent startup — the server still starts,
-    # just without that pipeline being pre-warmed.
-    logger.info("[WARMUP] Pre-warming ML pipeline...")
-    warmup_start = time.perf_counter()
-
-    try:
-        from src.predict import predict_sentiment
-        predict_sentiment("warmup")
-        logger.info("  ✓ predict_sentiment warmed")
-    except Exception as e:
-        logger.warning(
-            f"  ✗ predict_sentiment warmup failed: {e}"
-        )
-
-    try:
-        from src.sarcasm_detector import detect_sarcasm
-        detect_sarcasm("warmup")
-        logger.info("  ✓ detect_sarcasm warmed")
-    except Exception as e:
-        logger.warning(
-            f"  ✗ detect_sarcasm warmup failed: {e}"
-        )
-
-    try:
-        from src.models.aspect import analyze_aspects
-        analyze_aspects("warmup")
-        logger.info("  ✓ analyze_aspects warmed")
-    except Exception as e:
-        logger.warning(
-            f"  ✗ analyze_aspects warmup failed: {e}"
-        )
-
-    # Pre-warm translation model (Helsinki-NLP MarianMT)
-    # This forces the model load via @st.cache_resource
-    # so the first real non-English request is fast.
-    try:
-        from src.translator import detect_and_translate
-        detect_and_translate("这是一个测试")  # Chinese test
-        logger.info("  ✓ translation pipeline warmed")
-    except Exception as e:
-        logger.warning(
-            f"  ✗ translation warmup failed: {e}"
-        )
-
-    # NOTE: LIME warmup removed — startup measured at 17s
-    # which exceeds the 15s threshold. LIME is warmed lazily
-    # on first use (~1s penalty) which is acceptable.
-
-    warmup_ms = int(
-        (time.perf_counter() - warmup_start) * 1000
-    )
-    logger.info(f"[WARMUP] Complete in {warmup_ms}ms")
+    # WARMUP REMOVED: Render Free Tier (512MB RAM) will OOM
+    # or timeout if we load massive PyTorch models before 
+    # Uvicorn binds the port. Models will now load lazily 
+    # on the first prediction request.
+    logger.info("[WARMUP] Skipped to prevent OOM during startup")
 
     # ── GAP 3-E: Pre-warm Google probe cache ───────────────
     try:

@@ -9,8 +9,9 @@ python-dotenv==1.2.2
 httpx==0.28.1
 
 # ── ML / NLP ──────────────────────────────────────────
-# torch: CPU-only installed via --index-url in build command
-# DO NOT pin torch here — see build command in Render config
+# torch: CPU-only installed via extra-index-url
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.10.0+cpu
 transformers==4.57.6
 sentencepiece==0.2.1
 numpy==1.26.4
