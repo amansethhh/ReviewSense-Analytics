@@ -1,4 +1,4 @@
-"""
+﻿"""
 W4-4: Unit tests for translate_with_retry function.
 
 Tests:
@@ -17,7 +17,7 @@ def _get_fresh_translate():
     Import translate_with_retry fresh each time to avoid
     cached module-level state between tests.
     """
-    from backend.app.utils.translation_client import (
+    from app.utils.translation_client import (
         translate_with_retry,
     )
     return translate_with_retry

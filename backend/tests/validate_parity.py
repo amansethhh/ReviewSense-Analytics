@@ -1,4 +1,4 @@
-"""
+﻿"""
 Phase 1 Validation — Ensures API outputs match
 the existing Streamlit ML logic for 20 test inputs.
 Run this before declaring Phase 1 complete.
@@ -16,7 +16,7 @@ import requests
 import logging
 
 # Patch streamlit before importing src modules
-from backend.app.dependencies import _patch_streamlit_cache, add_src_to_path
+from app.dependencies import _patch_streamlit_cache, add_src_to_path
 _patch_streamlit_cache()
 add_src_to_path()
 
@@ -72,7 +72,7 @@ def run_parity_check():
 
         # B1: Apply same corrections that the API applies
         # so parity comparison is apples-to-apples
-        from backend.app.sentiment_corrections import (
+        from app.sentiment_corrections import (
             apply_sentiment_corrections,
         )
         gt_sentiment, gt_confidence, _ = (

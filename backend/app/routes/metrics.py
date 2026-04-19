@@ -1,4 +1,4 @@
-# IMPORTANT: This endpoint returns HARDCODED values.
+﻿# IMPORTANT: This endpoint returns HARDCODED values.
 # These match the actual trained model evaluation results
 # exactly. DO NOT read from pkl files or recompute.
 # The values were validated against the training run and
@@ -9,11 +9,11 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter
-from backend.app.schemas import (
+from app.schemas import (
     MetricsResponse, ModelMetric, ConfusionMatrixData
 )
-from backend.app.config import get_settings
-from backend.app.metrics_store import metrics_store
+from app.config import get_settings
+from app.metrics_store import metrics_store
 
 router = APIRouter()
 logger = logging.getLogger("reviewsense.metrics")

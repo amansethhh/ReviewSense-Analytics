@@ -1,4 +1,4 @@
-"""
+﻿"""
 Language detection, translation, and sentiment analysis route.
 
 MASTER FIX: Complete system stabilization.
@@ -25,19 +25,19 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.app.schemas import (
+from app.schemas import (
     LanguageRequest, LanguageResponse, SentimentLabel
 )
-from backend.app.dependencies import (
+from app.dependencies import (
     get_model, get_vectorizer, add_src_to_path
 )
-from backend.app.utils import normalize_confidence
-from backend.app.adaptive import (
+from app.utils import normalize_confidence
+from app.adaptive import (
     primary_pool,
     inference_throttler,
 )
-from backend.app.cache import prediction_cache
-from backend.app.metrics_store import metrics_store
+from app.cache import prediction_cache
+from app.metrics_store import metrics_store
 
 router = APIRouter()
 logger = logging.getLogger("reviewsense.language")
@@ -346,7 +346,7 @@ def _translate_with_fallback(
 
     # === TIER 2: deep-translator (Google) with retry ===
     try:
-        from backend.app.utils.translation_client import (
+        from app.utils.translation_client import (
             translate_with_retry,
         )
         src_lang = (
@@ -415,7 +415,7 @@ def _apply_sentiment_corrections(
     Wrapper around the shared apply_sentiment_corrections.
     Preserves the 4-arg signature used in language.py.
     """
-    from backend.app.sentiment_corrections import (
+    from app.sentiment_corrections import (
         apply_sentiment_corrections,
     )
     corrected_sent, corrected_conf, was_corrected = (
@@ -865,10 +865,10 @@ async def analyze_language(
     )
 
     # ── Import shared helpers from predict route ──────────
-    from backend.app.routes.predict import (
+    from app.routes.predict import (
         _run_lime, _run_absa, _run_sarcasm,
     )
-    from backend.app.schemas import (
+    from app.schemas import (
         LIMEFeature, ABSAItem, SentimentLabel, SarcasmResult,
     )
 

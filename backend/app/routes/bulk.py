@@ -1,4 +1,4 @@
-# CRITICAL DESIGN:
+﻿# CRITICAL DESIGN:
 # Render free tier has a 30-second HTTP timeout.
 # A 1000-row CSV with full ML analysis takes minutes.
 # Solution: daemon Thread + in-memory job store + polling.
@@ -27,19 +27,19 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 
-from backend.app.schemas import (
+from app.schemas import (
     BulkJobSubmitResponse, BulkJobResult,
     BulkJobStatus, BulkRowResult,
     ABSAItem, SentimentLabel,
 )
-from backend.app.dependencies import (
+from app.dependencies import (
     get_model, get_vectorizer, add_src_to_path
 )
-from backend.app.config import get_settings
-from backend.app.utils import normalize_confidence
-from backend.app.adaptive import adaptive_batch_sizer
-from backend.app.cache import prediction_cache
-from backend.app.metrics_store import metrics_store
+from app.config import get_settings
+from app.utils import normalize_confidence
+from app.adaptive import adaptive_batch_sizer
+from app.cache import prediction_cache
+from app.metrics_store import metrics_store
 
 router = APIRouter()
 logger = logging.getLogger("reviewsense.bulk")
@@ -162,12 +162,12 @@ def _process_bulk_job(
     """
     try:
         from src.predict import predict_sentiment
-        from backend.app.routes.language import (
+        from app.routes.language import (
             detect_language_adaptive,
             LANGUAGE_CODE_MAP,
             _apply_sentiment_corrections,
         )
-        from backend.app.cache import pipeline_cache
+        from app.cache import pipeline_cache
 
         total = len(df)
         results: list[BulkRowResult] = []
@@ -283,7 +283,7 @@ def _process_bulk_job(
                 lang_groups[lc].append((idx, all_texts[idx]))
 
             # Batch translate each language group
-            from backend.app.utils.batch_translate import (
+            from app.utils.batch_translate import (
                 translate_batch_for_lang,
             )
             for lang, indexed_texts in lang_groups.items():

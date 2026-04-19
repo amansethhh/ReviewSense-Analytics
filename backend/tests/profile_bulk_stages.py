@@ -1,4 +1,4 @@
-"""
+﻿"""
 Performance profiler for ReviewSense bulk pipeline.
 Measures per-stage timing for 10 sample reviews across multiple languages.
 Run: python backend/tests/profile_bulk_stages.py
@@ -45,7 +45,7 @@ def main():
     print("=" * 70)
 
     # Import pipeline components
-    from backend.app.routes.language import (
+    from app.routes.language import (
         detect_language_adaptive,
         _translate_with_fallback,
     )

@@ -1,4 +1,4 @@
-"""
+﻿"""
 W4-2: User feedback collection endpoint.
 Stores feedback in-memory + persists to data/feedback.jsonl.
 """
@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from fastapi import APIRouter
 
-from backend.app.schemas import (
+from app.schemas import (
     FeedbackRequest, FeedbackResponse,
 )
 

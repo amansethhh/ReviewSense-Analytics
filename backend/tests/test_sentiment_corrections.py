@@ -1,9 +1,9 @@
-"""
+﻿"""
 Tests for apply_sentiment_corrections() shared utility.
 Covers double negatives, but-clauses, and edge cases.
 """
 import pytest
-from backend.app.sentiment_corrections import (
+from app.sentiment_corrections import (
     apply_sentiment_corrections,
 )
 

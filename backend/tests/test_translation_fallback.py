@@ -1,4 +1,4 @@
-"""
+﻿"""
 Phase 6 GAP 4: Tests that the language route degrades gracefully
 when all translation tiers fail.
 
@@ -8,7 +8,7 @@ The model dependency is mocked to avoid startup loading requirement.
 import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
-from backend.app.main import app
+from app.main import app
 
 
 def _make_fake_model():

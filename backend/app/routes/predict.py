@@ -1,25 +1,25 @@
-import time
+﻿import time
 import logging
 import asyncio
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.app.schemas import (
+from app.schemas import (
     PredictRequest, PredictResponse,
     LIMEFeature, ABSAItem, SarcasmResult,
     SentimentLabel,
 )
-from backend.app.dependencies import (
+from app.dependencies import (
     get_model, get_vectorizer, add_src_to_path
 )
-from backend.app.utils import normalize_confidence
-from backend.app.adaptive import (
+from app.utils import normalize_confidence
+from app.adaptive import (
     primary_pool,
     inference_throttler,
     request_deduplicator,
 )
-from backend.app.cache import prediction_cache
-from backend.app.metrics_store import metrics_store
+from app.cache import prediction_cache
+from app.metrics_store import metrics_store
 
 router = APIRouter()
 logger = logging.getLogger("reviewsense.predict")
@@ -341,7 +341,7 @@ async def predict(
     # B1: Shared sentiment corrections (double negatives,
     # mixed "but" clauses) — applied in both /predict and
     # /language routes for consistency.
-    from backend.app.sentiment_corrections import (
+    from app.sentiment_corrections import (
         apply_sentiment_corrections,
     )
     sentiment_raw, confidence_pct, _was_corrected = (

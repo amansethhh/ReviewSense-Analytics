@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 import time
 import asyncio
 from contextlib import asynccontextmanager
@@ -6,10 +6,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.app.config import get_settings
-from backend.app.dependencies import load_artifacts
-from backend.app.routes import predict, bulk, language, metrics, feedback
-from backend.app.metrics_store import metrics_store
+from app.config import get_settings
+from app.dependencies import load_artifacts
+from app.routes import predict, bulk, language, metrics, feedback
+from app.metrics_store import metrics_store
 
 # ── Logging setup ──────────────────────────────────────────
 
@@ -36,7 +36,7 @@ async def _periodic_job_cleanup():
     This prevents unbounded memory growth on long-running
     servers without affecting active jobs.
     """
-    from backend.app.routes.bulk import cleanup_stale_jobs
+    from app.routes.bulk import cleanup_stale_jobs
 
     while True:
         await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI):
 
     # ── GAP 3-E: Pre-warm Google probe cache ───────────────
     try:
-        from backend.app.routes.metrics import (
+        from app.routes.metrics import (
             _get_google_reachable)
         await _get_google_reachable()
         logger.info("  ✓ Google Translate probe warmed")

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Phase 11 — Concurrency tests.
 
 Tests thread-safety of _job_store, concurrent bulk jobs,
@@ -12,8 +12,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
-from backend.app.routes.bulk import (
+from app.main import app
+from app.routes.bulk import (
     _job_store,
     _store_lock,
     _append_log,

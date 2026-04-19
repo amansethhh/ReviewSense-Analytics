@@ -1,4 +1,4 @@
-# This is the ONLY place models are loaded.
+﻿# This is the ONLY place models are loaded.
 # They are loaded ONCE at application startup via the
 # lifespan context manager in main.py.
 # All routes receive them via FastAPI Depends().
@@ -20,7 +20,7 @@ _models_loaded = False
 
 def add_src_to_path():
     """Add src/ to sys.path so all src imports work."""
-    from backend.app.config import get_settings
+    from app.config import get_settings
     settings = get_settings()
     src_path = str(settings.src_dir)
     if src_path not in sys.path:
@@ -118,7 +118,7 @@ def _load_artifacts_fallback():
     """
     global _model, _vectorizer, _models_loaded
     import joblib
-    from backend.app.config import get_settings
+    from app.config import get_settings
     settings = get_settings()
 
     model_candidates = [

@@ -1,9 +1,9 @@
-"""
+﻿"""
 Regression guard: Ensures the 7/8 edge case result is preserved
 across all future code changes. Run after any schema or prediction change.
 """
 from fastapi.testclient import TestClient
-from backend.app.main import app
+from app.main import app
 
 client = TestClient(app)
 
