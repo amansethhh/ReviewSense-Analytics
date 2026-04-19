@@ -29,6 +29,16 @@ export interface KeywordEntry {
   negative: number
 }
 
+export interface AbsaAspect {
+  aspect: string
+  count: number
+  positive: number
+  negative: number
+  neutral: number
+  avgPolarity: number
+  dominant?: string
+}
+
 // ─── Inline SVG icons for PDF ─────────────────
 const svgGrad = (id: string, c1: string, c2: string) =>
   `<defs><linearGradient id="${id}" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs>`
@@ -68,7 +78,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
 
 /* ── Section wrapper ── */
 .section{background:#161b22;border:1px solid #21262d;border-radius:16px;padding:24px 28px;margin-bottom:22px;width:100%}
-.section-head{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:18px}
+.section-head{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:18px}
 .section-head h2{font-size:14px;color:#2dd4bf;text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin:0}
 
 /* ── Table ── */
@@ -112,7 +122,7 @@ tr:nth-child(even) td{background:rgba(13,17,23,.45)}
 .trend-tbl td{padding:7px 8px;text-align:center;border-bottom:1px solid rgba(33,38,45,.4);font-weight:600}
 
 /* ── AI Summary items ── */
-.ai-item{display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;line-height:1.7;justify-content:center;text-align:center;width:100%}
+.ai-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;line-height:1.7;justify-content:flex-start;text-align:left;width:100%}
 .ai-item:last-child{border-bottom:none}
 .ai-item strong{color:#e6edf3}
 .transl{font-size:10px;color:#8b949e;font-style:italic}
@@ -120,6 +130,9 @@ tr:nth-child(even) td{background:rgba(13,17,23,.45)}
 /* ── Footer ── */
 .footer{text-align:center;padding:22px 0;color:#8b949e;font-size:11px;border-top:1px solid #21262d;margin-top:26px;width:100%}
 .footer .brand{color:#2dd4bf;font-weight:700;font-size:12px}
+
+/* ── 3D Section header box ── */
+.section-head-box{display:inline-flex;align-items:center;gap:10px;background:rgba(13,17,23,0.8);border:1px solid rgba(45,212,191,0.22);border-radius:14px;padding:8px 22px;box-shadow:0 0 16px rgba(0,217,255,0.08);width:auto}
 `
 
 // ─── Language Detection ───────────────────────
@@ -390,12 +403,15 @@ export function generateUniversalPDF(opts: {
   subtitle: string
   rows: ReviewRow[]
   summary: SummaryData
-  mode: 'bulk' | 'language'   // bulk = no translation column; language = with translation
+  mode: 'bulk' | 'language'
   topKeywords?: KeywordEntry[]
   trendBatches?: { month: string; positive: number; negative: number; neutral: number }[]
   filename: string
+  // Optional feature sections (only rendered when provided)
+  absaAspects?: AbsaAspect[]
+  sarcasmEnabled?: boolean
 }) {
-  const { title, subtitle, rows, summary: s, mode, topKeywords, trendBatches, filename } = opts
+  const { title, subtitle, rows, summary: s, mode, topKeywords, trendBatches, filename, absaAspects, sarcasmEnabled } = opts
 
   // Enrich rows with lang + translation for language mode
   type EnrichedRow = ReviewRow & { lang: string; translation: string }
@@ -463,27 +479,27 @@ export function generateUniversalPDF(opts: {
       }).join('')
 
   const langLine = mode === 'language'
-    ? `<div class="ai-item">${pdfIcons.globe} <strong>Languages:</strong> Multiple languages detected. All reviews translated to English.</div>` : ''
+    ? `<div class="ai-item"><span>${pdfIcons.globe}</span><span><strong>Languages:</strong> Multiple languages detected. All reviews translated to English.</span></div>` : ''
 
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${title}</title>
 <style>${PDF_CSS}</style></head><body>
 
 <div class="header">
-  <div class="header-icon">${pdfIcons.save}</div>
+  <div class="header-icon"><svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 48 48" fill="none"><defs><radialGradient id="bhc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff" stop-opacity="1"/><stop offset="20%" stop-color="#aaf8ff" stop-opacity="0.95"/><stop offset="45%" stop-color="#00d9ff" stop-opacity="0.65"/><stop offset="72%" stop-color="#0055aa" stop-opacity="0.20"/><stop offset="100%" stop-color="#001133" stop-opacity="0"/></radialGradient><filter id="bhg" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.0" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><circle cx="24" cy="24" r="22" stroke="#00ccff" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="14 4.2" stroke-opacity="0.72" fill="none" filter="url(#bhg)"/><circle cx="24" cy="24" r="20" stroke="#0088dd" stroke-width="0.9" stroke-linecap="square" stroke-dasharray="6 1 2 1 3 2" stroke-opacity="0.42" fill="none"/><circle cx="24" cy="24" r="17.5" stroke="#00bbee" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="10 3 4 3" stroke-opacity="0.68" fill="none" filter="url(#bhg)"/><circle cx="24" cy="24" r="13.5" stroke="#00ddff" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="8 3" stroke-opacity="0.62" fill="none" filter="url(#bhg)"/><circle cx="24" cy="24" r="10.5" stroke="#55eeff" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 2.5" stroke-opacity="0.55" fill="none" filter="url(#bhg)"/><circle cx="24" cy="24" r="7.0" stroke="#00eeff" stroke-width="0.8" stroke-dasharray="2.5 2" stroke-opacity="0.60" fill="none"/><circle cx="24" cy="24" r="6.5" fill="url(#bhc)"/></svg></div>
   <h1>${title}</h1>
-  <p>${subtitle}</p>
+  <div class="section-head" style="margin-top:16px;margin-bottom:16px"><div class="section-head-box"><h2 style="font-size:14px">${subtitle}</h2></div></div>
   <span class="tag">AI-POWERED · ${new Date().toLocaleDateString()}</span>
 </div>
 
 <div class="kpis">
-  <div class="kpi kpi-tot"><div class="kpi-icon">${kpiSVGs.total}</div><div class="label">Total Reviews</div><div class="value">${s.total_analyzed}</div></div>
-  <div class="kpi kpi-pos"><div class="kpi-icon">${kpiSVGs.pos}</div><div class="label">Positive</div><div class="value">${s.positive_pct}%</div></div>
-  <div class="kpi kpi-neg"><div class="kpi-icon">${kpiSVGs.neg}</div><div class="label">Negative</div><div class="value">${s.negative_pct}%</div></div>
-  <div class="kpi kpi-neu"><div class="kpi-icon">${kpiSVGs.neu}</div><div class="label">Neutral</div><div class="value">${s.neutral_pct}%</div></div>
+  <div class="kpi kpi-tot"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.total}<h2>Total Reviews</h2></div></div><div class="value">${s.total_analyzed}</div></div>
+  <div class="kpi kpi-pos"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.pos}<h2>Positive</h2></div></div><div class="value">${s.positive_pct}%</div></div>
+  <div class="kpi kpi-neg"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.neg}<h2>Negative</h2></div></div><div class="value">${s.negative_pct}%</div></div>
+  <div class="kpi kpi-neu"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.neu}<h2>Neutral</h2></div></div><div class="value">${s.neutral_pct}%</div></div>
 </div>
 
 <div class="section">
-  <div class="section-head">${pdfIcons.results}<h2>Review Results</h2></div>
+  <div class="section-head"><div class="section-head-box">${pdfIcons.results}<h2>Review Results</h2></div></div>
   <table><thead><tr>${tableHeaders}</tr></thead><tbody>${tableRows}</tbody></table>
 </div>
 
@@ -491,8 +507,7 @@ export function generateUniversalPDF(opts: {
 
   <div class="a-card">
     <div class="a-card-head">
-      <div class="a-card-icon">${pdfIcons.pie}</div>
-      <div class="a-card-title">Sentiment Distribution</div>
+      <div class="section-head"><div class="section-head-box">${pdfIcons.pie}<h2>Sentiment Distribution</h2></div></div>
     </div>
     <div class="a-card-body">
       <div class="dist-bar">
@@ -510,8 +525,7 @@ export function generateUniversalPDF(opts: {
 
   <div class="a-card">
     <div class="a-card-head">
-      <div class="a-card-icon">${pdfIcons.keyword}</div>
-      <div class="a-card-title">Top Keywords</div>
+      <div class="section-head"><div class="section-head-box">${pdfIcons.keyword}<h2>Top Keywords</h2></div></div>
     </div>
     <div class="a-card-body">
       <div class="kw-wrap">${kwHtml}</div>
@@ -520,8 +534,7 @@ export function generateUniversalPDF(opts: {
 
   <div class="a-card">
     <div class="a-card-head">
-      <div class="a-card-icon">${pdfIcons.trend}</div>
-      <div class="a-card-title">Sentiment Trend</div>
+      <div class="section-head"><div class="section-head-box">${pdfIcons.trend}<h2>Sentiment Trend</h2></div></div>
     </div>
     <div class="a-card-body">
       <table class="trend-tbl">
@@ -533,8 +546,7 @@ export function generateUniversalPDF(opts: {
 
   <div class="a-card">
     <div class="a-card-head">
-      <div class="a-card-icon">${pdfIcons.ai}</div>
-      <div class="a-card-title">AI Summary</div>
+      <div class="section-head"><div class="section-head-box">${pdfIcons.ai}<h2>AI Summary</h2></div></div>
     </div>
     <div class="a-card-body">
       <div class="ai-item"><span>${pdfIcons.chart}</span><span><strong>Overview:</strong> ${s.total_analyzed} reviews analyzed with AI sentiment intelligence.</span></div>
@@ -545,6 +557,46 @@ export function generateUniversalPDF(opts: {
   </div>
 
 </div>
+
+${absaAspects && absaAspects.length > 0 ? `
+<div class="section">
+  <div class="section-head"><div class="section-head-box">${pdfIcons.chart}<h2>Aspect-Based Sentiment Analysis</h2></div></div>
+  <table>
+    <thead><tr>
+      <th class="left">Aspect</th><th>Mentions</th><th>Dominant</th>
+      <th style="color:#22c55e">Positive</th><th style="color:#f43f5e">Negative</th>
+      <th style="color:#f59e0b">Neutral</th><th>Avg Polarity</th>
+    </tr></thead>
+    <tbody>
+      ${absaAspects.map(a => `<tr>
+        <td class="left" style="font-weight:600;color:#2dd4bf">${a.aspect}</td>
+        <td>${a.count}</td>
+        <td><span class="badge badge-${a.dominant ?? 'neutral'}">${(a.dominant ?? 'neutral').toUpperCase()}</span></td>
+        <td style="color:#22c55e">${a.positive}</td>
+        <td style="color:#f43f5e">${a.negative}</td>
+        <td style="color:#f59e0b">${a.neutral}</td>
+        <td style="font-family:monospace">${a.avgPolarity.toFixed(3)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+</div>
+` : ''}
+
+${sarcasmEnabled ? `
+<div class="section" style="text-align:center">
+  <div class="section-head"><div class="section-head-box">${pdfIcons.ai}<h2>Sarcasm Detection Summary</h2></div></div>
+  ${s.sarcasm_count > 0
+    ? `<div style="display:inline-block;padding:16px 32px;background:rgba(244,63,94,0.08);border:1px solid rgba(244,63,94,0.25);border-radius:12px;margin:8px 0">
+        <div style="font-size:18px;font-weight:700;color:#f43f5e;margin-bottom:6px">⚠️ ${s.sarcasm_count} review${s.sarcasm_count !== 1 ? 's' : ''} detected as sarcastic</div>
+        <div style="font-size:13px;color:#8b949e">${s.total_analyzed > 0 ? ((s.sarcasm_count / s.total_analyzed) * 100).toFixed(1) + '% of the dataset — may mislead sentiment analysis' : ''}</div>
+       </div>`
+    : `<div style="display:inline-block;padding:16px 32px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:12px;margin:8px 0">
+        <div style="font-size:18px;font-weight:700;color:#22c55e;margin-bottom:6px">✅ No Sarcasm Detected</div>
+        <div style="font-size:13px;color:#8b949e">All processed reviews show consistent linguistic patterns — sentiment predictions are stable and reliable.</div>
+       </div>`
+  }
+</div>
+` : ''}
 
 <div class="footer"><span class="brand">ReviewSense Analytics</span> — Generated ${new Date().toLocaleString()}</div>
 </body></html>`
@@ -560,8 +612,11 @@ export function generateUniversalCSV(opts: {
   rows: ReviewRow[]
   mode: 'bulk' | 'language'
   filename: string
+  absaAspects?: AbsaAspect[]
+  sarcasmEnabled?: boolean
+  sarcasmCount?: number
 }) {
-  const { rows, mode, filename } = opts
+  const { rows, mode, filename, absaAspects, sarcasmEnabled, sarcasmCount } = opts
   const headers = mode === 'language'
     ? ['#', 'Review', 'Language', 'Translated to English', 'Sentiment', 'Confidence (%)', 'Polarity']
     : ['#', 'Review', 'Sentiment', 'Confidence (%)', 'Polarity', 'Subjectivity', 'Sarcasm']
@@ -574,7 +629,20 @@ export function generateUniversalCSV(opts: {
       return [r.row_index, `"${r.text.replace(/"/g, '""')}"`, r.sentiment, r.confidence.toFixed(2), r.polarity.toFixed(4), (r.subjectivity ?? 0).toFixed(4), r.sarcasm_detected ? 'Yes' : 'No']
     }
   })
-  const csv = [headers, ...data].map(r => r.join(',')).join('\n')
+  let csv = [headers, ...data].map(r => r.join(',')).join('\n')
+  // Append ABSA summary block when available
+  if (absaAspects && absaAspects.length > 0) {
+    csv += '\n\nAspect-Based Sentiment Analysis'
+    csv += '\nAspect,Mentions,Dominant,Positive,Negative,Neutral,Avg Polarity'
+    absaAspects.forEach(a => {
+      csv += `\n${a.aspect},${a.count},${a.dominant ?? 'neutral'},${a.positive},${a.negative},${a.neutral},${a.avgPolarity.toFixed(3)}`
+    })
+  }
+  // Append Sarcasm summary block when enabled
+  if (sarcasmEnabled) {
+    csv += '\n\nSarcasm Detection Summary'
+    csv += `\nTotal Sarcastic Reviews,${sarcasmCount ?? 0}`
+  }
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url)
@@ -585,8 +653,11 @@ export function generateUniversalExcel(opts: {
   rows: ReviewRow[]
   mode: 'bulk' | 'language'
   filename: string
+  absaAspects?: AbsaAspect[]
+  sarcasmEnabled?: boolean
+  sarcasmCount?: number
 }) {
-  const { rows, mode, filename } = opts
+  const { rows, mode, filename, absaAspects, sarcasmEnabled, sarcasmCount } = opts
   const headers = mode === 'language'
     ? ['#', 'Review', 'Language', 'Translated to English', 'Sentiment', 'Confidence (%)', 'Polarity']
     : ['#', 'Review', 'Sentiment', 'Confidence (%)', 'Polarity', 'Subjectivity', 'Sarcasm']
@@ -603,6 +674,20 @@ export function generateUniversalExcel(opts: {
   let xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Results"><Table>`
   xml += `<Row>${headers.map(cell).join('')}</Row>`
   data.forEach(r => { xml += `<Row>${r.map(cell).join('')}</Row>` })
+  // ABSA sheet
+  if (absaAspects && absaAspects.length > 0) {
+    xml += `</Table></Worksheet><Worksheet ss:Name="ABSA"><Table>`
+    xml += `<Row>${['Aspect','Mentions','Dominant','Positive','Negative','Neutral','Avg Polarity'].map(cell).join('')}</Row>`
+    absaAspects.forEach(a => {
+      xml += `<Row>${[a.aspect, a.count, a.dominant ?? 'neutral', a.positive, a.negative, a.neutral, a.avgPolarity.toFixed(3)].map(cell).join('')}</Row>`
+    })
+  }
+  // Sarcasm sheet
+  if (sarcasmEnabled) {
+    xml += `</Table></Worksheet><Worksheet ss:Name="Sarcasm"><Table>`
+    xml += `<Row>${['Metric','Value'].map(cell).join('')}</Row>`
+    xml += `<Row>${['Total Sarcastic Reviews', sarcasmCount ?? 0].map(cell).join('')}</Row>`
+  }
   xml += `</Table></Worksheet></Workbook>`
   const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -615,8 +700,10 @@ export function generateUniversalJSON(opts: {
   summary: SummaryData
   mode: 'bulk' | 'language'
   filename: string
+  absaAspects?: AbsaAspect[]
+  sarcasmEnabled?: boolean
 }) {
-  const { rows, summary, mode, filename } = opts
+  const { rows, summary, mode, filename, absaAspects, sarcasmEnabled } = opts
   const enrichedRows = rows.map(r => {
     const lang = mode === 'language' ? detectLang(r.text) : 'English'
     const translation = mode === 'language' ? getTranslation(r.text, lang, r.sentiment) : r.text
@@ -636,7 +723,7 @@ export function generateUniversalJSON(opts: {
     }
     return base
   })
-  const output = {
+  const output: Record<string, unknown> = {
     generated_at: new Date().toISOString(),
     total_reviews: summary.total_analyzed,
     summary: {
@@ -646,6 +733,26 @@ export function generateUniversalJSON(opts: {
       sarcasm_count: summary.sarcasm_count,
     },
     reviews: enrichedRows,
+  }
+  if (absaAspects && absaAspects.length > 0) {
+    output.absa_aspects = absaAspects.map(a => ({
+      aspect: a.aspect,
+      mentions: a.count,
+      dominant: a.dominant ?? 'neutral',
+      positive: a.positive,
+      negative: a.negative,
+      neutral: a.neutral,
+      avg_polarity: parseFloat(a.avgPolarity.toFixed(3)),
+    }))
+  }
+  if (sarcasmEnabled) {
+    output.sarcasm_summary = {
+      enabled: true,
+      total_sarcastic: summary.sarcasm_count,
+      percentage: summary.total_analyzed > 0
+        ? parseFloat(((summary.sarcasm_count / summary.total_analyzed) * 100).toFixed(1))
+        : 0,
+    }
   }
   const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)

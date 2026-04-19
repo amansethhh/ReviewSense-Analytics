@@ -164,3 +164,72 @@ class PredictionCache:
 # NEVER pass raw non-English text to get() or set().
 # Translation must happen BEFORE any cache interaction.
 prediction_cache = PredictionCache(maxsize=512)
+
+
+# ── OPT-5: Full Pipeline Cache ────────────────────────────
+# Caches at the (original_text, lang) → full result level
+# so repeated reviews skip ALL stages.
+
+class FullPipelineCache:
+    """Thread-safe pipeline-level cache.
+
+    Keyed on SHA-256(lang::text). Stores the complete result
+    dict so repeated runs of the same CSV skip translation,
+    prediction, ABSA, and sarcasm entirely.
+    """
+
+    def __init__(self, maxsize: int = 5000) -> None:
+        self._store: OrderedDict[str, dict] = OrderedDict()
+        self._maxsize: int = maxsize
+        self._lock: threading.Lock = threading.Lock()
+        self._hits: int = 0
+        self._misses: int = 0
+
+    def _key(self, text: str, lang: str) -> str:
+        raw = f"{lang}::{text.strip()}"
+        return hashlib.sha256(
+            raw.encode("utf-8")
+        ).hexdigest()[:32]
+
+    def get(self, text: str, lang: str) -> dict | None:
+        with self._lock:
+            key = self._key(text, lang)
+            if key in self._store:
+                self._store.move_to_end(key)
+                self._hits += 1
+                return self._store[key]
+            self._misses += 1
+            return None
+
+    def set(self, text: str, lang: str, result: dict) -> None:
+        with self._lock:
+            key = self._key(text, lang)
+            if key in self._store:
+                self._store.move_to_end(key)
+                self._store[key] = result
+            else:
+                if len(self._store) >= self._maxsize:
+                    # Evict oldest 20% when full
+                    evict_count = self._maxsize // 5
+                    for _ in range(evict_count):
+                        if self._store:
+                            self._store.popitem(last=False)
+                self._store[key] = result
+
+    def stats(self) -> dict:
+        with self._lock:
+            total = self._hits + self._misses
+            return {
+                "hits": self._hits,
+                "misses": self._misses,
+                "size": len(self._store),
+                "capacity": self._maxsize,
+                "hit_rate": (
+                    round(self._hits / total, 4)
+                    if total > 0 else 0.0
+                ),
+            }
+
+
+pipeline_cache = FullPipelineCache(maxsize=5000)
+

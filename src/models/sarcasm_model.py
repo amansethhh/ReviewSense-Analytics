@@ -5,8 +5,8 @@ Real transformer-based irony detection with batch support.
 
 from __future__ import annotations
 
+import threading
 import numpy as np
-import streamlit as st
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import torch
 
@@ -16,13 +16,20 @@ MODEL_ID = "cardiffnlp/twitter-roberta-base-irony"
 IRONY_LABEL_MAP = {0: "non_irony", 1: "irony"}
 
 
-@st.cache_resource
+_MODEL_CACHE: dict = {}
+_MODEL_LOCK = threading.Lock()
+
+
 def _load_irony_model():
-    """Load and cache the RoBERTa irony/sarcasm model."""
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_ID)
-    model.eval()
-    return tokenizer, model
+    """Load and cache the RoBERTa irony/sarcasm model (framework-agnostic)."""
+    if "model" not in _MODEL_CACHE:
+        with _MODEL_LOCK:
+            if "model" not in _MODEL_CACHE:  # double-checked locking
+                tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+                model = AutoModelForSequenceClassification.from_pretrained(MODEL_ID)
+                model.eval()
+                _MODEL_CACHE["model"] = (tokenizer, model)
+    return _MODEL_CACHE["model"]
 
 
 def predict(text: str) -> dict:

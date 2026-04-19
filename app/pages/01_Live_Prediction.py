@@ -1,4 +1,9 @@
-"""Live Sentiment Prediction — ReviewSense Analytics."""
+"""Live Sentiment Prediction — ReviewSense Analytics.
+
+Surfaces all pipeline signals: neutral correction, short-text guard,
+temperature calibration, translation quality, Hinglish detection,
+and sarcasm detection with progressive rendering (RT-2).
+"""
 
 import sys
 import time
@@ -30,7 +35,7 @@ html, body, [data-testid="stApp"], [data-testid="stAppViewContainer"],
 
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
 from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR, ACCENT_BLUE  # noqa: E402
-from src.config import DOMAINS, MODEL_NAMES  # noqa: E402
+from src.config import DOMAINS, MODEL_NAMES, LABEL_MAP  # noqa: E402
 from src.analytics import extract_keywords_single, generate_summary_single  # noqa: E402
 from src.exporter import render_export_buttons  # noqa: E402
 
@@ -48,7 +53,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ━━━ UNIFIED REVIEW INPUT CARD (Pattern B) ━━━━━━━━━━━━━━━━
-# Text area + model/domain/stars all in ONE visual card
 
 with st.container():
     st.markdown("""
@@ -141,37 +145,87 @@ if result is None:
 review_text_display = st.session_state.live_review_analyzed
 
 pred_class = int(result["label"])
-label_name = result["sentiment"]
+label_name = LABEL_MAP.get(pred_class, result.get("sentiment", "Unknown"))
 confidence = float(result["confidence"])
 polarity = float(result["polarity"])
 subjectivity = float(result["subjectivity"])
 
-badge_class = {"Positive": "badge-positive", "Negative": "badge-negative", "Neutral": "badge-neutral", "Uncertain": "badge-neutral"}.get(label_name, "badge-neutral")
-badge_display = {"Positive": "✅ Positive", "Negative": "❌ Negative", "Neutral": "◼ Neutral", "Uncertain": "⚠️ Uncertain"}.get(label_name, label_name)
+badge_class = {"Positive": "badge-positive", "Negative": "badge-negative", "Neutral": "badge-neutral"}.get(label_name, "badge-neutral")
+badge_display = {"Positive": "✅ Positive", "Negative": "❌ Negative", "Neutral": "◼ Neutral"}.get(label_name, label_name)
 
-# ── Results Header (Pattern A) ───────────────────────────
-st.markdown(f"""
-<div class="glass-card">
-  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-    <div class="section-title">📊 Analysis Results</div>
-    <span class="{badge_class}" style="font-size:1.2rem;padding:8px 24px;">{badge_display}</span>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+# ── RT-2: Stage 1 — Core sentiment (fast) ────────────────
+result_placeholder = st.empty()
+with result_placeholder.container():
+    st.markdown(f"""
+    <div class="glass-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+        <div class="section-title">📊 Analysis Results</div>
+        <span class="{badge_class}" style="font-size:1.2rem;padding:8px 24px;">{badge_display}</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# ── 3-Column Metrics ─────────────────────────────────────
-m1, m2, m3 = st.columns(3)
-with m1:
-    st.markdown(f'<div class="metric-card metric-card-cyan"><div class="metric-label">CONFIDENCE SCORE</div><div class="metric-value">{confidence*100:.1f}%</div></div>', unsafe_allow_html=True)
-with m2:
-    st.markdown(f'<div class="metric-card metric-card-blue"><div class="metric-label">POLARITY</div><div class="metric-value">{polarity:.3f}</div></div>', unsafe_allow_html=True)
-with m3:
-    st.markdown(f'<div class="metric-card metric-card-violet"><div class="metric-label">SUBJECTIVITY</div><div class="metric-value">{subjectivity:.3f}</div></div>', unsafe_allow_html=True)
+    # ── 3-Column Metrics ─────────────────────────────────────
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.markdown(f'<div class="metric-card metric-card-cyan"><div class="metric-label">CONFIDENCE SCORE</div><div class="metric-value">{confidence*100:.1f}%</div></div>', unsafe_allow_html=True)
+    with m2:
+        st.markdown(f'<div class="metric-card metric-card-blue"><div class="metric-label">POLARITY</div><div class="metric-value">{polarity:.3f}</div></div>', unsafe_allow_html=True)
+    with m3:
+        st.markdown(f'<div class="metric-card metric-card-violet"><div class="metric-label">SUBJECTIVITY</div><div class="metric-value">{subjectivity:.3f}</div></div>', unsafe_allow_html=True)
 
-st.progress(confidence, text=f"Confidence Level — {confidence*100:.1f}%")
+    st.progress(confidence, text=f"Confidence Level — {confidence*100:.1f}%")
+
+    # ── ADD-ON 9: Pipeline signal indicators ─────────────────
+
+    # Neutral correction indicator
+    if result.get("neutral_corrected"):
+        st.info("ℹ️ Confidence-adjusted to Neutral based on polarity analysis.")
+
+    # Short-text guard indicator
+    if result.get("guard_applied"):
+        st.caption(f"ℹ️ Short-text guard applied: {result['guard_applied']}")
+
+    # Temperature calibration transparency
+    if result.get("temperature_scaled"):
+        raw_pct = result.get("raw_confidence", confidence) * 100
+        cal_pct = confidence * 100
+        st.caption(f"ℹ️ Confidence calibrated: raw {raw_pct:.1f}% → calibrated {cal_pct:.1f}%")
+
+    # Translation status badge
+    translation_status = result.get("translation_status", "OK")
+    if result.get("was_translated"):
+        if translation_status == "OK":
+            st.success("✓ Translation verified")
+        elif translation_status == "RETRIED_OK":
+            st.warning("⚠️ Translation required retry — verify result")
+        elif translation_status == "FALLBACK_PASSTHROUGH":
+            st.error("✗ Translation failed — original text used, result may be inaccurate")
+
+    # Translation quality warning
+    if result.get("translation_flagged"):
+        st.warning("⚠️ Translation quality may be low. Result may be unreliable.")
+
+    # View translation used
+    if result.get("was_translated"):
+        with st.expander("View translation used"):
+            st.write(result.get("translated", ""))
+
+    # Hinglish indicator
+    if result.get("hinglish_detected"):
+        st.info("🔤 Hinglish detected — direct multilingual inference used (no translation).")
+
+    # Sarcasm override badge
+    if result.get("sarcasm_applied"):
+        st.warning("⚠️ Sarcasm detected — prediction flipped to Negative")
+
+    # Uncertainty warning
+    if result.get("uncertain_prediction"):
+        st.caption(f"⚠️ Low confidence ({confidence*100:.1f}%) — result may be unreliable")
+
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── Keyword Extraction (NEW) ─────────────────────────────
+# ── Keyword Extraction ─────────────────────────────
 with st.container():
     st.markdown("""
     <div class="glass-card-header">
@@ -191,7 +245,7 @@ with st.container():
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── AI Summary (NEW) ─────────────────────────────────────
+# ── AI Summary ─────────────────────────────────────
 with st.container():
     st.markdown("""
     <div class="glass-card-header">
@@ -208,73 +262,74 @@ with st.container():
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── LIME (Pattern B) ─────────────────────────────────────
-with st.container():
-    st.markdown("""
-    <div class="glass-card-header">
-      <div class="section-title">🔍 LIME Explanation</div>
-      <div class="section-subtitle">Local Interpretable Model Explanations · Cached for speed</div>
-    </div>
-    """, unsafe_allow_html=True)
+# ── RT-2: Stage 2 — LIME (slower — show skeleton while computing) ─────
+lime_placeholder = st.empty()
+with lime_placeholder.container():
+    with st.container():
+        st.markdown("""
+        <div class="glass-card-header">
+          <div class="section-title">🔍 LIME Explanation</div>
+          <div class="section-subtitle">Local Interpretable Model Explanations · Cached for speed</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    try:
-        from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
-        import plotly.graph_objects as go  # noqa: E402
+        try:
+            from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
+            import plotly.graph_objects as go  # noqa: E402
 
-        lime_placeholder = st.empty()
-        lime_placeholder.info("⏳ Generating LIME explanation... (cached after first run)")
+            with st.spinner("Generating LIME explanation..."):
+                word_weights = explain_prediction(review_text_display, num_features=6)
 
-        word_weights = explain_prediction(review_text_display, num_features=6)
-        lime_placeholder.empty()
+            highlighted = highlight_text_html(review_text_display, word_weights)
+            st.markdown(highlighted, unsafe_allow_html=True)
 
-        highlighted = highlight_text_html(review_text_display, word_weights)
-        st.markdown(highlighted, unsafe_allow_html=True)
+            if word_weights:
+                words = [w for w, _ in word_weights]
+                weights = [v for _, v in word_weights]
+                colors = [POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR for v in weights]
+                fig = go.Figure(go.Bar(x=weights, y=words, orientation="h", marker_color=colors))
+                apply_theme(fig, title="Top Feature Contributions", height=350, margin=dict(l=120))
+                fig.update_layout(xaxis_title="← Negative | Positive →", yaxis=dict(autorange="reversed"))
+                st.plotly_chart(fig, use_container_width=True, key="lime_bar")
+        except Exception as e:
+            st.info(f"LIME explanation unavailable: {e}")
 
-        if word_weights:
-            words = [w for w, _ in word_weights]
-            weights = [v for _, v in word_weights]
-            colors = [POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR for v in weights]
-            fig = go.Figure(go.Bar(x=weights, y=words, orientation="h", marker_color=colors))
-            apply_theme(fig, title="Top Feature Contributions", height=350, margin=dict(l=120))
-            fig.update_layout(xaxis_title="← Negative | Positive →", yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True, key="lime_bar")
-    except Exception as e:
-        st.info(f"LIME explanation unavailable: {e}")
-
-    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
-
-st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
-
-# ── ABSA (Pattern B) — with safe empty-aspects guard ─────
-with st.container():
-    st.markdown("""
-    <div class="glass-card-header">
-      <div class="section-title">🔬 Aspect-Based Sentiment Analysis</div>
-      <div class="section-subtitle">Token-level aspect extraction and polarity scoring</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    try:
-        from src.absa import get_aspect_dataframe  # noqa: E402
-        import plotly.graph_objects as go  # noqa: E402
-        aspect_df = get_aspect_dataframe(review_text_display)
-        if aspect_df is None or aspect_df.empty:
-            st.info("No distinct aspects detected in this review.")
-        else:
-            st.dataframe(aspect_df, use_container_width=True)
-            colors = [POSITIVE_COLOR if p > 0.1 else NEGATIVE_COLOR if p < -0.1 else NEUTRAL_COLOR for p in aspect_df["Polarity"]]
-            fig = go.Figure(go.Bar(x=aspect_df["Polarity"], y=aspect_df["Aspect"], orientation="h", marker_color=colors))
-            apply_theme(fig, title="Aspect Polarity", height=max(300, len(aspect_df)*40), margin=dict(l=180))
-            fig.update_layout(xaxis_title="Polarity", yaxis=dict(autorange="reversed"))
-            st.plotly_chart(fig, use_container_width=True, key="absa_bar")
-    except Exception as e:
-        st.info(f"Aspect analysis unavailable: {e}")
-
-    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── Sarcasm + Gauge (2-col, each Pattern B) ──────────────
+# ── RT-2: Stage 3 — ABSA ─────────────────────────────────
+absa_placeholder = st.empty()
+with absa_placeholder.container():
+    with st.container():
+        st.markdown("""
+        <div class="glass-card-header">
+          <div class="section-title">🔬 Aspect-Based Sentiment Analysis</div>
+          <div class="section-subtitle">Token-level aspect extraction and polarity scoring</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        try:
+            from src.absa import get_aspect_dataframe  # noqa: E402
+            import plotly.graph_objects as go  # noqa: E402
+            aspect_df = get_aspect_dataframe(review_text_display)
+            if aspect_df is None or aspect_df.empty:
+                st.info("No distinct aspects detected in this review.")
+            else:
+                st.dataframe(aspect_df, use_container_width=True)
+                colors = [POSITIVE_COLOR if p > 0.1 else NEGATIVE_COLOR if p < -0.1 else NEUTRAL_COLOR for p in aspect_df["Polarity"]]
+                fig = go.Figure(go.Bar(x=aspect_df["Polarity"], y=aspect_df["Aspect"], orientation="h", marker_color=colors))
+                apply_theme(fig, title="Aspect Polarity", height=max(300, len(aspect_df)*40), margin=dict(l=180))
+                fig.update_layout(xaxis_title="Polarity", yaxis=dict(autorange="reversed"))
+                st.plotly_chart(fig, use_container_width=True, key="absa_bar")
+        except Exception as e:
+            st.info(f"Aspect analysis unavailable: {e}")
+
+        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+
+st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+
+# ── RT-2: Stage 4 — Sarcasm + Gauge (2-col) ──────────────
 sarc_col, gauge_col = st.columns(2)
 
 with sarc_col:
@@ -302,7 +357,7 @@ with gauge_col:
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── Export (centralized, 4-format — upgraded from 3) ─────
+# ── Export (centralized, 4-format) ─────
 import pandas as pd  # noqa: E402
 _export_df = pd.DataFrame([{
     "Text": review_text_display,
@@ -310,5 +365,8 @@ _export_df = pd.DataFrame([{
     "Confidence": round(confidence, 4),
     "Polarity": round(polarity, 4),
     "Subjectivity": round(subjectivity, 4),
+    "Neutral Corrected": result.get("neutral_corrected", False),
+    "Guard Applied": result.get("guard_applied", ""),
+    "Sarcasm": "Yes" if result.get("sarcasm", {}).get("is_sarcastic") else "No",
 }])
 render_export_buttons(_export_df, filename_prefix="reviewsense_live")

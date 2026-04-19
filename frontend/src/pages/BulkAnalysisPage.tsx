@@ -256,6 +256,18 @@ function Icon3DSarcasm({ size = 22 }: { size?: number }) {
   )
 }
 
+function Icon3DTarget({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+      <defs><linearGradient id="btgt3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#F43F5E"/><stop offset="100%" stopColor="#FDE047"/></linearGradient></defs>
+      <circle cx="24" cy="24" r="18" stroke="url(#btgt3d)" strokeWidth="2" fill="none" />
+      <circle cx="24" cy="24" r="12" stroke="url(#btgt3d)" strokeWidth="1.5" fill="url(#btgt3d)" fillOpacity=".06" />
+      <circle cx="24" cy="24" r="5" fill="url(#btgt3d)" opacity=".35" />
+      <circle cx="24" cy="24" r="2" fill="url(#btgt3d)" />
+    </svg>
+  )
+}
+
 /* ── Reusable Section Sub-Box Header ── */
 function SectionHeader({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle?: string }) {
   return (
@@ -303,7 +315,8 @@ function Icon3DBulkStack({ size = 22 }: { size?: number }) {
 }
 
 export function BulkAnalysisPage() {
-  const { showToast } = useApp()
+  const { showToast, state: appState } = useApp()
+  const { confidenceThreshold } = appState
   const store = useBulkStore()
   const {
     stage, setStage, fileName, setFileName, textColumn, setTextColumn,
@@ -481,11 +494,52 @@ export function BulkAnalysisPage() {
     return batches.slice(0, 6)
   }, [result?.results])
 
+  // Aggregate ABSA data from all bulk rows for the bulk ABSA overview
+  const topAbsaAspects = useMemo(() => {
+    if (!result?.results) return []
+    const aspectMap: Record<string, { count: number; positive: number; negative: number; neutral: number; totalPolarity: number }> = {}
+    result.results.forEach(row => {
+      if (!row.aspects) return
+      row.aspects.forEach(item => {
+        const key = item.aspect.toLowerCase()
+        if (!aspectMap[key]) aspectMap[key] = { count: 0, positive: 0, negative: 0, neutral: 0, totalPolarity: 0 }
+        aspectMap[key].count++
+        aspectMap[key].totalPolarity += item.polarity
+        if (item.sentiment === 'positive') aspectMap[key].positive++
+        else if (item.sentiment === 'negative') aspectMap[key].negative++
+        else aspectMap[key].neutral++
+      })
+    })
+    return Object.entries(aspectMap)
+      .map(([aspect, d]) => ({
+        aspect,
+        count: d.count,
+        positive: d.positive,
+        negative: d.negative,
+        neutral: d.neutral,
+        avgPolarity: d.count > 0 ? d.totalPolarity / d.count : 0,
+        dominantSentiment: d.positive >= d.negative && d.positive >= d.neutral
+          ? 'positive'
+          : d.negative >= d.positive && d.negative >= d.neutral
+          ? 'negative'
+          : 'neutral',
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10)
+  }, [result?.results])
+
   const exportCSV = useCallback(() => {
     if (!result?.results || result.results.length === 0) { showToast('error', 'No results to export'); return }
-    generateUniversalCSV({ rows: result.results, mode: 'bulk', filename: `reviewsense-bulk-${jobId ?? 'export'}.csv` })
+    generateUniversalCSV({
+      rows: result.results,
+      mode: 'bulk',
+      filename: `reviewsense-bulk-${jobId ?? 'export'}.csv`,
+      absaAspects: runAbsa ? topAbsaAspects : undefined,
+      sarcasmEnabled: runSarcasm,
+      sarcasmCount: result.summary?.sarcasm_count,
+    })
     showToast('success', 'CSV exported successfully')
-  }, [result, jobId, showToast])
+  }, [result, jobId, showToast, runAbsa, runSarcasm, topAbsaAspects])
 
   const exportPDF = useCallback(() => {
     if (!result?.results || !result.summary) { showToast('error', 'No results to export'); return }
@@ -498,15 +552,24 @@ export function BulkAnalysisPage() {
       topKeywords,
       trendBatches: trendData,
       filename: `reviewsense-bulk-${jobId ?? 'report'}.html`,
+      absaAspects: runAbsa ? topAbsaAspects : undefined,
+      sarcasmEnabled: runSarcasm,
     })
     showToast('success', 'PDF report downloaded')
-  }, [result, jobId, topKeywords, trendData, showToast])
+  }, [result, jobId, topKeywords, trendData, showToast, runAbsa, runSarcasm, topAbsaAspects])
 
   const exportExcel = useCallback(() => {
     if (!result?.results || result.results.length === 0) { showToast('error', 'No results to export'); return }
-    generateUniversalExcel({ rows: result.results, mode: 'bulk', filename: `reviewsense-bulk-${jobId ?? 'export'}.xls` })
+    generateUniversalExcel({
+      rows: result.results,
+      mode: 'bulk',
+      filename: `reviewsense-bulk-${jobId ?? 'export'}.xls`,
+      absaAspects: runAbsa ? topAbsaAspects : undefined,
+      sarcasmEnabled: runSarcasm,
+      sarcasmCount: result.summary?.sarcasm_count,
+    })
     showToast('success', 'Excel file downloaded')
-  }, [result, jobId, showToast])
+  }, [result, jobId, showToast, runAbsa, runSarcasm, topAbsaAspects])
 
   const displayRows = result?.results
     ? (showAll ? result.results : result.results.slice(0, 10))
@@ -1059,20 +1122,23 @@ export function BulkAnalysisPage() {
               <table className="results-table">
                 <thead><tr>
                   <th style={{ textAlign: 'center' }}>#</th>
-                  <th style={{ textAlign: 'center' }}>Review Text</th>
+                  <th style={{ textAlign: 'center' }}>{isMultilingual ? 'Review Text (English)' : 'Review Text'}</th>
                   <th style={{ textAlign: 'center' }}>Sentiment</th>
                   <th style={{ textAlign: 'center' }}>Confidence</th>
                   <th style={{ textAlign: 'center' }}>Polarity</th>
                   {isMultilingual && <th style={{ textAlign: 'center' }}>Language</th>}
                   {isMultilingual && <th style={{ textAlign: 'center' }}>Translation</th>}
-                  <th style={{ textAlign: 'center' }}>Sarcasm</th>
                 </tr></thead>
                 <tbody>
-                  {displayRows.map(row => (
-                    <tr key={row.row_index}>
+                  {displayRows.map(row => {
+                    const belowThreshold = row.confidence < confidenceThreshold * 100
+                    return (
+                    <tr key={row.row_index} style={belowThreshold ? { opacity: 0.5 } : undefined}>
                       <td className="col-idx" style={{ textAlign: 'center' }}>{row.row_index}</td>
-                      <td className="col-text" title={row.text} style={{ textAlign: 'center' }}>
-                        {row.text.slice(0, 80)}{row.text.length > 80 ? '…' : ''}
+                      <td className="col-text" title={isMultilingual && row.translated_text ? row.translated_text : row.text} style={{ textAlign: 'center' }}>
+                        {isMultilingual && row.translated_text
+                          ? (row.translated_text.slice(0, 80) + (row.translated_text.length > 80 ? '\u2026' : ''))
+                          : (row.text.slice(0, 80) + (row.text.length > 80 ? '\u2026' : ''))}
                       </td>
                       <td style={{ textAlign: 'center' }}><SentimentBadge sentiment={row.sentiment} confidence={row.confidence} showConfidence={false} /></td>
                       <td className="col-num" style={{ textAlign: 'center' }}>
@@ -1084,19 +1150,17 @@ export function BulkAnalysisPage() {
                       <td className="col-num" style={{ textAlign: 'center' }}>{row.polarity.toFixed(3)}</td>
                       {isMultilingual && (
                         <td className="col-num" style={{ textAlign: 'center' }}>
-                          {row.detected_language ?? '—'}
+                          {row.detected_language ?? '\u2014'}
                         </td>
                       )}
                       {isMultilingual && (
                         <td className="col-num" style={{ textAlign: 'center' }}>
-                          {row.translation_method ?? '—'}
+                          {row.translation_method ?? '\u2014'}
                         </td>
                       )}
-                      <td className="col-num" style={{ textAlign: 'center' }}>
-                        {row.sarcasm_detected ? <span className="sarcasm-warn">!!</span> : '—'}
-                      </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1125,9 +1189,129 @@ export function BulkAnalysisPage() {
           {/* Sentiment Trend */}
           {trendData && (
             <div className="card animate-in chart-full" style={{ marginTop: 'var(--space-4)' }}>
-              <SectionHeader icon={<Icon3DTrend size={22} />} title="Sentiment Trend" subtitle="Simulated monthly sentiment distribution" />
+              <SectionHeader icon={<Icon3DTrend size={22} />} title="Sentiment Trend" subtitle="Batch processing sentiment distribution" />
               <div className="card-body">
                 <SentimentTrendChart data={trendData} />
+              </div>
+            </div>
+          )}
+
+          {/* ABSA Aggregation (only when runAbsa was enabled) */}
+          {runAbsa && topAbsaAspects.length > 0 && (
+            <div className="card animate-in card--animated" style={{ marginTop: 'var(--space-4)' }}>
+              <SectionHeader icon={<Icon3DTarget size={22} />} title="Aspect-Based Sentiment Analysis" subtitle={`Top ${topAbsaAspects.length} aspects across ${result?.summary?.total_analyzed ?? 0} reviews`} />
+              <div className="card-body">
+                <table className="absa-table">
+                  <thead><tr>
+                    <th>Aspect</th>
+                    <th>Mentions</th>
+                    <th>Dominant</th>
+                    <th>Positive</th>
+                    <th>Negative</th>
+                    <th>Neutral</th>
+                    <th>Avg Polarity</th>
+                  </tr></thead>
+                  <tbody>
+                    {topAbsaAspects.map((item, i) => (
+                      <tr key={i} style={{ animationDelay: `${i * 0.04}s` }} className="animate-in">
+                        <td className="absa-aspect-term">{item.aspect}</td>
+                        <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'center' }}>{item.count}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className={`badge badge--${item.dominantSentiment}`}>{item.dominantSentiment}</span>
+                        </td>
+                        <td style={{ textAlign: 'center', color: 'var(--color-positive)', fontFamily: 'var(--font-mono)' }}>{item.positive}</td>
+                        <td style={{ textAlign: 'center', color: 'var(--color-negative)', fontFamily: 'var(--font-mono)' }}>{item.negative}</td>
+                        <td style={{ textAlign: 'center', color: 'var(--color-neutral-sent)', fontFamily: 'var(--font-mono)' }}>{item.neutral}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                            <div className="prog-bar" style={{ width: '60px' }}>
+                              <div
+                                className={`prog-bar__fill prog-bar__fill--${item.avgPolarity >= 0 ? 'positive' : 'negative'}`}
+                                style={{ width: `${Math.abs(item.avgPolarity) * 100}%` }}
+                              />
+                            </div>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', minWidth: '46px' }}>
+                              {item.avgPolarity >= 0 ? '+' : ''}{item.avgPolarity.toFixed(3)}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {runAbsa && topAbsaAspects.length === 0 && result?.results && result.results.length > 0 && (
+            <div className="card card--animated" style={{ marginTop: 'var(--space-4)', textAlign: 'center' }}>
+              <SectionHeader icon={<Icon3DTarget size={22} />} title="Aspect-Based Sentiment Analysis" subtitle="No aspect data in results" />
+              <p className="helper-text" style={{ padding: 'var(--space-5)' }}>ABSA was enabled but no aspects were extracted. Try more descriptive reviews.</p>
+            </div>
+          )}
+
+          {/* Sarcasm Summary — dataset-level card, only when runSarcasm is ON */}
+          {runSarcasm && (
+            <div className="card animate-in card--animated" style={{ marginTop: 'var(--space-4)' }}>
+              <SectionHeader icon={<Icon3DSarcasm size={22} />} title="Sarcasm Detection Summary" subtitle="Dataset-level sarcasm analysis" />
+              <div className="card-body">
+                {(result?.summary?.sarcasm_count ?? 0) > 0 ? (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)',
+                    padding: 'var(--space-4)',
+                  }}>
+                    <div style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)',
+                      padding: 'var(--space-4) var(--space-6)',
+                      background: 'rgba(244,63,94,0.08)',
+                      border: '1px solid rgba(244,63,94,0.25)',
+                      borderRadius: '12px',
+                      textAlign: 'center',
+                    }}>
+                      <svg width="36" height="36" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+                        <defs><linearGradient id="sarc-warn" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#F43F5E"/><stop offset="100%" stopColor="#FDE047"/></linearGradient></defs>
+                        <path d="M24 6L44 40H4z" stroke="url(#sarc-warn)" strokeWidth="2" fill="url(#sarc-warn)" fillOpacity=".12" strokeLinejoin="round"/>
+                        <path d="M24 18v10M24 33v2" stroke="url(#sarc-warn)" strokeWidth="2.5" strokeLinecap="round"/>
+                      </svg>
+                      <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-negative)' }}>
+                        {result.summary.sarcasm_count} review{result.summary.sarcasm_count !== 1 ? 's' : ''} detected as sarcastic
+                      </div>
+                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+                        {result.summary.total_analyzed > 0
+                          ? `${((result.summary.sarcasm_count / result.summary.total_analyzed) * 100).toFixed(1)}% of the dataset — these reviews may mislead sentiment analysis`
+                          : 'Sarcasm detected in this dataset'}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-faint)', textAlign: 'center', maxWidth: '480px' }}>
+                      Sarcastic reviews are flagged by the <strong>!! indicator</strong> in the results table above. Consider excluding or re-weighting them for downstream tasks.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    padding: 'var(--space-5)',
+                  }}>
+                    <div style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)',
+                      padding: 'var(--space-4) var(--space-6)',
+                      background: 'rgba(34,197,94,0.08)',
+                      border: '1px solid rgba(34,197,94,0.2)',
+                      borderRadius: '12px',
+                      textAlign: 'center',
+                    }}>
+                      <svg width="36" height="36" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
+                        <defs><linearGradient id="sarc-ok" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#2DD4BF"/></linearGradient></defs>
+                        <circle cx="24" cy="24" r="18" stroke="url(#sarc-ok)" strokeWidth="2" fill="url(#sarc-ok)" fillOpacity=".1"/>
+                        <path d="M14 24l8 8 12-14" stroke="url(#sarc-ok)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-positive)' }}>
+                        No Sarcasm Detected
+                      </div>
+                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+                        All processed reviews show consistent linguistic patterns — sentiment predictions are stable and reliable.
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1136,7 +1320,7 @@ export function BulkAnalysisPage() {
           <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
             <SectionHeader icon={<Icon3DRobot size={22} />} title="AI Summary" subtitle="AI-Generated analysis of the dataset" />
             <div className="ai-summary" style={{ textAlign: 'center' }}>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="bs1" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00D9FF"/><stop offset="100%" stopColor="#00FF88"/></linearGradient></defs>
@@ -1146,7 +1330,7 @@ export function BulkAnalysisPage() {
                 </span>
                 <span><strong>Overall:</strong> The dataset of {result.summary.total_analyzed} reviews shows a {result.summary.positive_pct > 50 ? 'predominantly positive' : 'mixed'} sentiment landscape.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="bs2" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#F43F5E"/></linearGradient></defs>
@@ -1156,7 +1340,7 @@ export function BulkAnalysisPage() {
                 </span>
                 <span><strong>Distribution:</strong> {result.summary.positive_pct}% positive, {result.summary.negative_pct}% negative, {result.summary.neutral_pct}% neutral.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="bs3" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#FDE047"/><stop offset="100%" stopColor="#F59E0B"/></linearGradient></defs>
@@ -1167,7 +1351,7 @@ export function BulkAnalysisPage() {
                 </span>
                 <span><strong>Model Confidence:</strong> Average confidence {result.results ? (result.results.reduce((s, r) => s + r.confidence, 0) / result.results.length).toFixed(1) : '—'}%.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="bs4" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
@@ -1176,7 +1360,7 @@ export function BulkAnalysisPage() {
                 </span>
                 <span><strong>Polarity Score:</strong> Mean polarity is {result.results ? (result.results.reduce((s, r) => s + r.polarity, 0) / result.results.length).toFixed(3) : '—'} ({result.summary.positive_pct > 50 ? 'positive' : 'balanced'} overall).</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="bs5" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00D9FF"/><stop offset="100%" stopColor="#00FF88"/></linearGradient></defs>
@@ -1187,7 +1371,7 @@ export function BulkAnalysisPage() {
                 </span>
                 <span><strong>Language Diversity:</strong> Primary language: English.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="bs6" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#F43F5E"/></linearGradient></defs>
@@ -1197,7 +1381,7 @@ export function BulkAnalysisPage() {
                 </span>
                 <span><strong>Sarcasm:</strong> {result.summary.sarcasm_count} reviews ({result.summary.total_analyzed > 0 ? ((result.summary.sarcasm_count / result.summary.total_analyzed) * 100).toFixed(1) : 0}%) flagged as sarcastic.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="bs7" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#F43F5E"/><stop offset="100%" stopColor="#FDE047"/></linearGradient></defs>
@@ -1226,7 +1410,14 @@ export function BulkAnalysisPage() {
               <NeuralButton variant="secondary" size="sm" style={{ width: '100%', justifyContent: 'center' }}
                       onClick={() => {
                         if (!result?.results || !result.summary) return
-                        generateUniversalJSON({ rows: result.results, summary: result.summary, mode: 'bulk', filename: `reviewsense-bulk-${jobId ?? 'export'}.json` })
+                        generateUniversalJSON({
+                          rows: result.results,
+                          summary: result.summary,
+                          mode: 'bulk',
+                          filename: `reviewsense-bulk-${jobId ?? 'export'}.json`,
+                          absaAspects: runAbsa ? topAbsaAspects : undefined,
+                          sarcasmEnabled: runSarcasm,
+                        })
                         showToast('success', 'JSON exported successfully')
                       }}>{'{ }'} JSON</NeuralButton>
               <NeuralButton variant="secondary" size="sm" style={{ width: '100%', justifyContent: 'center' }}

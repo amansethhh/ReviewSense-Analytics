@@ -57,7 +57,28 @@ LANGUAGE_CODE_MAP = {
     "ko":    "Korean",    "it": "Italian",
     "nl":    "Dutch",     "tr": "Turkish",
     "sv":    "Swedish",   "th": "Thai",
+    "pl":    "Polish",
 }
+
+# L1/L3: Whitelist of supported language codes
+_SUPPORTED_LANG_CODES = set(LANGUAGE_CODE_MAP.keys()) | {"unknown"}
+
+# L1: Polish diacritical characters for script-based detection
+_POLISH_CHARS = set('ąćęłńóśźżĄĆĘŁŃÓŚŹŻ')
+
+# L2: Portuguese markers for disambiguation from Spanish
+_PORTUGUESE_MARKERS = re.compile(
+    r'(?:ção|ções|ões|lho|lha|ão|ã|nh[ao]|\bmuito\b|\bproduto\b|\bbom\b|\bnão\b|\bótimo\b|\bpéssimo\b)',
+    re.IGNORECASE,
+)
+
+# T2/T4: Regex to strip language name suffixes appended by translation
+_LANG_SUFFIX_RE = re.compile(
+    r'\s*[,.]?\s*(?:Hindi|Chinese|Korean|Arabic|Russian|German|French|'
+    r'Spanish|Italian|Portuguese|Japanese|Thai|Turkish|Swedish|Dutch|'
+    r'Polish|Bengali|Tamil)\s*[.]?\s*$',
+    re.IGNORECASE,
+)
 
 
 # ══════════════════════════════════════════════════════════
@@ -119,6 +140,10 @@ def detect_language_adaptive(text: str) -> tuple:
     if re.search(r'[א-ת]', text_clean):
         return ("he", 1.0)  # Hebrew
 
+    # L1: Polish character-based detection (before langdetect)
+    if len(set(text_clean) & _POLISH_CHARS) >= 2:
+        return ("pl", 1.0)
+
     # ── Adaptive threshold based on text length ───────────
     word_count = len(text_clean.split())
     if word_count <= 3:
@@ -130,12 +155,28 @@ def detect_language_adaptive(text: str) -> tuple:
 
     # ── langdetect with threshold ─────────────────────────
     try:
-        from langdetect import detect_langs
+        from langdetect import detect_langs, DetectorFactory
+        DetectorFactory.seed = 42  # L2: Deterministic detection
         langs = detect_langs(text_clean)
         if not langs:
             return ("unknown", 0.0)
 
         top_lang = langs[0]
+
+        # L2: Portuguese/Spanish disambiguation
+        if top_lang.lang == "es" and _PORTUGUESE_MARKERS.search(text_clean):
+            logger.debug("Portuguese markers found — overriding es → pt")
+            return ("pt", max(top_lang.prob, 0.85))
+
+        # L3: Reject unsupported language codes
+        if top_lang.lang not in _SUPPORTED_LANG_CODES:
+            logger.warning(
+                f"Unsupported lang code '{top_lang.lang}' — "
+                f"falling back to second-best or unknown"
+            )
+            if len(langs) > 1 and langs[1].lang in _SUPPORTED_LANG_CODES:
+                return (langs[1].lang, langs[1].prob)
+            return ("unknown", 0.0)
 
         # English requires higher check: non-ASCII ratio
         if top_lang.lang == "en":
@@ -228,6 +269,13 @@ def _validate_translation_quality(
     return max(0.0, min(1.0, score))
 
 
+def _strip_language_suffix(translated: str) -> str:
+    """T2/T4: Strip appended language name suffixes from translations."""
+    if not translated:
+        return translated
+    return _LANG_SUFFIX_RE.sub('', translated).strip()
+
+
 def _translate_with_fallback(
     text: str,
     source_lang: str,
@@ -256,6 +304,7 @@ def _translate_with_fallback(
                 "was_translated", False)
 
             if helsinki_text and was_translated:
+                helsinki_text = _strip_language_suffix(helsinki_text)
                 quality = _validate_translation_quality(
                     text, helsinki_text, source_lang)
                 if quality >= 0.70:
@@ -308,8 +357,9 @@ def _translate_with_fallback(
             text, src_lang, "en"
         )
         if status == "success" and translated.strip():
+            cleaned = _strip_language_suffix(translated.strip())
             return {
-                "translated_text": translated.strip(),
+                "translated_text": cleaned,
                 "method": "google",
                 "confidence": 0.9,
                 "detected_language": source_lang,

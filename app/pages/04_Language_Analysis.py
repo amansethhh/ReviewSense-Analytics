@@ -26,9 +26,10 @@ html,body,[data-testid="stApp"],[data-testid="stAppViewContainer"],
 
 from ui.sidebar import load_css, render_sidebar  # noqa: E402
 from ui.theme import apply_theme, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR  # noqa: E402
-from src.config import MODEL_NAMES  # noqa: E402
-from src.analytics import compute_metrics, generate_summary, generate_summary_single, extract_keywords, extract_keywords_single, build_sentiment_pie, build_keywords_chart, build_trend_chart  # noqa: E402
+from src.config import MODEL_NAMES, LABEL_MAP  # noqa: E402
+from src.analytics import compute_metrics, generate_summary, generate_summary_single, extract_keywords, extract_keywords_single, build_sentiment_pie, build_keywords_chart  # noqa: E402
 from src.exporter import render_export_buttons  # noqa: E402
+from src.trend import compute_rolling_trend  # noqa: E402
 
 
 load_css()
@@ -133,7 +134,8 @@ if result is not None:
     flag_emoji = result["flag_emoji"]
     translated = result["translated"]
     was_translated = result["was_translated"]
-    label_name = result["sentiment"]
+    pred_class = int(result["label"])
+    label_name = LABEL_MAP.get(pred_class, result.get("sentiment", "Unknown"))
     confidence = result["confidence"]
     polarity = result["polarity"]
     subjectivity = result["subjectivity"]
@@ -141,15 +143,18 @@ if result is not None:
     # ── Detection + Sentiment (2-col, Pattern A) ──
     d1, d2 = st.columns(2)
     with d1:
+        # Translation quality badge
+        trans_quality = result.get("translation_confidence", "HIGH") if was_translated else ""
+        quality_pill = '<span class="tag-pill tag-green">HIGH CONFIDENCE</span>' if trans_quality != "LOW" else '<span class="tag-pill tag-amber">LOW CONFIDENCE</span>'
         ts = ""
         if was_translated:
-            ts = f'<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(59,130,246,0.1);"><div style="color:#7986cb;font-size:0.75rem;margin-bottom:8px;">Translated:</div><div style="color:#e8eaf6;font-size:0.9rem;line-height:1.6;background:rgba(13,17,23,0.5);padding:12px;border-radius:8px;">{translated}</div><span class="tag-pill tag-teal" style="margin-top:8px;">GoogleTrans</span></div>'
+            ts = f'<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(59,130,246,0.1);"><div style="color:#7986cb;font-size:0.75rem;margin-bottom:8px;">Translated:</div><div style="color:#e8eaf6;font-size:0.9rem;line-height:1.6;background:rgba(13,17,23,0.5);padding:12px;border-radius:8px;">{translated}</div><span class="tag-pill tag-teal" style="margin-top:8px;">Helsinki-NLP</span></div>'
         st.markdown(f"""<div class="glass-card">
           <div class="section-title">🔍 Detected Language</div>
           <div style="display:flex;align-items:center;gap:12px;margin-top:12px;">
             <span style="font-size:2.5rem;">{flag_emoji}</span>
             <div><div style="font-size:1.4rem;font-weight:700;color:#e8eaf6;">{lang_name}</div>
-            <div style="display:flex;gap:6px;margin-top:4px;"><span class="tag-pill tag-cyan">{detected_lang.upper()}</span><span class="tag-pill tag-green">HIGH CONFIDENCE</span></div></div>
+            <div style="display:flex;gap:6px;margin-top:4px;"><span class="tag-pill tag-cyan">{detected_lang.upper()}</span>{quality_pill}</div></div>
           </div>{ts}
         </div>""", unsafe_allow_html=True)
 
@@ -169,6 +174,28 @@ if result is not None:
         st.markdown(f'<div class="metric-card metric-card-violet"><div class="metric-label">POLARITY</div><div class="metric-value">{polarity:.3f}</div></div>', unsafe_allow_html=True)
     with mcol3:
         st.markdown(f'<div class="metric-card metric-card-amber"><div class="metric-label">SUBJECTIVITY</div><div class="metric-value">{subjectivity:.3f}</div></div>', unsafe_allow_html=True)
+
+    # ── Pipeline signal indicators (ADD-ON 9) ──
+    if result.get("neutral_corrected"):
+        st.info("ℹ️ Confidence-adjusted to Neutral based on polarity analysis.")
+    if result.get("guard_applied"):
+        st.caption(f"ℹ️ Short-text guard applied: {result['guard_applied']}")
+    if result.get("temperature_scaled"):
+        raw_pct = result.get("raw_confidence", confidence) * 100
+        st.caption(f"ℹ️ Confidence calibrated: raw {raw_pct:.1f}% → calibrated {confidence*100:.1f}%")
+    if result.get("translation_flagged"):
+        st.warning("⚠️ Translation quality may be low. Result may be unreliable.")
+    translation_status = result.get("translation_status", "OK")
+    if was_translated:
+        if translation_status == "RETRIED_OK":
+            st.warning("⚠️ Translation required retry — verify result")
+        elif translation_status == "FALLBACK_PASSTHROUGH":
+            st.error("✗ Translation failed — original text used")
+    if result.get("hinglish_detected"):
+        st.info("🔤 Hinglish detected — direct multilingual inference used (no translation).")
+    if was_translated:
+        with st.expander("View translation used"):
+            st.write(result.get("translated", ""))
 
     st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
@@ -311,10 +338,12 @@ if batch_file is not None:
         bsph.empty(); prog.empty()
         lang_status.success("✅ Analysis complete")
 
-        # Build results DataFrame
+        # Build results DataFrame with new pipeline signal columns
         br = []
         for r in batch_results:
             orig = r["original"]
+            tr_status = r.get("translation_status", "OK")
+            quality = "✓" if tr_status == "OK" else "⚠️" if tr_status == "RETRIED_OK" else "✗"
             br.append({
                 "Original": orig[:80] + ("…" if len(orig) > 80 else ""),
                 "Language": f"{r['flag_emoji']} {r['language_name']}",
@@ -323,6 +352,8 @@ if batch_file is not None:
                 "Confidence": round(r["confidence"] * 100, 1),
                 "Polarity": round(r["polarity"], 4),
                 "Subjectivity": round(r["subjectivity"], 4),
+                "Quality": quality,
+                "Corrected": "✓" if r.get("neutral_corrected") or r.get("guard_applied") else "—",
             })
         odf = pd.DataFrame(br)
 
@@ -380,10 +411,18 @@ if batch_file is not None:
 
         st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-        # ── Sentiment Trend (NEW) ──
-        ft = build_trend_chart(pos, neg, neu, POSITIVE_COLOR, NEGATIVE_COLOR, NEUTRAL_COLOR)
-        apply_theme(ft, title="Sentiment Trend", height=350)
-        st.plotly_chart(ft, use_container_width=True, key="lang_batch_trend")
+        # ── Sentiment Trend (rolling window — ADD-ON 8) ──
+        batch_results_for_trend = st.session_state.lang_batch_raw_results or []
+        trend_data = compute_rolling_trend(batch_results_for_trend)
+        if trend_data:
+            t_labels = [t["label"] for t in trend_data]
+            ft = go.Figure()
+            ft.add_trace(go.Scatter(x=t_labels, y=[t["positive_pct"] for t in trend_data], mode="lines+markers", name="Positive", line=dict(color=POSITIVE_COLOR, width=2.5)))
+            ft.add_trace(go.Scatter(x=t_labels, y=[t["negative_pct"] for t in trend_data], mode="lines+markers", name="Negative", line=dict(color=NEGATIVE_COLOR, width=2.5)))
+            ft.add_trace(go.Scatter(x=t_labels, y=[t["neutral_pct"] for t in trend_data], mode="lines+markers", name="Neutral", line=dict(color=NEUTRAL_COLOR, width=2.5)))
+            apply_theme(ft, title="Sentiment Trend (Rolling Window)", height=350)
+            ft.update_layout(yaxis_title="Percentage (%)", xaxis_tickangle=-45)
+            st.plotly_chart(ft, use_container_width=True, key="lang_batch_trend")
 
         st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 

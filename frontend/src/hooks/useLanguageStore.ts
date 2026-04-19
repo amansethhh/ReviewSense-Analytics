@@ -32,12 +32,13 @@ export function useLanguageStore() {
   const [selectedCorrection, _setSelectedCorrection] = useState<SentimentLabel | null>(r.selectedCorrection)
 
   // Batch tab state
-  const [bFileName,  _setBFileName]  = useState<string | null>(r.bFileName)
-  const [bTextCol,   _setBTextCol]   = useState(r.bTextCol)
-  const [bModel,     _setBModel]     = useState(r.bModel)
-  const [bRunAbsa,   _setBRunAbsa]   = useState(r.bRunAbsa)
-  const [bRunSarcasm, _setBRunSarcasm] = useState(r.bRunSarcasm)
-  const [bShowAll,   _setBShowAll]   = useState(r.bShowAll)
+  const [bFileName,       _setBFileName]       = useState<string | null>(r.bFileName)
+  const [bTextCol,        _setBTextCol]        = useState(r.bTextCol)
+  const [bModel,          _setBModel]          = useState(r.bModel)
+  const [bRunAbsa,        _setBRunAbsa]        = useState(r.bRunAbsa)
+  const [bRunSarcasm,     _setBRunSarcasm]     = useState(r.bRunSarcasm)
+  const [bIsMultilingual, _setBIsMultilingual] = useState(r.bIsMultilingual)
+  const [bShowAll,        _setBShowAll]        = useState(r.bShowAll)
   const [bStartedAt, _setBStartedAt] = useState<number | null>(r.bStartedAt)
   const [bStage,     _setBStage]     = useState<'upload' | 'configure' | 'processing' | 'results'>(r.bStage)
   const [bJobId,     _setBJobId]     = useState<string | null>(r.bJobId)
@@ -96,6 +97,9 @@ export function useLanguageStore() {
   const setBRunSarcasm = useCallback((v: boolean) => {
     _setBRunSarcasm(v); langRef.current.bRunSarcasm = v
   }, [langRef])
+  const setBIsMultilingual = useCallback((v: boolean) => {
+    _setBIsMultilingual(v); langRef.current.bIsMultilingual = v
+  }, [langRef])
   const setBShowAll = useCallback((v: boolean) => {
     _setBShowAll(v); langRef.current.bShowAll = v
   }, [langRef])
@@ -150,7 +154,8 @@ export function useLanguageStore() {
     // Batch tab
     bFileName, setBFileName, bTextCol, setBTextCol,
     bModel, setBModel, bRunAbsa, setBRunAbsa,
-    bRunSarcasm, setBRunSarcasm, bShowAll, setBShowAll,
+    bRunSarcasm, setBRunSarcasm, bIsMultilingual, setBIsMultilingual,
+    bShowAll, setBShowAll,
     bStartedAt, setBStartedAt, bStage, setBStage,
     bJobId, setBJobId, bResult, setBResult,
     bColumns, setBColumns, bPreview, setBPreview,

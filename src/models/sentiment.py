@@ -6,8 +6,8 @@ Cached via @st.cache_resource so the model loads only once.
 
 from __future__ import annotations
 
+import threading
 import numpy as np
-import streamlit as st
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import torch
 
@@ -17,13 +17,20 @@ MODEL_ID = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 ROBERTA_LABEL_MAP = {0: "Negative", 1: "Neutral", 2: "Positive"}
 
 
-@st.cache_resource
+_MODEL_CACHE: dict = {}
+_MODEL_LOCK = threading.Lock()
+
+
 def _load_sentiment_model():
-    """Load and cache the RoBERTa sentiment model + tokenizer."""
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_ID)
-    model.eval()
-    return tokenizer, model
+    """Load and cache the RoBERTa sentiment model + tokenizer (framework-agnostic)."""
+    if "model" not in _MODEL_CACHE:
+        with _MODEL_LOCK:
+            if "model" not in _MODEL_CACHE:  # double-checked locking
+                tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+                model = AutoModelForSequenceClassification.from_pretrained(MODEL_ID)
+                model.eval()
+                _MODEL_CACHE["model"] = (tokenizer, model)
+    return _MODEL_CACHE["model"]
 
 
 def predict(text: str) -> dict:

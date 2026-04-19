@@ -776,12 +776,12 @@ export function ModelDashboardPage() {
         </div>
       </div>
 
-      {/* SECTION 8 — Sentiment Trend */}
+      {/* SECTION 8 — Sentiment Trend (latest 3 jobs) */}
       <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
         <SectionHeader icon={<Icon3DTrend size={22} />} title="Sentiment Trend"
-          subtitle="Batch processing sentiment distribution" />
+          subtitle={`Latest ${Math.min(3, trendPoints.length)} batch job${trendPoints.length !== 1 ? 's' : ''} — sentiment distribution`} />
         <div className="card-body">
-          <SentimentTrendChart data={trendPoints.length > 0 ? trendPoints : undefined} />
+          <SentimentTrendChart data={trendPoints.length > 0 ? trendPoints.slice(-3) : undefined} />
         </div>
       </div>
 
@@ -874,7 +874,7 @@ function TranslationDashboard() {
   const [loadingT, setLoadingT] = useState(true)
 
   useEffect(() => {
-    fetch('http://localhost:8000/metrics/translations')
+    fetch(`${import.meta.env.VITE_API_URL}/metrics/translations`)
       .then(r => r.json())
       .then((d: TranslationStats) => { setStats(d); setLoadingT(false) })
       .catch(() => setLoadingT(false))

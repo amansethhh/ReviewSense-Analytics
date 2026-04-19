@@ -52,6 +52,9 @@ _job_expiry: dict[str, datetime] = {}
 # BUG-4 FIX: Thread-safe lock for all _job_store mutations
 _store_lock = threading.Lock()
 
+# OPT-4: Thread-safe lock for transformer model predictions
+_model_lock = threading.Lock()
+
 # O8: Stale job expiry interval (seconds)
 _STALE_JOB_AGE_SECONDS: int = 1800  # 30 minutes
 
@@ -148,341 +151,424 @@ def _process_bulk_job(
     multilingual: bool = False,
 ):
     """
-    FULLY SYNCHRONOUS bulk analysis pipeline.
-    Runs in a daemon thread — NEVER touches asyncio.
+    OPTIMIZED bulk analysis pipeline — 3-phase architecture.
 
-    BUG-2 FIX: No asyncio.run(), await, or event loop calls.
-    BUG-4 FIX: All _job_store mutations use _store_lock.
-    BUG-5 FIX: 15s per-row timeout. Never skips rows —
-               records them with error info instead.
+    Phase 1: Language detection (fast, sequential)
+    Phase 2: Batch translation (grouped by language)
+    Phase 3: Parallel sentiment + ABSA + sarcasm
 
-    Uses detect_translate_and_predict_sync() from language.py
-    for correct translation-first, cache-second ordering.
+    All phases are fully synchronous — NO asyncio.
+    Thread-safe via _model_lock for transformer predictions.
     """
     try:
-        # Import the synchronous prediction helper
+        from src.predict import predict_sentiment
         from backend.app.routes.language import (
-            detect_translate_and_predict_sync,
+            detect_language_adaptive,
+            LANGUAGE_CODE_MAP,
+            _apply_sentiment_corrections,
         )
+        from backend.app.cache import pipeline_cache
 
         total = len(df)
         results: list[BulkRowResult] = []
         processed_count = 0
 
         with _store_lock:
-            _job_store[job_id]["status"] = (
-                BulkJobStatus.processing)
+            _job_store[job_id]["status"] = BulkJobStatus.processing
             _job_store[job_id]["total_rows"] = total
-            _job_store[job_id]["results"] = []  # init for streaming
+            _job_store[job_id]["results"] = []
+            _job_store[job_id]["phase"] = "init"
+
+        # Extract all texts first
+        all_texts: list[str] = []
+        all_indices: list[int] = []
+        valid_mask: list[bool] = []  # True if row has valid text
+
+        for idx, (i, row) in enumerate(df.iterrows()):
+            text = str(row[text_col]).strip()
+            is_valid = bool(
+                text and text.lower() not in ["nan", "none", ""]
+            )
+            all_texts.append(text if is_valid else "")
+            all_indices.append(int(i))
+            valid_mask.append(is_valid)
+
+            if len(text) > 10000 and is_valid:
+                all_texts[-1] = text[:10000]
+
+        valid_count = sum(valid_mask)
+        _append_log(
+            job_id,
+            f"[{_ts()}] Pipeline started -- "
+            f"{total} rows ({valid_count} valid), "
+            f"{_MAX_ROW_WORKERS} workers"
+        )
+
+        # ══════════════════════════════════════════════════
+        # PHASE 1: Language Detection (fast, sequential)
+        # ══════════════════════════════════════════════════
+        detected_langs: list[str] = ["en"] * total
+        lang_names: list[str] = ["English"] * total
+        lang_confs: list[float] = [1.0] * total
+
+        if multilingual:
+            with _store_lock:
+                _job_store[job_id]["phase"] = "detecting"
+
+            _append_log(
+                job_id,
+                f"[{_ts()}] Phase 1: Detecting languages "
+                f"for {valid_count} reviews..."
+            )
+
+            for idx in range(total):
+                if not valid_mask[idx]:
+                    continue
+                try:
+                    lc, lconf = detect_language_adaptive(
+                        all_texts[idx]
+                    )
+                    detected_langs[idx] = lc
+                    lang_confs[idx] = lconf
+                    lang_names[idx] = LANGUAGE_CODE_MAP.get(
+                        lc, lc.title() if lc != "unknown"
+                        else "Unknown"
+                    )
+                except Exception:
+                    pass
+
+            # Count languages for log
+            from collections import Counter
+            lang_counts = Counter(
+                detected_langs[i] for i in range(total)
+                if valid_mask[i]
+            )
+            en_count = lang_counts.get("en", 0)
+            non_en = valid_count - en_count
+            _append_log(
+                job_id,
+                f"[{_ts()}] Phase 1 complete: "
+                f"{en_count} English, {non_en} non-English"
+            )
+
+        # ══════════════════════════════════════════════════
+        # PHASE 2: Batch Translation (grouped by language)
+        # ══════════════════════════════════════════════════
+        translated_texts: list[str] = list(all_texts)  # copy
+        trans_methods: list[str | None] = [None] * total
+        was_translated: list[bool] = [False] * total
+
+        if multilingual:
+            with _store_lock:
+                _job_store[job_id]["phase"] = "translating"
+
+            _append_log(
+                job_id,
+                f"[{_ts()}] Phase 2: Batch translating "
+                f"{non_en} non-English reviews..."
+            )
+
+            # Group non-English reviews by language
+            from collections import defaultdict
+            lang_groups: dict[
+                str, list[tuple[int, str]]
+            ] = defaultdict(list)
+            for idx in range(total):
+                if not valid_mask[idx]:
+                    continue
+                lc = detected_langs[idx]
+                if lc == "en" and lang_confs[idx] >= 0.85:
+                    trans_methods[idx] = "none"
+                    continue
+                lang_groups[lc].append((idx, all_texts[idx]))
+
+            # Batch translate each language group
+            from backend.app.utils.batch_translate import (
+                translate_batch_for_lang,
+            )
+            for lang, indexed_texts in lang_groups.items():
+                indices = [i for i, _ in indexed_texts]
+                texts = [t for _, t in indexed_texts]
+
+                try:
+                    batch_results = translate_batch_for_lang(
+                        texts, lang
+                    )
+                    for idx, result in zip(
+                        indices, batch_results
+                    ):
+                        translated_texts[idx] = result
+                        trans_methods[idx] = "google_batch"
+                        was_translated[idx] = True
+                except Exception as e:
+                    logger.warning(
+                        f"Batch translation failed for "
+                        f"{lang}: {e}"
+                    )
+                    for idx, text in zip(indices, texts):
+                        translated_texts[idx] = text
+                        trans_methods[idx] = "failed"
+
+            _append_log(
+                job_id,
+                f"[{_ts()}] Phase 2 complete: "
+                f"batch translation done"
+            )
+
+        # ══════════════════════════════════════════════════
+        # PHASE 3: Parallel Sentiment + ABSA + Sarcasm
+        # ══════════════════════════════════════════════════
+        with _store_lock:
+            _job_store[job_id]["phase"] = "analyzing"
 
         _append_log(
             job_id,
-            f"[{_ts()}] Pipeline started — "
-            f"{total} rows, {_MAX_ROW_WORKERS} workers"
+            f"[{_ts()}] Phase 3: Parallel sentiment analysis "
+            f"({_MAX_ROW_WORKERS} workers)..."
         )
 
-        for idx, (i, row) in enumerate(df.iterrows()):
-            row_num = idx + 1
-            try:
-                text = str(row[text_col]).strip()
-                if not text or text.lower() in [
-                    "nan", "none", ""
-                ]:
-                    # B5: Record empty rows with unknown
-                    results.append(BulkRowResult(
-                        row_index=int(i),
-                        text="",
-                        sentiment=SentimentLabel("unknown"),
-                        confidence=0.0,
-                        polarity=0.0,
-                        subjectivity=0.0,
-                    ))
-                    processed_count += 1
-                    _update_progress(
-                        job_id, processed_count, total)
-                    _append_log(
-                        job_id,
-                        f"[{_ts()}] Row {row_num}/{total}:"
-                        f" SKIPPED -- empty row"
-                    )
-                    continue
+        def _analyze_single_row(row_idx: int) -> BulkRowResult:
+            """Process one row. Called in parallel threads."""
+            original_text = all_texts[row_idx]
+            eng_text = translated_texts[row_idx]
+            lang_code = detected_langs[row_idx]
+            lang_name = lang_names[row_idx]
+            det_method = trans_methods[row_idx]
 
-                # B5: Truncate oversized text
-                if len(text) > 10000:
-                    text = text[:10000]
-                    _append_log(
-                        job_id,
-                        f"[{_ts()}] Row {row_num}/{total}:"
-                        f" TEXT TRUNCATED to 10,000 chars"
-                    )
-
-                # ── Per-row prediction with timeout ──────
-                try:
-                    future = _row_executor.submit(
-                        detect_translate_and_predict_sync,
-                        text,
-                        model_choice,
-                        multilingual,
-                        run_absa,
-                        run_sarcasm,
-                    )
-                    pred_result = future.result(
-                        timeout=_ROW_TIMEOUT_S)
-                except FuturesTimeoutError:
-                    # BUG-5 FIX: Never skip — record with
-                    # error instead
-                    metrics_store.record_timeout()
-                    logger.warning(
-                        f"Row {row_num}: timeout after "
-                        f"{_ROW_TIMEOUT_S}s"
-                    )
-                    _append_log(
-                        job_id,
-                        f"[{_ts()}] Row {row_num}/{total}:"
-                        f" TIMEOUT after {_ROW_TIMEOUT_S}s"
-                        f" — marked unknown"
-                    )
-                    # Still detect language for metadata
-                    to_lang = None
-                    to_method = None
-                    if multilingual:
-                        try:
-                            from backend.app.routes.language import detect_language_adaptive, LANGUAGE_CODE_MAP
-                            lc, _ = detect_language_adaptive(text)
-                            to_lang = LANGUAGE_CODE_MAP.get(lc, lc.title() if lc != 'unknown' else None)
-                            to_method = 'timeout'
-                        except Exception:
-                            pass
-                    results.append(BulkRowResult(
-                        row_index=int(i),
-                        text=text[:500],
-                        sentiment=SentimentLabel("unknown"),
-                        confidence=0.0,
-                        polarity=0.0,
-                        subjectivity=0.0,
-                        detected_language=to_lang,
-                        translation_method=to_method,
-                    ))
-                    processed_count += 1
-                    _update_progress(
-                        job_id, processed_count, total)
-                    continue
-                except Exception as e:
-                    logger.warning(
-                        f"Row {row_num}: prediction "
-                        f"failed: {e}"
-                    )
-                    _append_log(
-                        job_id,
-                        f"[{_ts()}] Row {row_num}/{total}:"
-                        f" ERROR — {str(e)[:60]}"
-                    )
-                    # Still detect language for metadata
-                    er_lang = None
-                    er_method = None
-                    if multilingual:
-                        try:
-                            from backend.app.routes.language import detect_language_adaptive, LANGUAGE_CODE_MAP
-                            lc, _ = detect_language_adaptive(text)
-                            er_lang = LANGUAGE_CODE_MAP.get(lc, lc.title() if lc != 'unknown' else None)
-                            er_method = 'error'
-                        except Exception:
-                            pass
-                    results.append(BulkRowResult(
-                        row_index=int(i),
-                        text=text[:500],
-                        sentiment=SentimentLabel("unknown"),
-                        confidence=0.0,
-                        polarity=0.0,
-                        subjectivity=0.0,
-                        detected_language=er_lang,
-                        translation_method=er_method,
-                    ))
-                    processed_count += 1
-                    _update_progress(
-                        job_id, processed_count, total)
-                    continue
-
-                # ── Extract prediction result ────────────
-                sentiment_raw = pred_result.get(
-                    "sentiment", "neutral")
-                if sentiment_raw not in [
-                    "positive", "negative", "neutral", "unknown"
-                ]:
-                    sentiment_raw = "neutral"
-
-                confidence_pct = float(
-                    pred_result.get("confidence", 0.0))
-                cache_hit = pred_result.get(
-                    "cache_hit", False)
-
-                # Optional ABSA (with timeout)
-                absa_list = None
-                if run_absa:
-                    try:
-                        absa_future = _row_executor.submit(
-                            _run_absa_sync, text
-                        )
-                        absa_list = absa_future.result(
-                            timeout=_ROW_TIMEOUT_S
-                        )
-                    except (FuturesTimeoutError, Exception):
-                        absa_list = None
-
-                # Optional sarcasm (with timeout)
-                sarcasm_detected = None
-                if run_sarcasm:
-                    try:
-                        sar_future = _row_executor.submit(
-                            _run_sarcasm_sync, text
-                        )
-                        sarcasm_detected = (
-                            sar_future.result(
-                                timeout=_ROW_TIMEOUT_S
-                            )
-                        )
-                    except (FuturesTimeoutError, Exception):
-                        sarcasm_detected = None
-
-                # Extract language metadata when multilingual
-                det_lang = None
-                trans_method = None
-                trans_text = None
-                if multilingual:
-                    det_lang = pred_result.get(
-                        "detected_language", None)
-                    trans_method = pred_result.get(
-                        "translation_method", None)
-                    trans_text = pred_result.get(
-                        "translated_text", None)
-
-                row_result = BulkRowResult(
-                    row_index=int(i),
-                    text=text[:500],
-                    sentiment=SentimentLabel(sentiment_raw),
-                    confidence=confidence_pct,
-                    polarity=float(
-                        pred_result.get("polarity", 0.0)),
-                    subjectivity=float(
-                        pred_result.get(
-                            "subjectivity", 0.0)),
-                    sarcasm_detected=sarcasm_detected,
-                    aspects=absa_list,
-                    detected_language=det_lang,
-                    translation_method=trans_method,
-                    translated_text=trans_text,
-                )
-                results.append(row_result)
-                processed_count += 1
-
-                # Stream result to job store for real-time panels
-                with _store_lock:
-                    if job_id in _job_store:
-                        _job_store[job_id]["results"].append(
-                            row_result.model_dump())
-
-                # Record prediction for live dashboard stats
-                metrics_store.record_prediction(
-                    sentiment_raw, det_lang)
-
-                # Thread-safe progress update
-                _update_progress(
-                    job_id, processed_count, total)
-
-                # Per-row log
-                hit_str = " [cached]" if cache_hit else ""
-                lang_str = (
-                    f" | lang={det_lang}"
-                    f" via {trans_method}"
-                ) if multilingual and det_lang else ""
-                _append_log(
-                    job_id,
-                    f"[{_ts()}] Row {row_num}/{total}: "
-                    f"{sentiment_raw} "
-                    f"({confidence_pct:.1f}%){hit_str}"
-                    f"{lang_str}"
-                )
-
-                # Milestone log every 10 rows
-                if row_num % 10 == 0:
-                    pct = int(
-                        (processed_count / total) * 100)
-                    _append_log(
-                        job_id,
-                        f"[{_ts()}] ── Milestone: "
-                        f"{row_num}/{total} ({pct}%) ──"
-                    )
-
-                # O9: Smart throttling
-                if adaptive_batch_sizer.should_throttle():
-                    time.sleep(0.1)
-
-            except Exception as e:
-                logger.warning(
-                    f"Row {row_num} failed: {e}")
-                _append_log(
-                    job_id,
-                    f"[{_ts()}] Row {row_num}/{total}: "
-                    f"failed — {str(e)[:60]}"
-                )
-                # BUG-5 FIX: Record failure, don't skip
-                results.append(BulkRowResult(
-                    row_index=int(i),
-                    text=str(row.get(text_col, ""))[:500],
+            # Skip invalid rows
+            if not valid_mask[row_idx]:
+                return BulkRowResult(
+                    row_index=all_indices[row_idx],
+                    text="",
                     sentiment=SentimentLabel("unknown"),
                     confidence=0.0,
                     polarity=0.0,
                     subjectivity=0.0,
-                ))
-                processed_count += 1
+                )
+
+            # OPT-5: Pipeline cache check
+            cached = pipeline_cache.get(
+                original_text, lang_code
+            )
+            if cached is not None:
+                return BulkRowResult(
+                    row_index=all_indices[row_idx],
+                    **cached,
+                )
+
+            # Predict (thread-safe via model lock)
+            predict_text = (
+                eng_text if was_translated[row_idx]
+                else original_text
+            )
+
+            with _model_lock:
+                pred = predict_sentiment(
+                    predict_text, model_choice
+                )
+
+            label_name = pred.get("label_name", "Neutral")
+            sentiment_raw = label_name.lower()
+            if sentiment_raw not in [
+                "positive", "negative", "neutral"
+            ]:
+                sentiment_raw = "neutral"
+
+            raw_conf = float(pred.get("confidence", 0.0))
+            confidence_pct = normalize_confidence(raw_conf)
+            polarity_val = float(pred.get("polarity", 0.0))
+
+            # Apply sentiment corrections
+            sentiment_raw, confidence_pct, polarity_val = (
+                _apply_sentiment_corrections(
+                    predict_text,
+                    sentiment_raw,
+                    confidence_pct,
+                    polarity_val,
+                )
+            )
+
+            # OPT-2: Conditional ABSA (skip short / certain)
+            absa_list = None
+            if run_absa:
+                words = predict_text.split()
+                if len(words) >= 5 and confidence_pct < 97.0:
+                    absa_list = _run_absa_sync(predict_text)
+
+            # Sarcasm
+            sarcasm_detected = None
+            if run_sarcasm:
+                sarcasm_detected = _run_sarcasm_sync(
+                    predict_text
+                )
+
+            row_result_dict = {
+                "text": original_text[:500],
+                "sentiment": SentimentLabel(sentiment_raw),
+                "confidence": confidence_pct,
+                "polarity": polarity_val,
+                "subjectivity": float(
+                    pred.get("subjectivity", 0.0)
+                ),
+                "sarcasm_detected": sarcasm_detected,
+                "aspects": absa_list,
+                "detected_language": (
+                    lang_name if multilingual else None
+                ),
+                "translation_method": det_method,
+                "translated_text": (
+                    eng_text if was_translated[row_idx]
+                    else None
+                ),
+            }
+
+            # OPT-5: Cache the result
+            pipeline_cache.set(
+                original_text, lang_code,
+                row_result_dict,
+            )
+
+            return BulkRowResult(
+                row_index=all_indices[row_idx],
+                **row_result_dict,
+            )
+
+        # Execute in parallel
+        from concurrent.futures import as_completed
+
+        results = [None] * total
+        with ThreadPoolExecutor(
+            max_workers=_MAX_ROW_WORKERS,
+            thread_name_prefix="bulk-analyze",
+        ) as executor:
+            future_to_idx = {
+                executor.submit(
+                    _analyze_single_row, idx
+                ): idx
+                for idx in range(total)
+            }
+
+            completed = 0
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                row_num = idx + 1
+                try:
+                    row_result = future.result(
+                        timeout=_ROW_TIMEOUT_S
+                    )
+                    results[idx] = row_result
+                except FuturesTimeoutError:
+                    metrics_store.record_timeout()
+                    results[idx] = BulkRowResult(
+                        row_index=all_indices[idx],
+                        text=all_texts[idx][:500],
+                        sentiment=SentimentLabel("unknown"),
+                        confidence=0.0,
+                        polarity=0.0,
+                        subjectivity=0.0,
+                        detected_language=(
+                            lang_names[idx]
+                            if multilingual else None
+                        ),
+                        translation_method="timeout",
+                    )
+                except Exception as e:
+                    results[idx] = BulkRowResult(
+                        row_index=all_indices[idx],
+                        text=all_texts[idx][:500],
+                        sentiment=SentimentLabel("unknown"),
+                        confidence=0.0,
+                        polarity=0.0,
+                        subjectivity=0.0,
+                    )
+
+                completed += 1
+                processed_count = completed
+
+                # Stream result for real-time panels
+                if results[idx] is not None:
+                    with _store_lock:
+                        if job_id in _job_store:
+                            _job_store[job_id][
+                                "results"
+                            ].append(
+                                results[idx].model_dump()
+                            )
+
+                    # Record metrics
+                    if results[idx].sentiment.value != "unknown":
+                        metrics_store.record_prediction(
+                            results[idx].sentiment.value,
+                            results[idx].detected_language,
+                        )
+
+                # Update progress
                 _update_progress(
-                    job_id, processed_count, total)
-                continue
+                    job_id, processed_count, total
+                )
+
+                # Log every 10 completions or final
+                if completed % 10 == 0 or completed == total:
+                    pct = int(
+                        (completed / total) * 100
+                    )
+                    _append_log(
+                        job_id,
+                        f"[{_ts()}] Phase 3: "
+                        f"{completed}/{total} "
+                        f"({pct}%) analyzed"
+                    )
 
         # ── Build summary ──────────────────────────────────
-        sentiments = [r.sentiment.value for r in results]
+        final_results = [
+            r for r in results if r is not None
+        ]
+        sentiments = [
+            r.sentiment.value for r in final_results
+        ]
         pos = sentiments.count("positive")
         neg = sentiments.count("negative")
         neu = sentiments.count("neutral")
 
         summary = {
-            "total_analyzed": len(results),
+            "total_analyzed": len(final_results),
             "positive": pos,
             "negative": neg,
             "neutral":  neu,
             "positive_pct": round(
-                pos / len(results) * 100, 1)
-                if results else 0,
+                pos / len(final_results) * 100, 1
+            ) if final_results else 0,
             "negative_pct": round(
-                neg / len(results) * 100, 1)
-                if results else 0,
+                neg / len(final_results) * 100, 1
+            ) if final_results else 0,
             "neutral_pct":  round(
-                neu / len(results) * 100, 1)
-                if results else 0,
+                neu / len(final_results) * 100, 1
+            ) if final_results else 0,
             "sarcasm_count": sum(
-                1 for r in results
+                1 for r in final_results
                 if r.sarcasm_detected
             ),
         }
 
         _append_log(
             job_id,
-            f"[{_ts()}] ✓ Analysis complete — "
-            f"{len(results)} reviews processed"
+            f"[{_ts()}] Analysis complete -- "
+            f"{len(final_results)} reviews processed"
         )
 
         with _store_lock:
             _job_store[job_id].update({
                 "status":    BulkJobStatus.completed,
                 "progress":  100.0,
-                "processed": len(results),
+                "processed": len(final_results),
                 "results":   [r.model_dump()
-                              for r in results],
+                              for r in final_results],
                 "summary":   summary,
+                "phase":     "done",
             })
         logger.info(
             f"Job {job_id[:8]} complete: "
-            f"{len(results)} rows processed"
+            f"{len(final_results)} rows processed"
         )
 
     except Exception as e:
@@ -497,7 +583,7 @@ def _process_bulk_job(
                 _job_store[job_id]["error"] = str(e)
         _append_log(
             job_id,
-            f"[{_ts()}] ✗ FATAL ERROR: {str(e)[:200]}"
+            f"[{_ts()}] FATAL ERROR: {str(e)[:200]}"
         )
 
 

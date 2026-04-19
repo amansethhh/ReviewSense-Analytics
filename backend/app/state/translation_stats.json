@@ -1,0 +1,75 @@
+{
+  "translation_counts": {
+    "helsinki_success": 60,
+    "google_success": 0,
+    "failed": 0,
+    "skipped_english": 51,
+    "failed_raw_predict_success": 12
+  },
+  "language_counts": {
+    "sv": {
+      "count": 1,
+      "failed": 0
+    },
+    "en": {
+      "count": 52,
+      "failed": 0
+    },
+    "so": {
+      "count": 2,
+      "failed": 0
+    },
+    "af": {
+      "count": 1,
+      "failed": 0
+    },
+    "es": {
+      "count": 23,
+      "failed": 0
+    },
+    "it": {
+      "count": 2,
+      "failed": 0
+    },
+    "lv": {
+      "count": 4,
+      "failed": 0
+    },
+    "ca": {
+      "count": 4,
+      "failed": 0
+    },
+    "tl": {
+      "count": 5,
+      "failed": 0
+    },
+    "fr": {
+      "count": 9,
+      "failed": 0
+    },
+    "hi": {
+      "count": 8,
+      "failed": 0
+    },
+    "fi": {
+      "count": 1,
+      "failed": 0
+    },
+    "da": {
+      "count": 1,
+      "failed": 0
+    },
+    "de": {
+      "count": 6,
+      "failed": 0
+    },
+    "ja": {
+      "count": 3,
+      "failed": 0
+    },
+    "unknown": {
+      "count": 1,
+      "failed": 0
+    }
+  }
+}

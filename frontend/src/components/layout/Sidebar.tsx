@@ -55,11 +55,11 @@ function ActiveJobsDot({ count }: { count: number }) {
 }
 
 export function Sidebar() {
-  const { state } = useApp()
+  const { state, setConfidenceThreshold } = useApp()
   const { collapsed } = useSidebar()
   const [activeModel, setActiveModel] = useState('best')
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.75)
   const [domainFilter, setDomainFilter] = useState('All Domains')
+  const { confidenceThreshold } = state
 
   // Nav bar active-jobs indicator (polls /bulk/active every 3s)
   const activeJobs = useActiveJobs()
@@ -199,7 +199,7 @@ export function Sidebar() {
       <div className="sidebar__footer">
         <SystemStatus online={state.apiConnected} />
         <div style={{ marginTop: '8px' }}>
-          <div>ReviewSense v11.0.0</div>
+          <div>ReviewSense v1.0.0</div>
           <div>&copy; 2026 ReviewSense Analytics</div>
         </div>
       </div>

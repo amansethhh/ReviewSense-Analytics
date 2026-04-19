@@ -13,27 +13,30 @@ interface Toast {
 }
 
 interface AppState {
-  toasts:          Toast[]
-  lastPrediction:  PredictResponse | null
-  metricsCache:    MetricsResponse | null
-  apiConnected:    boolean
+  toasts:               Toast[]
+  lastPrediction:       PredictResponse | null
+  metricsCache:         MetricsResponse | null
+  apiConnected:         boolean
+  confidenceThreshold:  number
 }
 
 const initialState: AppState = {
-  toasts:         [],
-  lastPrediction: null,
-  metricsCache:   null,
-  apiConnected:   true,
+  toasts:              [],
+  lastPrediction:      null,
+  metricsCache:        null,
+  apiConnected:        true,
+  confidenceThreshold: 0.60,
 }
 
 // ── Actions ─────────────────────────────────────────
 
 type Action =
-  | { type: 'ADD_TOAST';        payload: Toast }
-  | { type: 'REMOVE_TOAST';     payload: string }
-  | { type: 'SET_PREDICTION';   payload: PredictResponse }
-  | { type: 'SET_METRICS';      payload: MetricsResponse }
-  | { type: 'SET_API_STATUS';   payload: boolean }
+  | { type: 'ADD_TOAST';              payload: Toast }
+  | { type: 'REMOVE_TOAST';           payload: string }
+  | { type: 'SET_PREDICTION';         payload: PredictResponse }
+  | { type: 'SET_METRICS';            payload: MetricsResponse }
+  | { type: 'SET_API_STATUS';         payload: boolean }
+  | { type: 'SET_CONF_THRESHOLD';     payload: number }
 
 function reducer(state: AppState, action: Action):
   AppState {
@@ -55,6 +58,8 @@ function reducer(state: AppState, action: Action):
       return { ...state, metricsCache: action.payload }
     case 'SET_API_STATUS':
       return { ...state, apiConnected: action.payload }
+    case 'SET_CONF_THRESHOLD':
+      return { ...state, confidenceThreshold: action.payload }
     default:
       return state
   }
@@ -63,10 +68,10 @@ function reducer(state: AppState, action: Action):
 // ── Context ─────────────────────────────────────────
 
 interface AppContextValue {
-  state:        AppState
-  dispatch:     React.Dispatch<Action>
-  showToast:    (type: Toast['type'], message: string)
-                  => void
+  state:                  AppState
+  dispatch:               React.Dispatch<Action>
+  showToast:              (type: Toast['type'], message: string) => void
+  setConfidenceThreshold: (v: number) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -90,8 +95,13 @@ export function AppProvider({
     [dispatch],
   )
 
+  const setConfidenceThreshold = useCallback(
+    (v: number) => dispatch({ type: 'SET_CONF_THRESHOLD', payload: v }),
+    [dispatch],
+  )
+
   return (
-    <AppContext.Provider value={{ state, dispatch, showToast }}>
+    <AppContext.Provider value={{ state, dispatch, showToast, setConfidenceThreshold }}>
       {children}
     </AppContext.Provider>
   )

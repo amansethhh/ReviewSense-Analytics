@@ -68,6 +68,7 @@ export interface LangPageState {
   bModel: string
   bRunAbsa: boolean
   bRunSarcasm: boolean
+  bIsMultilingual: boolean
   bShowAll: boolean
   bStartedAt: number | null         // Date.now() when batch processing began
   bStage: 'upload' | 'configure' | 'processing' | 'results'
@@ -106,7 +107,7 @@ export const LANG_DEFAULTS: LangPageState = {
   includeLime: true, includeAbsa: true, includeSarcasm: true,
   data: null, feedbackSent: false, selectedCorrection: null,
   bFileName: null, bTextCol: '', bModel: 'best',
-  bRunAbsa: false, bRunSarcasm: true, bShowAll: false,
+  bRunAbsa: false, bRunSarcasm: true, bIsMultilingual: true, bShowAll: false,
   bStartedAt: null, bStage: 'upload', bJobId: null, bResult: null,
   bColumns: [], bPreview: [],
 }

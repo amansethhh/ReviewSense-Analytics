@@ -279,7 +279,8 @@ export function LivePredictionPage() {
   } = store
 
   const { data: predictData, loading, error: _error, run, reset: _predictReset } = usePredict()
-  const { showToast: _showToast } = useApp()
+  const { showToast: _showToast, state: appState } = useApp()
+  const { confidenceThreshold } = appState
 
   // Sync usePredict result into the store (persists across navigation)
   useEffect(() => {
@@ -333,7 +334,24 @@ export function LivePredictionPage() {
 
   const exportJSON = () => {
     if (!data) return
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'text/json' })
+    const output: Record<string, unknown> = {
+      generated_at: new Date().toISOString(),
+      review_text: text,
+      sentiment: data.sentiment,
+      confidence: parseFloat(data.confidence.toFixed(2)),
+      polarity: parseFloat(data.polarity.toFixed(4)),
+      subjectivity: parseFloat(subjectivity.toFixed(4)),
+      model_used: data.model_used,
+      processing_ms: data.processing_ms,
+    }
+    if (data.sarcasm) output.sarcasm = { detected: data.sarcasm.detected }
+    if (data.lime_features && data.lime_features.length > 0) {
+      output.lime_features = data.lime_features.map(f => ({ word: f.word, weight: parseFloat(f.weight.toFixed(4)) }))
+    }
+    if (data.absa && data.absa.length > 0) {
+      output.absa_aspects = data.absa.map(a => ({ aspect: a.aspect, sentiment: a.sentiment, polarity: parseFloat(a.polarity.toFixed(4)) }))
+    }
+    const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = 'reviewsense-result.json'
@@ -342,9 +360,23 @@ export function LivePredictionPage() {
 
   const exportCSV = () => {
     if (!data) return
-    const headers = ['sentiment', 'confidence', 'polarity', 'subjectivity', 'model_used']
-    const row = [data.sentiment, data.confidence.toFixed(2), data.polarity.toFixed(4), subjectivity.toFixed(3), data.model_used]
-    const csv = [headers.join(','), row.join(',')].join('\n')
+    let csv = 'Field,Value\n'
+    csv += `Sentiment,${data.sentiment}\n`
+    csv += `Confidence (%),${data.confidence.toFixed(2)}\n`
+    csv += `Polarity,${data.polarity.toFixed(4)}\n`
+    csv += `Subjectivity,${subjectivity.toFixed(4)}\n`
+    csv += `Model,${data.model_used}\n`
+    csv += `Processing (ms),${data.processing_ms}\n`
+    if (data.sarcasm) csv += `Sarcasm Detected,${data.sarcasm.detected ? 'Yes' : 'No'}\n`
+    csv += `Review Text,"${text.replace(/"/g, '""')}"\n`
+    if (data.absa && data.absa.length > 0) {
+      csv += '\nAspect-Based Sentiment Analysis\nAspect,Sentiment,Polarity\n'
+      data.absa.forEach(a => { csv += `${a.aspect},${a.sentiment},${a.polarity.toFixed(4)}\n` })
+    }
+    if (data.lime_features && data.lime_features.length > 0) {
+      csv += '\nLIME Feature Contributions\nWord,Weight\n'
+      data.lime_features.forEach(f => { csv += `${f.word},${f.weight.toFixed(4)}\n` })
+    }
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -354,44 +386,144 @@ export function LivePredictionPage() {
 
   const exportPDF = () => {
     if (!data) return
-    const badgeCls = data.sentiment === 'positive' ? 'badge-positive' : data.sentiment === 'negative' ? 'badge-negative' : 'badge-neutral'
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Sentiment Analysis Report</title>
+    const badgeColor = data.sentiment === 'positive' ? '#22c55e' : data.sentiment === 'negative' ? '#f43f5e' : '#f59e0b'
+    const polarityPct = Math.min(100, Math.abs(data.polarity) * 100)
+    const polarityColor = data.polarity >= 0 ? '#00D9FF' : '#f43f5e'
+    const absaRows = data.absa && data.absa.length > 0
+      ? data.absa.map(a => {
+          const c = a.sentiment === 'positive' ? '#22c55e' : a.sentiment === 'negative' ? '#f43f5e' : '#f59e0b'
+          return `<tr><td style="font-weight:600;color:#2dd4bf">${a.aspect}</td><td><span style="display:inline-block;padding:2px 10px;border-radius:10px;font-size:10px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}55">${a.sentiment.toUpperCase()}</span></td><td style="font-family:monospace">${a.polarity.toFixed(3)}</td></tr>`
+        }).join('')
+      : ''
+    const limeRows = data.lime_features && data.lime_features.length > 0
+      ? data.lime_features.map(f => {
+          const w = f.weight
+          const c = w > 0 ? '#22c55e' : '#f43f5e'
+          const barW = Math.min(100, Math.abs(w) * 200)
+          const leftBar = w < 0 ? '<div style="height:10px;width:' + barW + '%;background:' + c + ';border-radius:4px 0 0 4px"></div>' : ''
+          const rightBar = w > 0 ? '<div style="height:10px;width:' + barW + '%;background:' + c + ';border-radius:0 4px 4px 0"></div>' : ''
+          return `<tr><td style="font-weight:600">${f.word}</td><td style="font-family:monospace;color:${c}">${w > 0 ? '+' : ''}${w.toFixed(4)}</td><td><div style="display:flex;width:100%;align-items:center"><div style="flex:1;display:flex;justify-content:flex-end;padding-right:2px">${leftBar}</div><div style="width:2px;height:14px;background:#30363d"></div><div style="flex:1;display:flex;justify-content:flex-start;padding-left:2px">${rightBar}</div></div></td></tr>`
+        }).join('')
+      : ''
+    // ── Inline logo ──────────────────────────────────────────────────────────
+    const LOGO = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 48 48" fill="none"><defs><radialGradient id="plc" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffffff" stop-opacity="1"/><stop offset="20%" stop-color="#aaf8ff" stop-opacity="0.95"/><stop offset="45%" stop-color="#00d9ff" stop-opacity="0.65"/><stop offset="72%" stop-color="#0055aa" stop-opacity="0.20"/><stop offset="100%" stop-color="#001133" stop-opacity="0"/></radialGradient><filter id="plg" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.0" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><circle cx="24" cy="24" r="22" stroke="#00ccff" stroke-width="2.8" stroke-linecap="round" stroke-dasharray="14 4.2" stroke-opacity="0.72" fill="none" filter="url(#plg)"/><circle cx="24" cy="24" r="17.5" stroke="#00bbee" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="10 3 4 3" stroke-opacity="0.68" fill="none" filter="url(#plg)"/><circle cx="24" cy="24" r="13.5" stroke="#00ddff" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="8 3" stroke-opacity="0.62" fill="none" filter="url(#plg)"/><circle cx="24" cy="24" r="10.5" stroke="#55eeff" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 2.5" stroke-opacity="0.55" fill="none" filter="url(#plg)"/><circle cx="24" cy="24" r="7.0" stroke="#00eeff" stroke-width="0.8" stroke-dasharray="2.5 2" stroke-opacity="0.60" fill="none"/><circle cx="24" cy="24" r="6.5" fill="url(#plc)"/></svg>`
+    //  3D KPI icons 
+    const kpiSVGs = {
+      sentiment: `<svg width="20" height="20" viewBox="0 0 48 48" fill="none"><defs><linearGradient id="lsent" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#00D9FF"/><stop offset="100%" stop-color="#00FF88"/></linearGradient></defs><circle cx="24" cy="24" r="18" stroke="url(#lsent)" stroke-width="2" fill="url(#lsent)" fill-opacity=".1"/><path d="M16 28c2 4 5 6 8 6s6-2 8-6" stroke="url(#lsent)" stroke-width="2" stroke-linecap="round"/><circle cx="18" cy="20" r="2" fill="url(#lsent)"/><circle cx="30" cy="20" r="2" fill="url(#lsent)"/></svg>`,
+      confidence: `<svg width="20" height="20" viewBox="0 0 48 48" fill="none"><defs><linearGradient id="lconf" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#22C55E"/><stop offset="100%" stop-color="#00FF88"/></linearGradient></defs><path d="M24 6l6 12h12l-10 8 4 14-12-8-12 8 4-14L6 18h12z" stroke="url(#lconf)" stroke-width="2" fill="url(#lconf)" fill-opacity=".1" stroke-linejoin="round"/></svg>`,
+      polarity: `<svg width="20" height="20" viewBox="0 0 48 48" fill="none"><defs><linearGradient id="lpol" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#A78BFA"/><stop offset="100%" stop-color="#00D9FF"/></linearGradient></defs><path d="M24 8L40 38H8z" stroke="url(#lpol)" stroke-width="2" fill="url(#lpol)" fill-opacity=".15"/><path d="M24 18v10M24 32v2" stroke="url(#lpol)" stroke-width="2" stroke-linecap="round"/></svg>`,
+      subjectivity: `<svg width="20" height="20" viewBox="0 0 48 48" fill="none"><defs><linearGradient id="lsub" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#FDE047"/><stop offset="100%" stop-color="#F59E0B"/></linearGradient></defs><circle cx="24" cy="24" r="16" stroke="url(#lsub)" stroke-width="2" fill="url(#lsub)" fill-opacity=".15"/><circle cx="24" cy="24" r="8" stroke="url(#lsub)" stroke-width="1.5"/><circle cx="24" cy="24" r="3" fill="url(#lsub)"/></svg>`,
+    }
+    //  3D Section icons ─────────────────────────────────────────────────────
+    const LI = {
+      input:   `<svg width="20" height="20" viewBox="0 0 48 48" fill="none" style="vertical-align:middle"><defs><linearGradient id="li1" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#00D9FF"/><stop offset="100%" stop-color="#A78BFA"/></linearGradient></defs><rect x="6" y="6" width="36" height="36" rx="6" stroke="url(#li1)" stroke-width="2" fill="url(#li1)" fill-opacity=".08"/><path d="M14 18h20M14 26h16M14 34h12" stroke="url(#li1)" stroke-width="2" stroke-linecap="round" opacity=".6"/></svg>`,
+      gauge:   `<svg width="20" height="20" viewBox="0 0 48 48" fill="none" style="vertical-align:middle"><defs><linearGradient id="li2" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#00D9FF"/><stop offset="100%" stop-color="#00FF88"/></linearGradient></defs><path d="M8 36a16 16 0 1 1 32 0" stroke="url(#li2)" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M24 36L24 22" stroke="url(#li2)" stroke-width="2.5" stroke-linecap="round"/><circle cx="24" cy="36" r="3" fill="url(#li2)"/></svg>`,
+      details: `<svg width="20" height="20" viewBox="0 0 48 48" fill="none" style="vertical-align:middle"><defs><linearGradient id="li3" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#00D9FF"/><stop offset="100%" stop-color="#A78BFA"/></linearGradient></defs><rect x="8" y="6" width="32" height="36" rx="4" stroke="url(#li3)" stroke-width="2" fill="url(#li3)" fill-opacity=".1"/><path d="M14 18h20M14 26h16M14 34h12" stroke="url(#li3)" stroke-width="2" stroke-linecap="round" opacity=".7"/></svg>`,
+      ai:      `<svg width="20" height="20" viewBox="0 0 48 48" fill="none" style="vertical-align:middle"><defs><linearGradient id="li4" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#A78BFA"/><stop offset="100%" stop-color="#00D9FF"/></linearGradient></defs><rect x="10" y="14" width="28" height="24" rx="6" stroke="url(#li4)" stroke-width="2" fill="url(#li4)" fill-opacity=".12"/><circle cx="19" cy="26" r="3" fill="url(#li4)" opacity=".7"/><circle cx="29" cy="26" r="3" fill="url(#li4)" opacity=".7"/><path d="M20 33h8" stroke="url(#li4)" stroke-width="2" stroke-linecap="round"/><path d="M24 14V8M18 8h12" stroke="url(#li4)" stroke-width="2" stroke-linecap="round"/></svg>`,
+      absa:    `<svg width="20" height="20" viewBox="0 0 48 48" fill="none" style="vertical-align:middle"><defs><linearGradient id="li5" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#00D9FF"/></linearGradient></defs><circle cx="24" cy="24" r="18" stroke="url(#li5)" stroke-width="2" fill="url(#li5)" fill-opacity=".06"/><circle cx="24" cy="24" r="10" stroke="url(#li5)" stroke-width="1.5" fill="none" opacity=".4"/><circle cx="24" cy="24" r="4" fill="url(#li5)" opacity=".8"/></svg>`,
+      lime:    `<svg width="20" height="20" viewBox="0 0 48 48" fill="none" style="vertical-align:middle"><defs><linearGradient id="li6" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#22C55E"/><stop offset="100%" stop-color="#A78BFA"/></linearGradient></defs><path d="M6 38l10-14 8 6 8-12 10-8" stroke="url(#li6)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="42" cy="10" r="3" fill="url(#li6)"/></svg>`,
+      sarcasm: `<svg width="20" height="20" viewBox="0 0 48 48" fill="none" style="vertical-align:middle"><defs><linearGradient id="li7" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stop-color="#F43F5E"/><stop offset="100%" stop-color="#A78BFA"/></linearGradient></defs><path d="M24 4L6 14v12c0 12 8 16 18 18 10-2 18-6 18-18V14L24 4z" stroke="url(#li7)" stroke-width="2" fill="url(#li7)" fill-opacity=".1"/><path d="M24 18v8M24 31v2" stroke="url(#li7)" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+    }
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Live Sentiment Analysis Report</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:40px;max-width:800px;margin:0 auto}
-.header{text-align:center;padding:30px 0;border-bottom:2px solid rgba(45,212,191,0.2);margin-bottom:30px}
-.header h1{font-size:32px;color:#2dd4bf;letter-spacing:-0.02em;margin-bottom:8px}
-.header p{color:#8b949e;font-size:14px}
-.header .tag{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(45,212,191,0.1);color:#2dd4bf;border:1px solid rgba(45,212,191,0.25);margin-top:8px}
-.section{background:#161b22;border:1px solid #21262d;border-radius:12px;padding:24px;margin-bottom:20px}
-.section h2{font-size:14px;color:#2dd4bf;margin-bottom:16px;text-align:center;text-transform:uppercase;letter-spacing:0.08em}
-.badge{display:inline-block;padding:6px 20px;border-radius:20px;font-size:14px;font-weight:700;text-transform:uppercase}
-.badge-positive{background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)}
-.badge-negative{background:rgba(244,63,94,0.15);color:#f43f5e;border:1px solid rgba(244,63,94,0.3)}
-.badge-neutral{background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
-.metric{text-align:center;padding:20px;background:#0d1117;border-radius:10px;border:1px solid #21262d}
-.metric .label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px}
-.metric .value{font-size:28px;font-weight:700;font-family:'Courier New',monospace;color:#e6edf3}
-.text-block{padding:20px;background:#0d1117;border-radius:10px;border:1px solid #21262d;font-size:14px;line-height:1.8;color:#e6edf3}
-.footer{text-align:center;padding:24px 0;color:#8b949e;font-size:11px;border-top:1px solid #21262d;margin-top:30px}
-.footer .brand{color:#2dd4bf;font-weight:600}
+@page{size:A4;margin:0}
+html,body{width:100%;min-height:100vh}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:36px 40px;width:100%}
+.header{text-align:center;padding:36px 0 28px;border-bottom:2px solid rgba(45,212,191,0.25);margin-bottom:30px}
+.header h1{font-size:34px;color:#2dd4bf;letter-spacing:-0.02em;margin-bottom:8px;font-weight:800}
+.header p{color:#8b949e;font-size:14px;margin-bottom:10px}
+.header .tag{display:inline-block;padding:5px 16px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(45,212,191,0.1);color:#2dd4bf;border:1px solid rgba(45,212,191,0.25);letter-spacing:.1em;text-transform:uppercase}
+.section{background:#161b22;border:1px solid #21262d;border-radius:16px;padding:24px 28px;margin-bottom:22px}
+.section-head{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:18px}
+.section-head h2{font-size:14px;color:#2dd4bf;text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin:0}
+.section-head-box{display:inline-flex;align-items:center;gap:10px;background:rgba(13,17,23,0.8);border:1px solid rgba(45,212,191,0.22);border-radius:14px;padding:8px 22px;box-shadow:0 0 16px rgba(0,217,255,0.08)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:26px}
+.kpi{text-align:center;padding:20px 16px;background:#161b22;border-radius:14px;border:1px solid #21262d}
+.kpi .label{font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+.kpi .value{font-size:26px;font-weight:800;font-family:'Courier New',monospace}
+.analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
+.a-card{background:#0f1419;border:1px solid #2a3441;border-radius:16px;padding:22px 24px}
+.a-card-title{font-size:12px;color:#2dd4bf;text-transform:uppercase;letter-spacing:.1em;font-weight:700;text-align:center;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{padding:10px;text-align:center;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#8b949e;border-bottom:2px solid #21262d;background:#0d1117}
+td{padding:9px 10px;text-align:center;border-bottom:1px solid rgba(33,38,45,.6);color:#e6edf3;vertical-align:middle}
+.badge-positive{background:rgba(34,197,94,.15);color:#22c55e;border:1px solid rgba(34,197,94,.3)}
+.badge-negative{background:rgba(244,63,94,.15);color:#f43f5e;border:1px solid rgba(244,63,94,.3)}
+.badge-neutral{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+.text-box{background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:16px;font-size:14px;line-height:1.8;color:#e6edf3}
+.gauge-track{background:#21262d;border-radius:8px;height:20px;overflow:hidden;margin:10px 0}
+.ai-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;line-height:1.7;justify-content:flex-start;text-align:left;width:100%}
+.ai-item:last-child{border-bottom:none}
+.footer{text-align:center;padding:22px 0;color:#8b949e;font-size:11px;border-top:1px solid #21262d;margin-top:26px}
+.footer .brand{color:#2dd4bf;font-weight:700;font-size:12px}
 </style></head><body>
-<div class="header"><h1>ReviewSense Analytics</h1><p>Live Sentiment Analysis Report</p><span class="tag">AI-POWERED</span></div>
-<div class="section"><h2>Input Review</h2><div class="text-block">${text}</div></div>
-<div class="section"><h2>Sentiment Result</h2>
-<div style="text-align:center;margin-bottom:16px"><span class="badge ${badgeCls}">${data.sentiment}</span></div>
-<div class="grid">
-<div class="metric"><div class="label">Confidence</div><div class="value">${data.confidence.toFixed(1)}%</div></div>
-<div class="metric"><div class="label">Polarity</div><div class="value">${data.polarity.toFixed(3)}</div></div>
-<div class="metric"><div class="label">Subjectivity</div><div class="value">${subjectivity.toFixed(3)}</div></div>
-</div></div>
-<div class="section"><h2>Analysis Details</h2><div style="text-align:center;line-height:2;font-size:13px">
-<p>🤖 Model: <strong>${data.model_used}</strong></p>
-<p>⚡ Processing Time: <strong>${data.processing_ms}ms</strong></p>
-<p>🔍 Sarcasm: <strong>${data.sarcasm?.detected ? 'Detected' : 'Not Detected'}</strong></p>
-</div></div>
-<div class="footer"><span class="brand">ReviewSense Analytics</span> — Generated ${new Date().toLocaleString()}</div></body></html>`
+
+<div class="header">
+  <div style="display:flex;justify-content:center;margin-bottom:14px">${LOGO}</div>
+  <h1 style="color:#2dd4bf;margin-bottom:8px">ReviewSense Analytics</h1>
+  <div class="section-head" style="margin-top:16px;margin-bottom:16px"><div class="section-head-box"><h2 style="font-size:14px">Live Sentiment Analysis Report</h2></div></div>
+  <span class="tag">AI-POWERED &middot; ${new Date().toLocaleDateString()}</span>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.sentiment}<h2>Sentiment</h2></div></div><div class="value" style="color:${badgeColor}">${data.sentiment.toUpperCase()}</div></div>
+  <div class="kpi"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.confidence}<h2>Confidence</h2></div></div><div class="value" style="color:#00D9FF">${data.confidence.toFixed(1)}%</div></div>
+  <div class="kpi"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.polarity}<h2>Polarity</h2></div></div><div class="value" style="color:${polarityColor}">${data.polarity.toFixed(3)}</div></div>
+  <div class="kpi"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.subjectivity}<h2>Subjectivity</h2></div></div><div class="value" style="color:#A78BFA">${subjectivity.toFixed(3)}</div></div>
+</div>
+
+<div class="section"><div class="section-head"><div class="section-head-box">${LI.input}<h2>Input Review</h2></div></div>
+  <div class="text-box" style="text-align:center">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+</div>
+
+<div class="analytics-grid">
+  <div class="a-card">
+    <div class="section-head"><div class="section-head-box">${LI.gauge}<h2>Polarity Gauge</h2></div></div>
+    <div style="text-align:center;padding:8px 0">
+      <div class="gauge-track"><div style="width:${polarityPct}%;height:100%;background:${polarityColor};border-radius:8px"></div></div>
+      <div style="font-size:13px;color:${polarityColor};font-weight:700;margin-top:8px">${data.polarity >= 0 ? 'Positive' : 'Negative'} Tone &middot; ${data.polarity.toFixed(3)}</div>
+    </div>
+  </div>
+  <div class="a-card">
+    <div class="section-head"><div class="section-head-box">${LI.details}<h2>Analysis Details</h2></div></div>
+    <div style="font-size:12px;line-height:2;text-align:center">
+      <div>Model: <strong>${data.model_used}</strong></div>
+      <div>Processing: <strong>${data.processing_ms}ms</strong></div>
+      ${data.sarcasm ? `<div>Sarcasm: <strong style="color:${data.sarcasm.detected ? '#f43f5e' : '#22c55e'}">${data.sarcasm.detected ? 'Detected' : 'Not Detected'}</strong></div>` : ''}
+    </div>
+  </div>
+</div>
+
+<div class="section"><div class="section-head"><div class="section-head-box">${LI.ai}<h2>AI Summary</h2></div></div>
+  <div class="ai-item"><span>${'&#129504;'}</span><span><strong>Sentiment:</strong> The review expresses a <strong>${data.sentiment}</strong> opinion with <strong>${data.confidence.toFixed(1)}%</strong> model confidence.</span></div>
+  <div class="ai-item"><span>${'&#9651;'}</span><span><strong>Polarity:</strong> Score of <strong>${data.polarity.toFixed(3)}</strong> indicates a ${data.polarity > 0.3 ? 'positive' : data.polarity < -0.3 ? 'negative' : 'balanced'} tone.</span></div>
+  <div class="ai-item"><span>${'&#9678;'}</span><span><strong>Subjectivity:</strong> At <strong>${subjectivity.toFixed(3)}</strong>, the text is ${subjectivity > 0.6 ? 'highly' : 'moderately'} subjective.</span></div>
+  <div class="ai-item"><span>${'&#11088;'}</span><span><strong>Reliability:</strong> Confidence is ${data.confidence > 85 ? 'high' : data.confidence > 60 ? 'moderate' : 'low'}, suggesting ${data.confidence > 85 ? 'trustworthy' : data.confidence > 60 ? 'moderate' : 'uncertain'} interpretation.</span></div>
+</div>
+
+${absaRows ? `
+<div class="section"><div class="section-head"><div class="section-head-box">${LI.absa}<h2>Aspect-Based Sentiment Analysis</h2></div></div>
+  <table><thead><tr><th>Aspect</th><th>Sentiment</th><th>Polarity</th></tr></thead>
+  <tbody>${absaRows}</tbody></table>
+</div>` : ''}
+
+${limeRows ? `
+<div class="section"><div class="section-head"><div class="section-head-box">${LI.lime}<h2>LIME Feature Contributions</h2></div></div>
+  <table><thead><tr><th>Word</th><th>Weight</th><th>Contribution</th></tr></thead>
+  <tbody>${limeRows}</tbody></table>
+</div>` : ''}
+
+${data.sarcasm ? `
+<div class="section" style="text-align:center"><div class="section-head"><div class="section-head-box">${LI.sarcasm}<h2>Sarcasm Detection</h2></div></div>
+  <div style="display:inline-block;padding:14px 28px;background:${data.sarcasm.detected ? 'rgba(244,63,94,0.08)' : 'rgba(34,197,94,0.08)'};border:1px solid ${data.sarcasm.detected ? 'rgba(244,63,94,0.25)' : 'rgba(34,197,94,0.2)'};border-radius:12px;margin:4px 0;text-align:center">
+    <div style="font-size:16px;font-weight:700;color:${data.sarcasm.detected ? '#f43f5e' : '#22c55e'};margin-bottom:6px">${data.sarcasm.detected ? '\u26a0\ufe0f Sarcasm Detected' : '\u2705 No Sarcasm Detected'}</div>
+    <div style="font-size:12px;color:#8b949e;text-align:center">${data.sarcasm.detected ? 'This review may contain ironic or sarcastic language.' : 'The model found no indicators of sarcasm.'}</div>
+  </div>
+</div>` : ''}
+
+<div class="footer"><span class="brand">ReviewSense Analytics</span> &mdash; Generated ${new Date().toLocaleString()}</div>
+</body></html>`
     const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob); const a = document.createElement('a')
     a.href = url; a.download = 'reviewsense-report.html'; a.click(); URL.revokeObjectURL(url)
@@ -399,10 +531,24 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
 
   const exportExcel = () => {
     if (!data) return
-    const headers = ['Sentiment','Confidence (%)','Polarity','Subjectivity','Model','Processing (ms)','Sarcasm','Review Text']
-    const row = [data.sentiment, data.confidence.toFixed(2), data.polarity.toFixed(4), subjectivity.toFixed(3), data.model_used, data.processing_ms, data.sarcasm?.detected ? 'Yes' : 'No', `"${text.replace(/"/g, '""')}"`]
-    const tsv = [headers.join('\t'), row.join('\t')].join('\n')
-    const blob = new Blob(['\uFEFF' + tsv], { type: 'application/vnd.ms-excel;charset=utf-8' })
+    const cell = (v: string | number) => `<Cell><Data ss:Type="String">${String(v).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]??c))}</Data></Cell>`
+    let xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Result"><Table>`
+    const mainHeaders = ['Sentiment','Confidence (%)','Polarity','Subjectivity','Model','Processing (ms)','Sarcasm','Review Text']
+    const mainRow = [data.sentiment, data.confidence.toFixed(2), data.polarity.toFixed(4), subjectivity.toFixed(3), data.model_used, data.processing_ms, data.sarcasm?.detected ? 'Yes' : 'No', text]
+    xml += `<Row>${mainHeaders.map(cell).join('')}</Row>`
+    xml += `<Row>${mainRow.map(cell).join('')}</Row>`
+    if (data.absa && data.absa.length > 0) {
+      xml += `</Table></Worksheet><Worksheet ss:Name="ABSA"><Table>`
+      xml += `<Row>${['Aspect','Sentiment','Polarity'].map(cell).join('')}</Row>`
+      data.absa.forEach(a => { xml += `<Row>${[a.aspect, a.sentiment, a.polarity.toFixed(4)].map(cell).join('')}</Row>` })
+    }
+    if (data.lime_features && data.lime_features.length > 0) {
+      xml += `</Table></Worksheet><Worksheet ss:Name="LIME"><Table>`
+      xml += `<Row>${['Word','Weight'].map(cell).join('')}</Row>`
+      data.lime_features.forEach(f => { xml += `<Row>${[f.word, f.weight.toFixed(4)].map(cell).join('')}</Row>` })
+    }
+    xml += `</Table></Worksheet></Workbook>`
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' })
     const url = URL.createObjectURL(blob); const a = document.createElement('a')
     a.href = url; a.download = 'reviewsense-result.xls'; a.click(); URL.revokeObjectURL(url)
   }
@@ -559,13 +705,29 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
       {data && (
         <div className="predict-results" style={{ marginTop: 'var(--space-6)' }}>
 
-          {/* ── SECTION 2 — Analysis Results (#6) ── */}
+          {/* ── SECTION 2 — Sentiment Result (#6) ── */}
           <div className="card animate-in animate-in--d1 card--animated">
-            <SectionHeader icon={<Icon3DChart size={22} />} title="Analysis Results" subtitle="AI-powered analysis output" />
+            <SectionHeader icon={<Icon3DChart size={22} />} title="Sentiment Result" subtitle="AI-powered analysis output" />
             {/* Sentiment badge — ABOVE the metrics */}
             <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-4) var(--space-4) 0' }}>
               <SentimentBadge sentiment={data.sentiment} confidence={data.confidence} size="lg" showConfidence={false} />
             </div>
+            {/* Low-confidence warning (when below sidebar threshold) */}
+            {data.confidence < confidenceThreshold * 100 && (
+              <div style={{
+                margin: 'var(--space-2) var(--space-4) 0',
+                padding: '7px 14px',
+                background: 'rgba(245,158,11,0.08)',
+                border: '1px solid rgba(245,158,11,0.25)',
+                borderRadius: '8px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                fontSize: 'var(--text-xs)', color: 'var(--color-neutral-sent)',
+                textAlign: 'center',
+              }}>
+                <span style={{ fontWeight: 700 }}>⚠ Low Confidence</span>
+                <span>Result confidence ({data.confidence.toFixed(1)}%) is below your threshold ({(confidenceThreshold * 100).toFixed(0)}%). Interpret with caution.</span>
+              </div>
+            )}
             {/* 3 metric sub-boxes — BELOW the badge */}
             <div style={{
               display: 'grid',
@@ -668,7 +830,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
               <span className="ai-tag ai-tag--instant">INSTANT</span>
             </div>
             <div className="ai-summary" style={{ textAlign: 'center' }}>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="sent3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00D9FF"/><stop offset="100%" stopColor="#00FF88"/></linearGradient></defs>
@@ -679,7 +841,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
                 </span>
                 <span><strong>Sentiment:</strong> The review expresses a <strong>{data.sentiment}</strong> opinion with <strong>{data.confidence.toFixed(1)}%</strong> model confidence.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="pol3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#00D9FF"/></linearGradient></defs>
@@ -689,7 +851,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
                 </span>
                 <span><strong>Polarity:</strong> Score of <strong>{data.polarity.toFixed(3)}</strong> indicates a {data.polarity > 0.3 ? 'positive' : data.polarity < -0.3 ? 'negative' : 'balanced'} tone.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="sub3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#FDE047"/><stop offset="100%" stopColor="#F59E0B"/></linearGradient></defs>
@@ -700,7 +862,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
                 </span>
                 <span><strong>Subjectivity:</strong> At <strong>{subjectivity.toFixed(3)}</strong>, the text is {subjectivity > 0.6 ? 'highly' : 'moderately'} subjective.</span>
               </div>
-              <div className="ai-summary__item" style={{ justifyContent: 'center' }}>
+              <div className="ai-summary__item" style={{ justifyContent: 'flex-start', textAlign: 'left' }}>
                 <span className="ai-summary__icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
                   <svg width="16" height="16" viewBox="0 0 48 48" style={icon3dStyle} fill="none">
                     <defs><linearGradient id="rel3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#00FF88"/></linearGradient></defs>
@@ -863,15 +1025,21 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
             <div style={{ padding: 'var(--space-4)', textAlign: 'center' }}>
               {feedbackSent ? (
                 <div style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                  padding: 'var(--space-3)',
-                  background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)',
-                  borderRadius: '10px',
+                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
+                  padding: '16px 32px',
+                  background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)',
+                  borderRadius: '12px', margin: '8px 0'
                 }}>
-                  <span style={{ fontSize: 'var(--text-lg)', color: 'var(--color-positive)' }}>✓</span>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-positive)', fontWeight: 600 }}>Thank you for your feedback!</span>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                    Corrected to: <strong>{selectedCorrection}</strong>
+                  <div style={{ marginBottom: '2px' }}>
+                    <svg width="28" height="28" viewBox="0 0 48 48" style={{ filter: 'drop-shadow(0 0 8px rgba(34,197,94,0.3))' }} fill="none">
+                      <defs><linearGradient id="feedback-ok" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#2DD4BF"/></linearGradient></defs>
+                      <circle cx="24" cy="24" r="18" stroke="url(#feedback-ok)" strokeWidth="2" fill="url(#feedback-ok)" fillOpacity=".1"/>
+                      <path d="M14 24l8 8 12-14" stroke="url(#feedback-ok)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <span style={{ fontSize: 'var(--text-base)', color: 'var(--color-positive)', fontWeight: 700 }}>Thank you for your feedback!</span>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)' }}>
+                    Corrected to: <strong>{selectedCorrection ? selectedCorrection.charAt(0).toUpperCase() + selectedCorrection.slice(1) : ''}</strong>
                   </span>
                 </div>
               ) : (
@@ -888,7 +1056,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#0d1117;color:#e6edf3;pa
                         style={{ minWidth: '100px', justifyContent: 'center' }}
                         onClick={async () => {
                           try {
-                            await fetch('http://localhost:8000/feedback/submit', {
+                            await fetch(`${import.meta.env.VITE_API_URL}/feedback/submit`, {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
