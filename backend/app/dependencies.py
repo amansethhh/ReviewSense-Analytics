@@ -1,4 +1,4 @@
-﻿# This is the ONLY place models are loaded.
+# This is the ONLY place models are loaded.
 # They are loaded ONCE at application startup via the
 # lifespan context manager in main.py.
 # All routes receive them via FastAPI Depends().
@@ -166,20 +166,14 @@ def _load_artifacts_fallback():
 
 
 def get_model() -> Any:
-    """FastAPI dependency — returns loaded model."""
+    """FastAPI dependency — returns loaded model lazily."""
     if not _models_loaded:
-        raise RuntimeError(
-            "Models not loaded. "
-            "Ensure load_artifacts() ran during startup."
-        )
+        load_artifacts()
     return _model
 
 
 def get_vectorizer() -> Any:
-    """FastAPI dependency — returns loaded vectorizer."""
+    """FastAPI dependency — returns loaded vectorizer lazily."""
     if not _models_loaded:
-        raise RuntimeError(
-            "Models not loaded. "
-            "Ensure load_artifacts() ran during startup."
-        )
+        load_artifacts()
     return _vectorizer

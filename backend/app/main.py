@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"   Root dir:  {settings.src_dir.parent}")
     logger.info(f"   Model dir: {settings.model_dir}")
     logger.info(f"   Src dir:   {settings.src_dir}")
-    load_artifacts()
+    # load_artifacts()  # MOVED: Now loads lazily on first request via dependencies.py
 
     # ── O1: Cold-start warmup ──────────────────────────────
     # WARMUP REMOVED: Render Free Tier (512MB RAM) will OOM
