@@ -1868,3 +1868,55 @@
     justify-content: flex-start !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════
+   BUG-6 FIX: Anti-flicker animation system
+   ═══════════════════════════════════════════════════════ */
+
+/* Animated entrance cards with will-change cleanup */
+.animated-card {
+  opacity: 0;
+  transform: translateY(20px) translateZ(0);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animated-card.animate-in {
+  opacity: 1;
+  transform: translateY(0) translateZ(0);
+}
+
+/* Hardware-accelerated compositing for animated elements */
+.animated-card,
+.chart-container,
+.result-panel {
+  -webkit-transform-style: preserve-3d;
+  transform-style: preserve-3d;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Chart containers — prevent re-render flicker */
+.chart-container canvas,
+.chart-container svg {
+  will-change: auto !important;
+  backface-visibility: hidden;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animated-card {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

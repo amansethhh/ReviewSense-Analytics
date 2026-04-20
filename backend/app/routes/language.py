@@ -7,6 +7,8 @@ FIX-1: Translation quality — two-tier fallback
        (Helsinki-NLP → googletrans) with quality validation.
 FIX-2: langdetect false positives — regex script pre-checks
        + adaptive confidence thresholds by text length.
+       BUG-2 FIX: Now uses centralized language_detection.py
+       for consistent CJK handling across all routes.
 FIX-3: Null prediction guard — 0.0 confidence flagged.
 FIX-4: Mixed sentiment post-processing for "but" clauses
        and double negatives.
@@ -38,6 +40,15 @@ from app.adaptive import (
 )
 from app.cache import prediction_cache
 from app.metrics_store import metrics_store
+
+# BUG-2 FIX: Import from centralized language detection module
+from app.utils.language_detection import (
+    detect_language_robust,
+    detect_script_unicode,
+    detect_hinglish,
+    is_confidently_english,
+    LANGUAGE_CODE_MAP as _CENTRAL_LANG_MAP,
+)
 
 router = APIRouter()
 logger = logging.getLogger("reviewsense.language")
@@ -87,133 +98,16 @@ _LANG_SUFFIX_RE = re.compile(
 
 def detect_language_adaptive(text: str) -> tuple:
     """
-    Adaptive language detection with regex pre-checks
-    and length-based confidence thresholds.
-
-    Returns (language_code, confidence).
-
-    Regex pre-checks catch script-specific languages with
-    100% accuracy (Devanagari, Arabic, Korean, etc.) before
-    falling through to langdetect for Latin-script languages.
+    BUG-2 FIX: Delegates to centralized detect_language_robust().
+    Returns (language_code, confidence) tuple for backward compat.
     """
-    if not text or len(text.strip()) < 2:
-        return ("unknown", 0.0)
-
-    text_clean = text.strip()
-
-    # ── Script-based detection (100% confidence) ──────────
-    # Unambiguous scripts bypass langdetect entirely.
-    if re.search(r'[\u0900-\u097f]', text_clean):
-        return ("hi", 1.0)  # Devanagari → Hindi
-
-    if re.search(r'[\u0980-\u09ff]', text_clean):
-        return ("bn", 1.0)  # Bengali
-
-    if re.search(r'[\u0b80-\u0bff]', text_clean):
-        return ("ta", 1.0)  # Tamil
-
-    if re.search(
-        r'[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff'
-        r'\ufb50-\ufdff\ufe70-\ufeff]',
-        text_clean,
-    ):
-        return ("ar", 1.0)  # Arabic
-
-    if re.search(r'[가-힣]', text_clean):
-        return ("ko", 1.0)  # Korean Hangul
-
-    if re.search(r'[ก-๙]', text_clean):
-        return ("th", 1.0)  # Thai
-
-    if re.search(r'[а-яА-ЯёЁ]', text_clean):
-        return ("ru", 1.0)  # Cyrillic → Russian
-
-    # BUG-2 FIX: Japanese MUST be detected BEFORE Chinese.
-    # Japanese uses Hiragana/Katakana mixed with CJK.
-    if re.search(r'[\u3040-\u309f\u30a0-\u30ff]', text_clean):
-        return ("ja", 1.0)  # Japanese kana (Hiragana or Katakana)
-
-    if re.search(r'[\u4e00-\u9fff]', text_clean):
-        # CJK unified — only Chinese if no Japanese kana markers
-        if not re.search(r'[\u3040-\u309f\u30a0-\u30ff]', text_clean):
-            return ("zh-cn", 0.95)
-
-    if re.search(r'[א-ת]', text_clean):
-        return ("he", 1.0)  # Hebrew
-
-    # L1: Polish character-based detection (before langdetect)
-    # BUG-2/8 FIX: Lower threshold to 1 for Polish diacritics detection
-    if len(set(text_clean) & _POLISH_CHARS) >= 1:
-        return ("pl", 1.0)
-
-    # ── Adaptive threshold based on text length ───────────
-    word_count = len(text_clean.split())
-    if word_count <= 3:
-        threshold = 0.70
-    elif word_count <= 8:
-        threshold = 0.85
-    else:
-        threshold = 0.92
-
-    # ── langdetect with threshold ─────────────────────────
-    try:
-        from langdetect import detect_langs, DetectorFactory
-        DetectorFactory.seed = 42  # L2: Deterministic detection
-        langs = detect_langs(text_clean)
-        if not langs:
-            return ("unknown", 0.0)
-
-        top_lang = langs[0]
-
-        # L2: Portuguese/Spanish disambiguation
-        if top_lang.lang == "es" and _PORTUGUESE_MARKERS.search(text_clean):
-            logger.debug("Portuguese markers found — overriding es → pt")
-            return ("pt", max(top_lang.prob, 0.85))
-
-        # L3/BUG-2 FIX: Reject unsupported/garbage language codes
-        # (e.g. "eu" for "European" which is not a valid ISO code)
-        if top_lang.lang not in _SUPPORTED_LANG_CODES:
-            logger.warning(
-                f"Unsupported lang code '{top_lang.lang}' — "
-                f"falling back to second-best or unknown"
-            )
-            if len(langs) > 1 and langs[1].lang in _SUPPORTED_LANG_CODES:
-                return (langs[1].lang, langs[1].prob)
-            return ("en", 0.0)  # Default to English, not unknown
-
-        # English requires higher check: non-ASCII ratio
-        if top_lang.lang == "en":
-            ascii_ratio = sum(
-                c.isascii() for c in text_clean
-            ) / max(len(text_clean), 1)
-            if ascii_ratio < 0.6:
-                # Probably not English — use second-best
-                if len(langs) > 1:
-                    return (langs[1].lang, langs[1].prob)
-                return ("unknown", 0.0)
-
-            if top_lang.prob >= threshold:
-                return ("en", top_lang.prob)
-            # Not confident enough — second-best if available
-            if len(langs) > 1 and langs[1].prob > 0.15:
-                return (langs[1].lang, langs[1].prob)
-            return ("en", top_lang.prob)
-        else:
-            return (top_lang.lang, top_lang.prob)
-
-    except Exception as e:
-        logger.warning(f"langdetect failed: {e}")
-        return ("unknown", 0.0)
+    result = detect_language_robust(text)
+    return (result["language"], result["confidence"])
 
 
 def _is_confidently_english(text: str) -> bool:
-    """
-    Returns True only if we are highly confident the text
-    is English. Uses detect_language_adaptive() which
-    includes regex pre-checks + confidence thresholds.
-    """
-    lang, confidence = detect_language_adaptive(text)
-    return lang == "en" and confidence >= 0.85
+    """Returns True only if highly confident the text is English."""
+    return is_confidently_english(text)
 
 
 # ══════════════════════════════════════════════════════════

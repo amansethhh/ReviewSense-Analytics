@@ -1,4 +1,4 @@
-﻿# CRITICAL DESIGN:
+# CRITICAL DESIGN:
 # Render free tier has a 30-second HTTP timeout.
 # A 1000-row CSV with full ML analysis takes minutes.
 # Solution: daemon Thread + in-memory job store + polling.
@@ -162,9 +162,13 @@ def _process_bulk_job(
     """
     try:
         from src.predict import predict_sentiment
+        # BUG-2 FIX: Use centralized language detection
+        from app.utils.language_detection import (
+            detect_language_robust,
+            LANGUAGE_CODE_MAP,
+        )
         from app.routes.language import (
             detect_language_adaptive,
-            LANGUAGE_CODE_MAP,
             _apply_sentiment_corrections,
         )
         from app.cache import pipeline_cache
