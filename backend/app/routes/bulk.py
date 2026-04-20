@@ -376,37 +376,11 @@ def _process_bulk_job(
             f"({len(batch_predictions)} predictions)"
         )
 
-        # 3C: TextBlob polarity (batch, lightweight)
-        try:
-            from textblob import TextBlob
-            _has_textblob = True
-        except ImportError:
-            _has_textblob = False
-
-        batch_polarities: list[float] = []
-        batch_subjectivities: list[float] = []
-        for pt in predict_texts:
-            if _has_textblob and pt != "empty":
-                try:
-                    blob = TextBlob(pt)
-                    batch_polarities.append(
-                        blob.sentiment.polarity
-                    )
-                    batch_subjectivities.append(
-                        blob.sentiment.subjectivity
-                    )
-                except Exception:
-                    batch_polarities.append(0.0)
-                    batch_subjectivities.append(0.0)
-            else:
-                batch_polarities.append(0.0)
-                batch_subjectivities.append(0.0)
-
-        # 3D: Per-row post-processing (NO model lock needed)
+        # 3C: Per-row polarity computed inside _postprocess_row
+        # (parallelized — was a serial O(n) blocking loop here)
         _update_progress_pct(job_id, 68.0)
 
-        results = [None] * total
-        processed_count = 0
+        completed = 0
 
         def _postprocess_row(
             row_idx: int,
@@ -457,7 +431,16 @@ def _process_bulk_job(
             confidence_pct = normalize_confidence(
                 raw_conf
             )
-            polarity_val = batch_polarities[row_idx]
+            # FIX-1: Compute TextBlob polarity per-row inside thread
+            # (was a serial pre-batch loop — now fully parallelized)
+            try:
+                from textblob import TextBlob as _TB
+                _blob = _TB(predict_text)
+                polarity_val = _blob.sentiment.polarity
+                subjectivity_val = _blob.sentiment.subjectivity
+            except Exception:
+                polarity_val = 0.0
+                subjectivity_val = 0.0
 
             # Apply sentiment corrections
             sentiment_raw, confidence_pct, polarity_val = (
@@ -493,9 +476,7 @@ def _process_bulk_job(
                 ),
                 "confidence": confidence_pct,
                 "polarity": polarity_val,
-                "subjectivity": float(
-                    batch_subjectivities[row_idx]
-                ),
+                "subjectivity": float(subjectivity_val),
                 "sarcasm_detected": sarcasm_detected,
                 "aspects": absa_list,
                 "detected_language": (
@@ -522,7 +503,7 @@ def _process_bulk_job(
             )
 
         # Execute post-processing in parallel
-        # (no model lock = true parallelism)
+        # FIX-4+5: Single lock per row; no redundant local results list
         from concurrent.futures import as_completed
 
         with ThreadPoolExecutor(
@@ -536,17 +517,15 @@ def _process_bulk_job(
                 for idx in range(total)
             }
 
-            completed = 0
             for future in as_completed(future_to_idx):
                 idx = future_to_idx[future]
                 try:
                     row_result = future.result(
                         timeout=_ROW_TIMEOUT_S
                     )
-                    results[idx] = row_result
                 except FuturesTimeoutError:
                     metrics_store.record_timeout()
-                    results[idx] = BulkRowResult(
+                    row_result = BulkRowResult(
                         row_index=all_indices[idx],
                         text=all_texts[idx][:500],
                         sentiment=SentimentLabel(
@@ -561,8 +540,8 @@ def _process_bulk_job(
                         ),
                         translation_method="timeout",
                     )
-                except Exception as e:
-                    results[idx] = BulkRowResult(
+                except Exception:
+                    row_result = BulkRowResult(
                         row_index=all_indices[idx],
                         text=all_texts[idx][:500],
                         sentiment=SentimentLabel(
@@ -574,95 +553,98 @@ def _process_bulk_job(
                     )
 
                 completed += 1
-                processed_count = completed
-
-                # Stream result for real-time panels
-                if results[idx] is not None:
-                    with _store_lock:
-                        if job_id in _job_store:
-                            _job_store[job_id][
-                                "results"
-                            ].append(
-                                results[idx].model_dump()
-                            )
-
-                    # Record metrics
-                    if (results[idx].sentiment.value
-                            != "unknown"):
-                        metrics_store.record_prediction(
-                            results[idx].sentiment.value,
-                            results[idx].detected_language,
-                        )
-
-                # Update progress (68% -> 100%)
-                _update_progress_pct(
-                    job_id,
-                    68.0 + (completed / total) * 32.0
+                row_dict = row_result.model_dump()
+                pct = 68.0 + (completed / total) * 32.0
+                should_log = (
+                    completed % 10 == 0
+                    or completed == total
                 )
 
-                # Log every 10 completions or final
-                if (completed % 10 == 0
-                        or completed == total):
-                    pct = int(
-                        (completed / total) * 100
-                    )
-                    _append_log(
-                        job_id,
-                        f"[{_ts()}] Phase 3: "
-                        f"{completed}/{total} "
-                        f"({pct}%) post-processed"
+                # FIX-4: Single lock acquire for append+progress+log
+                with _store_lock:
+                    if job_id in _job_store:
+                        _job_store[job_id][
+                            "results"
+                        ].append(row_dict)
+                        _job_store[job_id][
+                            "progress"
+                        ] = pct
+                        _job_store[job_id][
+                            "processed"
+                        ] = completed
+                        if should_log:
+                            log_pct = int(
+                                (completed / total) * 100
+                            )
+                            _job_store[job_id][
+                                "logs"
+                            ].append(
+                                f"[{_ts()}] Phase 3: "
+                                f"{completed}/{total} "
+                                f"({log_pct}%) post-processed"
+                            )
+
+                # Metrics outside lock (non-blocking)
+                if row_result.sentiment.value != "unknown":
+                    metrics_store.record_prediction(
+                        row_result.sentiment.value,
+                        row_result.detected_language,
                     )
 
+
         # ── Build summary ──────────────────────────────────
-        final_results = [
-            r for r in results if r is not None
-        ]
+        # FIX-5: Read from job store (no redundant local results list)
+        with _store_lock:
+            final_results = list(
+                _job_store[job_id].get("results", [])
+            )
+        n = len(final_results)
         sentiments = [
-            r.sentiment.value for r in final_results
+            r.get("sentiment", "neutral")
+            for r in final_results
         ]
         pos = sentiments.count("positive")
         neg = sentiments.count("negative")
         neu = sentiments.count("neutral")
 
         summary = {
-            "total_analyzed": len(final_results),
+            "total_analyzed": n,
             "positive": pos,
             "negative": neg,
             "neutral":  neu,
             "positive_pct": round(
-                pos / len(final_results) * 100, 1
-            ) if final_results else 0,
+                pos / n * 100, 1
+            ) if n else 0,
             "negative_pct": round(
-                neg / len(final_results) * 100, 1
-            ) if final_results else 0,
-            "neutral_pct":  round(
-                neu / len(final_results) * 100, 1
-            ) if final_results else 0,
+                neg / n * 100, 1
+            ) if n else 0,
+            "neutral_pct": round(
+                neu / n * 100, 1
+            ) if n else 0,
             "sarcasm_count": sum(
                 1 for r in final_results
-                if r.sarcasm_detected
+                if r.get("sarcasm_detected")
             ),
         }
 
         _append_log(
             job_id,
             f"[{_ts()}] Analysis complete -- "
-            f"{len(final_results)} reviews processed"
+            f"{n} reviews processed"
         )
 
         with _store_lock:
             _job_store[job_id].update({
                 "status":    BulkJobStatus.completed,
                 "progress":  100.0,
-                "processed": len(final_results),
-                "results":   [r.model_dump()
-                              for r in final_results],
+                "processed": n,
+                # results already accumulated as dicts in job store
                 "summary":   summary,
                 "phase":     "done",
             })
         logger.info(
             f"Job {job_id[:8]} complete: "
-            f"{len(final_results)} rows processed"
+            f"{n} rows processed"
         )
 
     except Exception as e:
@@ -885,11 +867,26 @@ async def get_bulk_status(job_id: str):
         # serialization
         job["logs"] = list(job.get("logs", []))
 
-    # Return results during both processing AND completed
-    # so the frontend panels update in real-time
+    # FIX-2: Cap results payload during processing to prevent 500ms poll
+    # from sending growing MB-sized JSON arrays. Full results only at completion.
+    all_results = job.get("results") or []
+    status_val  = job.get("status")
+    is_done = status_val in (
+        BulkJobStatus.completed,
+        BulkJobStatus.completed.value,
+        "completed",
+    )
+    if is_done:
+        streamed_results = all_results if all_results else None
+    elif all_results:
+        # Send only last 50 rows during processing (live panels only need recent data)
+        streamed_results = all_results[-50:]
+    else:
+        streamed_results = None
+
     return BulkJobResult(**{
         **job,
-        "results": job["results"] if job["results"] else None,
+        "results": streamed_results,
     })
 
 

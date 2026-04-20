@@ -457,7 +457,8 @@ export function BulkAnalysisPage() {
 
   // Compute keywords from results
   const topKeywords = useMemo(() => {
-    if (!result?.results) return []
+    // FIX-3: Only compute heavy O(n) loop after analysis completes
+    if (!result?.results || result.status !== 'completed') return []
     const wordCounts: Record<string, { positive: number; negative: number }> = {}
     result.results.forEach(r => {
       r.text.split(/\s+/).forEach(w => {
@@ -473,11 +474,12 @@ export function BulkAnalysisPage() {
       .map(([word, counts]) => ({ word, ...counts }))
       .sort((a, b) => (b.positive + b.negative) - (a.positive + a.negative))
       .slice(0, 10)
-  }, [result?.results])
+  }, [result?.results, result?.status])
 
   // Compute trend from results batches
   const trendData = useMemo(() => {
-    if (!result?.results || result.results.length < 5) return undefined
+    // FIX-3: Only compute after completion — was running O(n) every 500ms
+    if (!result?.results || result.status !== 'completed' || result.results.length < 5) return undefined
     const batchSize = Math.max(1, Math.floor(result.results.length / 6))
     const batches = []
     for (let i = 0; i < result.results.length; i += batchSize) {
@@ -491,11 +493,12 @@ export function BulkAnalysisPage() {
       })
     }
     return batches.slice(0, 6)
-  }, [result?.results])
+  }, [result?.results, result?.status])
 
   // Aggregate ABSA data from all bulk rows for the bulk ABSA overview
   const topAbsaAspects = useMemo(() => {
-    if (!result?.results) return []
+    // FIX-3: Only compute after completion — was running O(n) every 500ms
+    if (!result?.results || result.status !== 'completed') return []
     const aspectMap: Record<string, { count: number; positive: number; negative: number; neutral: number; totalPolarity: number }> = {}
     result.results.forEach(row => {
       if (!row.aspects) return
@@ -526,7 +529,7 @@ export function BulkAnalysisPage() {
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
-  }, [result?.results])
+  }, [result?.results, result?.status])
 
   const exportCSV = useCallback(() => {
     if (!result?.results || result.results.length === 0) { showToast('error', 'No results to export'); return }

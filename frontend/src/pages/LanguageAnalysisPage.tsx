@@ -728,7 +728,8 @@ export function LanguageAnalysisPage() {
   }, [bulk, resetBatch])
 
   const bTopKeywords = useMemo(() => {
-    if (!bResult?.results) return []
+    // FIX-3: Only compute heavy O(n) loop after analysis completes
+    if (!bResult?.results || bResult.status !== 'completed') return []
     const wordCounts: Record<string, { positive: number; negative: number }> = {}
     bResult.results.forEach(r => {
       r.text.split(/\s+/).forEach(w => {
@@ -744,11 +745,12 @@ export function LanguageAnalysisPage() {
       .map(([word, counts]) => ({ word, ...counts }))
       .sort((a, b) => (b.positive + b.negative) - (a.positive + a.negative))
       .slice(0, 10)
-  }, [bResult?.results])
+  }, [bResult?.results, bResult?.status])
 
   // Compute batch-based trend data from bulk results (mirrors BulkAnalysisPage logic)
   const bTrendData = useMemo(() => {
-    if (!bResult?.results || bResult.results.length < 5) return undefined
+    // FIX-3: Only compute after completion — was running O(n) every 500ms
+    if (!bResult?.results || bResult.status !== 'completed' || bResult.results.length < 5) return undefined
     const batchSize = Math.max(1, Math.floor(bResult.results.length / 6))
     const batches = []
     for (let i = 0; i < bResult.results.length; i += batchSize) {
@@ -762,11 +764,12 @@ export function LanguageAnalysisPage() {
       })
     }
     return batches.slice(0, 6)
-  }, [bResult?.results])
+  }, [bResult?.results, bResult?.status])
 
   // Build language distribution data for bar chart using real server-detected language
   const bLangDistData = useMemo(() => {
-    if (!bResult?.results) return []
+    // FIX-3: Only compute after completion (language dist doesn't change during processing)
+    if (!bResult?.results || bResult.status !== 'completed') return []
     const counts: Record<string, number> = {}
     bResult.results.forEach(r => {
       // Use backend-detected language; fall back to 'Unknown' only if missing
@@ -781,14 +784,15 @@ export function LanguageAnalysisPage() {
         percentage: Math.round((count / total) * 100),
       }))
       .sort((a, b) => b.count - a.count)
-  }, [bResult?.results])
+  }, [bResult?.results, bResult?.status])
 
   // Derive language count from the distribution data (same source of truth)
   const bLanguageCount = bLangDistData.length
 
   // Aggregate ABSA aspects from all batch rows (mirrors BulkAnalysisPage)
   const bTopAbsaAspects = useMemo(() => {
-    if (!bResult?.results) return []
+    // FIX-3: Only compute after completion — was running O(n) every 500ms
+    if (!bResult?.results || bResult.status !== 'completed') return []
     const aspectMap: Record<string, { count: number; positive: number; negative: number; neutral: number; totalPolarity: number }> = {}
     bResult.results.forEach(row => {
       if (!row.aspects) return
@@ -819,7 +823,7 @@ export function LanguageAnalysisPage() {
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
-  }, [bResult?.results])
+  }, [bResult?.results, bResult?.status])
 
   // Compute single analysis values
   const subjectivity = useMemo(() => {
