@@ -169,7 +169,7 @@ def _apply_post_processing(text: str, sentiment: dict) -> dict:
         temp_probs = apply_temperature_scaling(scores)
         temp_confidence = temp_probs[pred_class]
         confidence = min(confidence, temp_confidence)
-        confidence = max(confidence, 0.40)
+        confidence = max(confidence, 0.30)  # C2 FIX: aligned with predict.py
         confidence = round(confidence, 4)
         temperature_scaled = True
 

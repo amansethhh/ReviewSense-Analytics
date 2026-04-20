@@ -91,10 +91,15 @@ analyze_clicked = st.button("⚡  Analyze Sentiment", use_container_width=True, 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
 # ━━━ SESSION STATE ━━━
-if "live_result" not in st.session_state:
-    st.session_state.live_result = None
-if "live_review_analyzed" not in st.session_state:
-    st.session_state.live_review_analyzed = ""
+for _ss_key, _ss_default in [
+    ("live_result", None),
+    ("live_review_analyzed", ""),
+    ("live_lime_weights", None),
+    ("live_lime_html", ""),
+    ("live_absa_df", None),
+]:
+    if _ss_key not in st.session_state:
+        st.session_state[_ss_key] = _ss_default
 
 # ━━━ RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -132,9 +137,29 @@ if analyze_clicked:
     status_ph.empty()
     progress_ph.empty()
 
-    # Store in session state — survives rerenders
+    # RT-2: Eagerly compute LIME + ABSA and cache in session state
+    _lime_weights = None
+    _lime_html = ""
+    try:
+        from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
+        _lime_weights = explain_prediction(review_text, num_features=6)
+        _lime_html = highlight_text_html(review_text, _lime_weights)
+    except Exception:
+        pass
+
+    _absa_df = None
+    try:
+        from src.absa import get_aspect_dataframe  # noqa: E402
+        _absa_df = get_aspect_dataframe(review_text)
+    except Exception:
+        pass
+
+    # Store ALL results in session state — survives rerenders
     st.session_state.live_result = result
     st.session_state.live_review_analyzed = review_text
+    st.session_state.live_lime_weights = _lime_weights
+    st.session_state.live_lime_html = _lime_html
+    st.session_state.live_absa_df = _absa_df
 
 # ━━━ RENDER FROM SESSION STATE (anti-flicker) ━━━
 
@@ -262,70 +287,59 @@ with st.container():
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── RT-2: Stage 2 — LIME (slower — show skeleton while computing) ─────
-lime_placeholder = st.empty()
-with lime_placeholder.container():
-    with st.container():
-        st.markdown("""
-        <div class="glass-card-header">
-          <div class="section-title">🔍 LIME Explanation</div>
-          <div class="section-subtitle">Local Interpretable Model Explanations · Cached for speed</div>
-        </div>
-        """, unsafe_allow_html=True)
+# ── RT-2: Stage 2 — LIME (from session state — no recompute on rerun) ─────
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">🔍 LIME Explanation</div>
+      <div class="section-subtitle">Local Interpretable Model Explanations · Cached for speed</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        try:
-            from src.lime_explainer import explain_prediction, highlight_text_html  # noqa: E402
-            import plotly.graph_objects as go  # noqa: E402
+    word_weights = st.session_state.live_lime_weights
+    lime_html = st.session_state.live_lime_html
 
-            with st.spinner("Generating LIME explanation..."):
-                word_weights = explain_prediction(review_text_display, num_features=6)
+    if lime_html:
+        st.markdown(lime_html, unsafe_allow_html=True)
 
-            highlighted = highlight_text_html(review_text_display, word_weights)
-            st.markdown(highlighted, unsafe_allow_html=True)
+    if word_weights:
+        import plotly.graph_objects as go  # noqa: E402
+        words = [w for w, _ in word_weights]
+        weights = [v for _, v in word_weights]
+        colors = [POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR for v in weights]
+        fig = go.Figure(go.Bar(x=weights, y=words, orientation="h", marker_color=colors))
+        apply_theme(fig, title="Top Feature Contributions", height=350, margin=dict(l=120))
+        fig.update_layout(xaxis_title="← Negative | Positive →", yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig, use_container_width=True, key="lime_bar")
+    elif word_weights is None:
+        st.info("LIME explanation unavailable for this text.")
 
-            if word_weights:
-                words = [w for w, _ in word_weights]
-                weights = [v for _, v in word_weights]
-                colors = [POSITIVE_COLOR if v >= 0 else NEGATIVE_COLOR for v in weights]
-                fig = go.Figure(go.Bar(x=weights, y=words, orientation="h", marker_color=colors))
-                apply_theme(fig, title="Top Feature Contributions", height=350, margin=dict(l=120))
-                fig.update_layout(xaxis_title="← Negative | Positive →", yaxis=dict(autorange="reversed"))
-                st.plotly_chart(fig, use_container_width=True, key="lime_bar")
-        except Exception as e:
-            st.info(f"LIME explanation unavailable: {e}")
-
-        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
-# ── RT-2: Stage 3 — ABSA ─────────────────────────────────
-absa_placeholder = st.empty()
-with absa_placeholder.container():
-    with st.container():
-        st.markdown("""
-        <div class="glass-card-header">
-          <div class="section-title">🔬 Aspect-Based Sentiment Analysis</div>
-          <div class="section-subtitle">Token-level aspect extraction and polarity scoring</div>
-        </div>
-        """, unsafe_allow_html=True)
+# ── RT-2: Stage 3 — ABSA (from session state — no recompute on rerun) ────
+with st.container():
+    st.markdown("""
+    <div class="glass-card-header">
+      <div class="section-title">🔬 Aspect-Based Sentiment Analysis</div>
+      <div class="section-subtitle">Token-level aspect extraction and polarity scoring</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        try:
-            from src.absa import get_aspect_dataframe  # noqa: E402
-            import plotly.graph_objects as go  # noqa: E402
-            aspect_df = get_aspect_dataframe(review_text_display)
-            if aspect_df is None or aspect_df.empty:
-                st.info("No distinct aspects detected in this review.")
-            else:
-                st.dataframe(aspect_df, use_container_width=True)
-                colors = [POSITIVE_COLOR if p > 0.1 else NEGATIVE_COLOR if p < -0.1 else NEUTRAL_COLOR for p in aspect_df["Polarity"]]
-                fig = go.Figure(go.Bar(x=aspect_df["Polarity"], y=aspect_df["Aspect"], orientation="h", marker_color=colors))
-                apply_theme(fig, title="Aspect Polarity", height=max(300, len(aspect_df)*40), margin=dict(l=180))
-                fig.update_layout(xaxis_title="Polarity", yaxis=dict(autorange="reversed"))
-                st.plotly_chart(fig, use_container_width=True, key="absa_bar")
-        except Exception as e:
-            st.info(f"Aspect analysis unavailable: {e}")
+    aspect_df = st.session_state.live_absa_df
+    if aspect_df is None or (hasattr(aspect_df, 'empty') and aspect_df.empty):
+        st.info("No distinct aspects detected in this review.")
+    else:
+        import plotly.graph_objects as go  # noqa: E402
+        st.dataframe(aspect_df, use_container_width=True)
+        colors = [POSITIVE_COLOR if p > 0.1 else NEGATIVE_COLOR if p < -0.1 else NEUTRAL_COLOR for p in aspect_df["Polarity"]]
+        fig = go.Figure(go.Bar(x=aspect_df["Polarity"], y=aspect_df["Aspect"], orientation="h", marker_color=colors))
+        apply_theme(fig, title="Aspect Polarity", height=max(300, len(aspect_df)*40), margin=dict(l=180))
+        fig.update_layout(xaxis_title="Polarity", yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig, use_container_width=True, key="absa_bar")
 
-        st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-bottom-border"></div>', unsafe_allow_html=True)
 
 st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
 
