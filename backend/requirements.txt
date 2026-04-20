@@ -14,6 +14,7 @@ httpx==0.28.1
 torch==2.10.0+cpu
 transformers==4.57.6
 sentencepiece==0.2.1
+protobuf>=4.0.0
 numpy==1.26.4
 safetensors==0.7.0
 huggingface_hub==0.36.2
@@ -23,6 +24,7 @@ scikit-learn
 joblib
 nltk
 textblob
+vaderSentiment>=3.3.2
 datasets
 lime
 spacy

@@ -1581,12 +1581,12 @@ export function LanguageAnalysisPage() {
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '190px 1fr 190px',
-                gridTemplateRows: '152px 152px',
+                gridTemplateRows: 'auto auto',
                 gap: '12px',
               }}>
 
                 {/* ── TOP-LEFT: Live Stats ── */}
-                <CyberCard style={{ gridColumn: 1, gridRow: 1 }}>
+                <CyberCard style={{ gridColumn: 1, gridRow: 1, height: '152px' }}>
                   <PanelBadge icon={<Icon3DPulse />} label="Live Stats"
                     bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1, justifyContent: 'center' }}>
@@ -1606,7 +1606,7 @@ export function LanguageAnalysisPage() {
                 </CyberCard>
 
                 {/* ── TOP-RIGHT: Sentiment ── */}
-                <CyberCard style={{ gridColumn: 3, gridRow: 1 }}>
+                <CyberCard style={{ gridColumn: 3, gridRow: 1, height: '152px' }}>
                   <PanelBadge icon={<Icon3DSentimentPie />} label="Sentiment"
                     bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center' }}>
@@ -1677,7 +1677,7 @@ export function LanguageAnalysisPage() {
                 </CyberCard>
 
                 {/* ── BOTTOM-LEFT: Config ── */}
-                <CyberCard style={{ gridColumn: 1, gridRow: 2, opacity: 0.85 }}>
+                <CyberCard style={{ gridColumn: 1, gridRow: 2, height: '152px', opacity: 0.85 }}>
                   <PanelBadge icon={<Icon3DGearPanel />} label="Config"
                     bg="rgba(167,139,250,0.06)" border="rgba(167,139,250,0.18)" color="#a78bfa" />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
@@ -1698,7 +1698,7 @@ export function LanguageAnalysisPage() {
                 </CyberCard>
 
                 {/* ── BOTTOM-RIGHT: Languages ── */}
-                <CyberCard style={{ gridColumn: 3, gridRow: 2, opacity: 0.85 }}>
+                <CyberCard style={{ gridColumn: 3, gridRow: 2, height: '152px', opacity: 0.85 }}>
                   <PanelBadge icon={<Icon3DGlobePanel />} label="Languages"
                     bg="rgba(244,63,94,0.06)" border="rgba(244,63,94,0.18)" color="#f43f5e" />
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -1746,8 +1746,8 @@ export function LanguageAnalysisPage() {
                 <div style={{
                   gridColumn: 2, gridRow: '1 / 3',
                   display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'flex-start',
-                  gap: '8px', paddingTop: '8px',
+                  alignItems: 'center', justifyContent: 'center',
+                  gap: '6px',
                 }}>
                   {/* CyberLoader — negative margins reduce its visual footprint */}
                   <div style={{ margin: '-55px 0 -18px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

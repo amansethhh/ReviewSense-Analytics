@@ -391,27 +391,33 @@ def _process_bulk_job(
         )
 
         # 3A: Prepare texts for batch inference
+        # CRITICAL: Classify on ORIGINAL text, not translated.
+        # Translation is for display only. The XLM model handles
+        # non-Latin scripts natively.
         predict_texts: list[str] = []
+        predict_lang_codes: list[str] = []
         for idx in range(total):
             if not valid_mask[idx]:
                 predict_texts.append("empty")
-            elif was_translated[idx]:
-                predict_texts.append(
-                    translated_texts[idx] or "empty"
-                )
             else:
                 predict_texts.append(
                     all_texts[idx] or "empty"
                 )
+            predict_lang_codes.append(
+                detected_langs[idx]
+            )
 
-        # 3B: Run BATCH sentiment (NO per-row lock needed)
+        # 3B: Run BATCH sentiment with language routing
+        # (XLM-RoBERTa for non-Latin, English RoBERTa for Latin)
         from src.models.sentiment import (
             predict_batch as _sentiment_batch,
         )
         _update_progress_pct(job_id, 42.0)
 
         batch_predictions = _sentiment_batch(
-            predict_texts, batch_size=32
+            predict_texts,
+            lang_codes=predict_lang_codes,
+            batch_size=32,
         )
 
         _update_progress_pct(job_id, 65.0)
@@ -476,15 +482,19 @@ def _process_bulk_job(
             confidence_pct = normalize_confidence(
                 raw_conf
             )
-            # FIX-1: Compute TextBlob polarity per-row inside thread
-            # (was a serial pre-batch loop — now fully parallelized)
+            # FIX-2: VADER + TextBlob dual polarity
             try:
-                from textblob import TextBlob as _TB
-                _blob = _TB(predict_text)
-                polarity_val = _blob.sentiment.polarity
-                subjectivity_val = _blob.sentiment.subjectivity
+                from src.predict import (
+                    compute_dual_polarity,
+                )
+                polarity_val, vader_compound, subjectivity_val = (
+                    compute_dual_polarity(
+                        predict_text, lang_code
+                    )
+                )
             except Exception:
                 polarity_val = 0.0
+                vader_compound = 0.0
                 subjectivity_val = 0.0
 
             # Apply sentiment corrections

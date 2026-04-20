@@ -531,8 +531,17 @@ def detect_translate_and_predict_sync(
     metrics_store.record_cache_miss()
 
     # ── Prediction ────────────────────────────────────────
+    # FIX-1 (V2): Route to XLM model for non-Latin scripts.
+    # The XLM model classifies on ORIGINAL text natively.
+    # Only fall back to translated English for Latin-script languages.
+    from src.models.sentiment import XLM_LANGUAGES
+    lc_short = (language_code or "en").lower().strip()[:2]
     try:
-        if multilingual and was_translated:
+        if lc_short in XLM_LANGUAGES:
+            # Non-Latin: classify on original text with XLM model
+            pred = predict_sentiment(
+                original_text, lc_short)
+        elif multilingual and was_translated:
             pred = predict_sentiment(
                 english_text, model_choice)
         else:

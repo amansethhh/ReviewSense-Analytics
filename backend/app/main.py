@@ -65,9 +65,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"   Src dir:   {settings.src_dir}")
     # load_artifacts()  # MOVED: Now loads lazily on first request via dependencies.py
 
-    # ── O1: Cold-start warmup ──────────────────────────────
-    # Models load lazily on first request — no warmup needed locally.
-    logger.info("[WARMUP] Skipped — models load lazily on first request")
+    # ── O1: Model pre-warming ──────────────────────────────
+    # FIX-5: Pre-load both sentiment models at startup
+    # (English RoBERTa + XLM-RoBERTa multilingual)
+    # This eliminates 1-4s cold-start on first request.
+    try:
+        load_artifacts()  # classical model/vectorizer
+        from src.models.sentiment import load_all_models
+        load_all_models()
+        logger.info("[WARMUP] ✅ Both sentiment models pre-loaded")
+    except Exception as e:
+        logger.warning(f"[WARMUP] Model pre-warm failed (will load lazily): {e}")
 
     # ── GAP 3-E: Pre-warm Google probe cache ───────────────
     try:
