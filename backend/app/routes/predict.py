@@ -26,7 +26,7 @@ logger = logging.getLogger("reviewsense.predict")
 add_src_to_path()
 
 # Phase 2, Part 4: Inference timeout (seconds)
-_INFERENCE_TIMEOUT_S: float = 120.0
+_INFERENCE_TIMEOUT_S: float = 8.0
 
 
 def _run_prediction(text: str, model_choice: str,

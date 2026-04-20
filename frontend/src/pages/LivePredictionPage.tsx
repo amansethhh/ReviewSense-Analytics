@@ -303,7 +303,7 @@ export function LivePredictionPage() {
       })
     } catch {
       // 504 / 503 — server under bulk load
-      setServerError('The AI model is warming up (first request takes ~60s on free tier). Please wait and try again.')
+      setServerError('Server is under load. Please wait a moment and try again.')
     }
   }
 

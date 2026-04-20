@@ -66,20 +66,8 @@ async def lifespan(app: FastAPI):
     # load_artifacts()  # MOVED: Now loads lazily on first request via dependencies.py
 
     # ── O1: Cold-start warmup ──────────────────────────────
-    async def warmup_model():
-        try:
-            # import and run a dummy inference to load model into memory
-            await asyncio.sleep(2)  # let server fully start first
-            # call the sentiment pipeline with a dummy text
-            logger.info("[WARMUP] Starting background model warmup...")
-            # trigger the lazy loader
-            from app.dependencies import get_model
-            get_model()
-            logger.info("[WARMUP] Model warmed up successfully")
-        except Exception as e:
-            logger.warning(f"[WARMUP] Failed: {e}")
-            
-    asyncio.create_task(warmup_model())
+    # Models load lazily on first request — no warmup needed locally.
+    logger.info("[WARMUP] Skipped — models load lazily on first request")
 
     # ── GAP 3-E: Pre-warm Google probe cache ───────────────
     try:
@@ -139,7 +127,6 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
-        "https://reviewsense-frontend.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -257,15 +244,3 @@ async def root():
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "healthy"}
-
-
-@app.get("/model/status", tags=["Health"])
-async def model_status():
-    try:
-        from app.dependencies import _models_loaded
-        return {
-            "loaded": _models_loaded,
-            "status": "ready" if _models_loaded else "loading"
-        }
-    except Exception:
-        return {"loaded": False, "status": "unknown"}
