@@ -6,9 +6,8 @@ import { NeuralButton } from '@/components/ui/NeuralButton'
 import { EyebrowPill } from '@/components/ui/EyebrowPill'
 import { HoloToggle } from '@/components/ui/HoloToggle'
 import { FolderUpload } from '@/components/ui/FolderUpload'
-import { CyberLoader } from '@/components/ui/CyberLoader'
-import { CyberCard } from '@/components/ui/CyberCard'
 import { SentimentPieChart } from '@/components/charts/SentimentPieChart'
+import { AnalysisLayout } from '@/components/layout/AnalysisLayout'
 import { TopKeywordsChart } from '@/components/charts/TopKeywordsChart'
 import { SentimentTrendChart } from '@/components/charts/SentimentTrendChart'
 import { useBulk } from '@/hooks/useBulk'
@@ -82,60 +81,6 @@ function Icon3DGearSettings({ size = 22 }: { size?: number }) {
   )
 }
 
-function Icon3DPulse({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
-      <defs><linearGradient id="pls3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#00D9FF"/><stop offset="100%" stopColor="#2dd4bf"/></linearGradient></defs>
-      <circle cx="24" cy="24" r="18" stroke="url(#pls3d)" strokeWidth="1.5" fill="url(#pls3d)" fillOpacity=".08" />
-      <path d="M8 24h8l4-12 4 24 4-12 4 6 4-6h8" stroke="url(#pls3d)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-
-
-function Icon3DSentimentPie({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
-      <defs><linearGradient id="spie3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#22C55E"/><stop offset="100%" stopColor="#F59E0B"/></linearGradient></defs>
-      <circle cx="24" cy="24" r="18" stroke="url(#spie3d)" strokeWidth="2" fill="url(#spie3d)" fillOpacity=".08" />
-      <path d="M24 6v18l14 10" stroke="url(#spie3d)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M24 24L10 14" stroke="url(#spie3d)" strokeWidth="1.5" strokeLinecap="round" opacity=".5" />
-    </svg>
-  )
-}
-
-function Icon3DGearPanel({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" style={icon3dStyle} fill="none">
-      <defs><linearGradient id="gp3d" x1="0" y1="0" x2="48" y2="48"><stop offset="0%" stopColor="#A78BFA"/><stop offset="100%" stopColor="#818cf8"/></linearGradient></defs>
-      <path d="M24 16a8 8 0 100 16 8 8 0 000-16z" stroke="url(#gp3d)" strokeWidth="2" fill="url(#gp3d)" fillOpacity=".15" />
-      <path d="M24 4v6M24 38v6M4 24h6M38 24h6M9.9 9.9l4.2 4.2M33.9 33.9l4.2 4.2M38.1 9.9l-4.2 4.2M14.1 33.9l-4.2 4.2" stroke="url(#gp3d)" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-/** Styled sub-box panel header with icon + title */
-function PanelBadge({ icon, label, bg, border, color }: {
-  icon: React.ReactNode, label: string,
-  bg: string, border: string, color: string,
-}) {
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: '7px', alignSelf: 'center',
-      background: bg, border: `1px solid ${border}`,
-      borderRadius: '10px', padding: '5px 14px',
-      marginBottom: '10px',
-    }}>
-      {icon}
-      <span style={{
-        fontSize: '10px', fontWeight: 700,
-        textTransform: 'uppercase', letterSpacing: '0.08em',
-        color,
-      }}>{label}</span>
-    </div>
-  )
-}
 
 
 function Icon3DResults({ size = 22 }: { size?: number }) {
@@ -782,24 +727,20 @@ export function BulkAnalysisPage() {
         </div>
       ))}
 
-      {/* STATE 3: PROCESSING — 2×2 corner grid + centered loader */}
+      {/* STATE 3: PROCESSING — Uses shared AnalysisLayout */}
       {stage === 'processing' && (() => {
-        // ── Live stats from streaming results (updates every 250ms poll) ──
         const rows = result?.results ?? []
         const processed = result?.processed ?? 0
         const total = result?.total_rows ?? 0
-        // Use server-provided exact progress percentage which accounts for all 3 phases
         const progressPct = result?.progress ? Math.round(result.progress) : (total > 0 ? Math.round((processed / total) * 100) : 0)
         const speed = elapsed > 0 ? (processed / elapsed).toFixed(1) : '0.0'
-        const avgConf = rows.length > 0 ? (rows.reduce((s, r) => s + r.confidence, 0) / rows.length).toFixed(1) : '—'
-        const errorCount = rows.filter(r => r.sentiment === 'error' || r.sentiment === 'unknown').length
+        const avgConf = rows.length > 0 ? (rows.reduce((s: number, r: any) => s + r.confidence, 0) / rows.length).toFixed(1) : '\u2014'
+        const errorCount = rows.filter((r: any) => r.sentiment === 'error' || r.sentiment === 'unknown').length
 
-        // ── Live sentiment distribution — use server-provided cumulative counts
-        // (NOT from rows[] which is capped at 50 for network efficiency)
-        const posCount     = result?.live_pos     ?? rows.filter(r => r.sentiment === 'positive').length
-        const negCount     = result?.live_neg     ?? rows.filter(r => r.sentiment === 'negative').length
-        const neuCount     = result?.live_neu     ?? rows.filter(r => r.sentiment === 'neutral').length
-        const sarcasmCount = result?.live_sarcasm ?? rows.filter(r => r.sarcasm_detected).length
+        const posCount     = result?.live_pos     ?? rows.filter((r: any) => r.sentiment === 'positive').length
+        const negCount     = result?.live_neg     ?? rows.filter((r: any) => r.sentiment === 'negative').length
+        const neuCount     = result?.live_neu     ?? rows.filter((r: any) => r.sentiment === 'neutral').length
+        const sarcasmCount = result?.live_sarcasm ?? rows.filter((r: any) => r.sarcasm_detected).length
         const sentRealTotal = posCount + negCount + neuCount
         const hasSentimentData = sentRealTotal > 0
         const sentTotal = sentRealTotal || 1
@@ -807,370 +748,40 @@ export function BulkAnalysisPage() {
         const negPct = Math.round((negCount / sentTotal) * 100)
         const neuPct = 100 - posPct - negPct
 
-
-
-        // ── Shared styles ──
-        const statLabel: React.CSSProperties = {
-          fontSize: '10px', color: 'var(--color-text-faint)',
-          textTransform: 'uppercase', letterSpacing: '0.06em',
-        }
-        const statValue: React.CSSProperties = {
-          fontSize: '13px', fontWeight: 700, fontFamily: 'var(--font-mono)',
-          color: 'var(--color-text)', transition: 'all 0.3s ease',
-        }
-
         return (
-        <div className="card animate-in" style={{ padding: '16px' }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '190px 1fr 190px',
-            gridTemplateRows: 'auto auto',
-            gap: '12px',
-          }}>
-
-            {/* ── TOP-LEFT: Live Stats ── */}
-            <CyberCard style={{ gridColumn: 1, gridRow: 1, height: '152px' }}>
-              <PanelBadge icon={<Icon3DPulse />} label="Live Stats"
-                bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1, justifyContent: 'center' }}>
-                {[
-                  { label: 'Processed', value: `${processed} / ${total || '?'}`, color: 'var(--color-primary-bright)' },
-                  { label: 'Speed', value: `${speed} r/s`, color: '#2dd4bf' },
-                  { label: 'Avg Conf', value: avgConf === '—' ? '—' : `${avgConf}%`, color: '#a78bfa' },
-                  { label: 'Errors', value: String(errorCount), color: errorCount > 0 ? 'var(--color-negative)' : 'var(--color-positive)' },
-                  { label: 'Progress', value: `${progressPct}%`, color: '#fde047' },
-                ].map(s => (
-                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={statLabel}>{s.label}</span>
-                    <span style={{ ...statValue, color: s.color }}>{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            </CyberCard>
-
-            {/* ── TOP-RIGHT: Sentiment ── */}
-            <CyberCard style={{ gridColumn: 3, gridRow: 1, height: '152px' }}>
-              <PanelBadge icon={<Icon3DSentimentPie />} label="Sentiment"
-                bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center' }}>
-                {hasSentimentData ? (
-                  <>
-                    <div style={{
-                      width: '68px', height: '68px', borderRadius: '50%',
-                      background: `conic-gradient(
-                        #22c55e 0% ${posPct}%,
-                        #f59e0b ${posPct}% ${posPct + neuPct}%,
-                        #f43f5e ${posPct + neuPct}% 100%
-                      )`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.3s ease',
-                    }}>
-                      <div style={{
-                        width: '44px', height: '44px', borderRadius: '50%',
-                        background: 'var(--color-bg-card, #0f1923)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text)',
-                        fontFamily: 'var(--font-mono)',
-                      }}>
-                        {sentRealTotal}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
-                      {[
-                        { label: 'Positive', pct: posPct, color: '#22c55e' },
-                        { label: 'Neutral', pct: neuPct, color: '#f59e0b' },
-                        { label: 'Negative', pct: negPct, color: '#f43f5e' },
-                      ].map(s => (
-                        <div key={s.label}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '2px' }}>
-                            <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
-                            <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>{s.pct}%</span>
-                          </div>
-                          <div style={{ height: '3px', borderRadius: '2px', background: 'rgba(255,255,255,0.06)' }}>
-                            <div style={{
-                              height: '100%', borderRadius: '2px', background: s.color,
-                              width: `${s.pct}%`, transition: 'width 0.4s ease', opacity: 0.8,
-                            }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
-                    <div style={{
-                      width: '48px', height: '48px', borderRadius: '50%',
-                      border: '2px dashed rgba(34,197,94,0.3)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      animation: 'pulse 2s ease-in-out infinite',
-                    }}>
-                      <div style={{
-                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
-                        fontFamily: 'var(--font-mono)',
-                      }}>0</div>
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
-                      Awaiting data…
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CyberCard>
-
-            {/* ── BOTTOM-LEFT: Config ── */}
-            <CyberCard style={{ gridColumn: 1, gridRow: 2, height: '152px', opacity: 0.85 }}>
-              <PanelBadge icon={<Icon3DGearPanel />} label="Config"
-                bg="rgba(167,139,250,0.06)" border="rgba(167,139,250,0.18)" color="#a78bfa" />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
-                {[
-                  ['Model', model === 'best' ? 'Best' : formatModelName(model)],
-                  ['Multi', isMultilingual ? 'ON' : 'OFF'],
-                  ['ABSA', runAbsa ? 'ON' : 'OFF'],
-                  ['Sarcasm', runSarcasm ? 'ON' : 'OFF'],
-                ].map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--color-text-faint)' }}>{k}</span>
-                    <span style={{
-                      fontWeight: 600, fontFamily: 'var(--font-mono)',
-                      color: v === 'ON' ? 'var(--color-positive)' : v === 'OFF' ? 'var(--color-text-faint)' : 'var(--color-primary-bright)',
-                    }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-            </CyberCard>
-
-            {/* ── BOTTOM-RIGHT: Pipeline (with real-time counts) ── */}
-            <CyberCard style={{ gridColumn: 3, gridRow: 2, height: '152px', opacity: 0.85 }}>
-              <PanelBadge icon={<Icon3DPulse />} label="Pipeline"
-                bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
-                {hasSentimentData ? (
-                  [
-                    { label: 'Positive', value: posCount, color: '#22c55e' },
-                    { label: 'Neutral', value: neuCount, color: '#f59e0b' },
-                    { label: 'Negative', value: negCount, color: '#f43f5e' },
-                    { label: 'Sarcasm', value: sarcasmCount, color: '#a78bfa' },
-                  ].map(s => (
-                    <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--color-text-faint)' }}>{s.label}</span>
-                      <span style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', color: s.color, transition: 'all 0.3s ease' }}>{s.value}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '12px 0', flex: 1 }}>
-                    <div style={{
-                      width: '48px', height: '48px', borderRadius: '50%',
-                      border: '2px dashed rgba(0,217,255,0.3)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      animation: 'pulse 2s ease-in-out infinite',
-                    }}>
-                      <div style={{
-                        fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
-                        fontFamily: 'var(--font-mono)',
-                      }}>0</div>
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'var(--color-text-faint)', textAlign: 'center', lineHeight: 1.4, letterSpacing: '0.02em' }}>
-                      Awaiting data…
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CyberCard>
-
-            {/* ── CENTER: Loader + Progress Box + Status Pill + Terminal ── */}
-            <div style={{
-              gridColumn: 2, gridRow: '1 / 3',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              gap: '6px',
-            }}>
-              {/* CyberLoader — negative margins reduce its visual footprint */}
-              <div style={{ margin: '-55px 0 -18px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <CyberLoader scale={0.78} />
-              </div>
-
-              {/* ── Phase Progress 3D Sub-Box ── */}
-              {(() => {
-                const phase = result?.phase
-
-                /* Per-phase SVG icons */
-                const phaseIcons: Record<string, string> = {
-                  init: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="pi0" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#fde047"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient></defs><circle cx="12" cy="12" r="10" stroke="url(#pi0)" stroke-width="1.5" fill="url(#pi0)" fill-opacity=".1"/><path d="M12 7v5l3 3" stroke="url(#pi0)" stroke-width="1.5" stroke-linecap="round"/></svg>`,
-                  detecting: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="pi1" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#00d9ff"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient></defs><circle cx="10" cy="10" r="6" stroke="url(#pi1)" stroke-width="1.5" fill="url(#pi1)" fill-opacity=".1"/><path d="M14.5 14.5l4 4" stroke="url(#pi1)" stroke-width="2" stroke-linecap="round"/></svg>`,
-                  translating: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="pi2" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs><circle cx="12" cy="12" r="9" stroke="url(#pi2)" stroke-width="1.5" fill="url(#pi2)" fill-opacity=".1"/><ellipse cx="12" cy="12" rx="4" ry="9" stroke="url(#pi2)" stroke-width="1" fill="none" opacity=".5"/><path d="M3 12h18" stroke="url(#pi2)" stroke-width="1" opacity=".4"/></svg>`,
-                  analyzing: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="pi3" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#00ff88"/><stop offset="100%" stop-color="#22c55e"/></linearGradient></defs><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke="url(#pi3)" stroke-width="1.5" stroke-linejoin="round" fill="url(#pi3)" fill-opacity=".15"/></svg>`,
-                  done: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="pi4" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#00ff88"/></linearGradient></defs><circle cx="12" cy="12" r="9" stroke="url(#pi4)" stroke-width="1.5" fill="url(#pi4)" fill-opacity=".12"/><path d="M8 12l3 3 5-5" stroke="url(#pi4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-                }
-
-                const PHASE_CONFIG: Record<string, { label: string; color: string; grad: string }> = {
-                  init:        { label: 'Initializing',        color: '#fde047', grad: 'linear-gradient(90deg,#fde047,#f59e0b)' },
-                  detecting:   { label: 'Detecting Languages', color: '#00d9ff', grad: 'linear-gradient(90deg,#00d9ff,#0ea5e9)' },
-                  translating: { label: 'Translating',         color: '#a78bfa', grad: 'linear-gradient(90deg,#a78bfa,#7c3aed)' },
-                  analyzing:   { label: 'Analyzing Sentiment', color: '#00ff88', grad: 'linear-gradient(90deg,#00ff88,#22c55e)' },
-                  done:        { label: 'Finalizing',           color: '#22c55e', grad: 'linear-gradient(90deg,#22c55e,#16a34a)' },
-                }
-                const cfg = PHASE_CONFIG[phase ?? 'init'] ?? PHASE_CONFIG.init
-
-                const STEPS = [
-                  { key: 'detecting',   label: 'Detect',    pct: 15  },
-                  { key: 'translating', label: 'Translate', pct: 40  },
-                  { key: 'analyzing',   label: 'Analyze',   pct: 68  },
-                  { key: 'done',        label: 'Done',      pct: 100 },
-                ]
-
-                return (
-                  <div style={{
-                    width: '72%', maxWidth: '280px', alignSelf: 'center',
-                    background: 'rgba(13,17,23,0.75)',
-                    border: '1px solid rgba(0,217,255,0.20)',
-                    borderRadius: '14px',
-                    boxShadow: '0 0 18px rgba(0,217,255,0.08), inset 0 1px 0 rgba(255,255,255,0.04)',
-                    backdropFilter: 'blur(10px)',
-                    padding: '12px 16px 10px',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                  }}>
-                    {/* Icon + label + pct — all centered */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      gap: '7px', width: '100%',
-                    }}>
-                      {/* 3D phase icon */}
-                      <span
-                        dangerouslySetInnerHTML={{ __html: phaseIcons[phase ?? 'init'] ?? phaseIcons.init }}
-                        style={{ display: 'flex', flexShrink: 0 }}
-                      />
-                      <span style={{
-                        fontSize: '10px', fontFamily: 'var(--font-mono)',
-                        color: cfg.color, fontWeight: 700, letterSpacing: '0.06em',
-                      }}>
-                        {cfg.label}
-                      </span>
-                      <span style={{
-                        fontSize: '10px', fontFamily: 'var(--font-mono)',
-                        color: 'var(--color-text-faint)',
-                        background: 'rgba(255,255,255,0.05)',
-                        padding: '1px 6px', borderRadius: '6px',
-                        border: '1px solid rgba(255,255,255,0.07)',
-                      }}>
-                        {progressPct}%
-                      </span>
-                    </div>
-
-                    {/* Progress bar track */}
-                    <div style={{
-                      width: '100%', height: '4px', borderRadius: '3px',
-                      background: 'rgba(255,255,255,0.06)', overflow: 'hidden',
-                    }}>
-                      <div style={{
-                        height: '100%', borderRadius: '3px',
-                        background: cfg.grad,
-                        width: `${progressPct}%`,
-                        transition: 'width 0.5s ease',
-                        boxShadow: `0 0 6px ${cfg.color}55`,
-                      }} />
-                    </div>
-
-                    {/* Phase step dots */}
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between',
-                      width: '100%', paddingTop: '2px',
-                    }}>
-                      {STEPS.map(step => {
-                        const stepDone   = progressPct >= step.pct
-                        const stepActive = result?.phase === step.key
-                        return (
-                          <div key={step.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-                            <div style={{
-                              width: '7px', height: '7px', borderRadius: '50%',
-                              background: stepDone ? '#00ff88' : 'rgba(255,255,255,0.12)',
-                              boxShadow: stepActive ? '0 0 8px #00ff88' : 'none',
-                              transition: 'all 0.3s ease',
-                            }} />
-                            <span style={{
-                              fontSize: '7px',
-                              color: stepDone ? 'var(--color-text-muted)' : 'var(--color-text-faint)',
-                              fontFamily: 'var(--font-mono)',
-                              letterSpacing: '0.03em',
-                            }}>{step.label}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
-
-
-              {/* Status pill */}
-              <div style={{
-                display: 'inline-flex', alignItems: 'center', gap: '8px',
-                background: 'rgba(0, 217, 255, 0.06)', border: '1px solid rgba(0, 217, 255, 0.15)',
-                borderRadius: '12px', padding: '5px 14px',
-                whiteSpace: 'nowrap', marginTop: '6px',
-              }}>
-                <span style={{ fontSize: '11px', color: 'var(--color-primary-bright)', fontWeight: 600 }}>
-                  {result?.status === 'failed' ? 'Analysis Failed' : 'Analyzing Reviews'}
-                </span>
-                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  {processed}/{total || '?'} · {Math.floor(elapsed / 60)}m {elapsed % 60}s
-                </span>
-              </div>
-
-              {/* Terminal logs */}
-              <div style={{
-                width: '90%', maxWidth: '380px',
-                background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(0, 217, 255, 0.1)',
-                borderRadius: '10px', overflow: 'hidden',
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '5px',
-                  padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-                  background: 'rgba(0,0,0,0.3)',
-                }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ff5f57' }} />
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffbd2e' }} />
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#28ca41' }} />
-                  <span style={{ flex: 1, textAlign: 'center', fontSize: '8px', color: 'var(--color-text-faint)', fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}>
-                    ANALYSIS TERMINAL
-                  </span>
-                </div>
-                <div ref={terminalRef} style={{
-                  padding: '6px 10px', height: '90px', overflowY: 'auto',
-                  display: 'flex', flexDirection: 'column', gap: '2px',
-                  fontFamily: 'var(--font-mono)', fontSize: '9px', lineHeight: '1.5',
-                }}>
-                  {logs.map((log, i) => (
-                    <div key={i} style={{
-                      color: i >= prevLogCount ? 'var(--color-text)' : 'var(--color-text-faint)',
-                      opacity: i >= prevLogCount ? 1 : 0.7,
-                      animation: i >= prevLogCount ? 'logFadeIn 200ms ease forwards' : 'none',
-                    }}>
-                      <span style={{ color: '#28ca41', marginRight: '4px', fontWeight: 700 }}>❯</span>
-                      {log}
-                    </div>
-                  ))}
-                  {logs.length === 0 && (
-                    <div style={{ color: 'var(--color-text-faint)' }}>
-                      <span style={{ color: '#28ca41', marginRight: '4px', fontWeight: 700 }}>❯</span>
-                      Initializing analysis pipeline...
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {result?.status === 'failed' && (
-                <>
-                  <p className="error-msg">{result.error ?? 'Job failed'}</p>
-                  <NeuralButton onClick={handleReset}>Retry</NeuralButton>
-                </>
-              )}
-              {result?.status !== 'failed' && (
-                <NeuralButton variant="ghost" size="sm" onClick={handleReset}>Cancel</NeuralButton>
-              )}
-            </div>
-
-          </div>
-        </div>
+          <AnalysisLayout
+            processed={processed}
+            total={total}
+            speed={speed}
+            avgConf={avgConf}
+            errorCount={errorCount}
+            progressPct={progressPct}
+            configRows={[
+              ['Model', model === 'best' ? 'Best' : formatModelName(model)],
+              ['Multi', isMultilingual ? 'ON' : 'OFF'],
+              ['ABSA', runAbsa ? 'ON' : 'OFF'],
+              ['Sarcasm', runSarcasm ? 'ON' : 'OFF'],
+            ]}
+            hasSentimentData={hasSentimentData}
+            posPct={posPct}
+            neuPct={neuPct}
+            negPct={negPct}
+            sentTotal={sentRealTotal}
+            pipelineRows={[
+              { label: 'Positive', value: posCount, color: '#22c55e' },
+              { label: 'Neutral', value: neuCount, color: '#f59e0b' },
+              { label: 'Negative', value: negCount, color: '#f43f5e' },
+              { label: 'Sarcasm', value: sarcasmCount, color: '#a78bfa' },
+            ]}
+            phase={result?.phase ?? undefined}
+            elapsed={elapsed}
+            logs={logs}
+            prevLogCount={prevLogCount}
+            isFailed={result?.status === 'failed'}
+            failError={result?.error ?? undefined}
+            onCancel={handleReset}
+            onRetry={handleReset}
+          />
         )
       })()}
 

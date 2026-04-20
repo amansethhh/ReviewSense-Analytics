@@ -1,0 +1,375 @@
+/* ═══════════════════════════════════════════════════════════
+   AnalysisLayout — SINGLE SOURCE OF TRUTH
+   This is the CANONICAL layout for ALL analysis pages:
+   Bulk, Live, Language, and any future analysis page.
+   DO NOT duplicate. DO NOT create variations.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Main 3-column grid ── */
+.analysis-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  grid-template-rows: 1fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+
+/* ── Side panels (left col / right col) ── */
+.analysis-grid__panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.analysis-grid__panel--tl { grid-column: 1; grid-row: 1; }
+.analysis-grid__panel--bl { grid-column: 1; grid-row: 2; opacity: 0.85; }
+.analysis-grid__panel--tr { grid-column: 3; grid-row: 1; }
+.analysis-grid__panel--br { grid-column: 3; grid-row: 2; opacity: 0.85; }
+
+/* ── Center core (spans both rows) ── */
+.analysis-grid__center {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+}
+
+/* ── Panel badge header ── */
+.analysis-panel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  align-self: center;
+  border-radius: 10px;
+  padding: 5px 14px;
+  margin-bottom: 24px;
+}
+
+/* ── Panel stat rows ── */
+.analysis-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.analysis-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.analysis-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  transition: all 0.3s ease;
+}
+
+/* ── Donut chart ── */
+.analysis-donut {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  margin-bottom: 12px;
+}
+
+.analysis-donut__center {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-bg-card, #0f1923);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+}
+
+/* ── Sentiment bar rows ── */
+.analysis-sent-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+
+.analysis-sent-bar {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.analysis-sent-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  opacity: 0.8;
+}
+
+/* ── Awaiting data state ── */
+.analysis-awaiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 0;
+  flex: 1;
+}
+
+.analysis-awaiting__ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.analysis-awaiting__text {
+  font-size: 10px;
+  color: var(--color-text-faint);
+  text-align: center;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+/* ── Loader container ── */
+.analysis-loader-wrap {
+  margin: 10px 0 40px 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* ── Phase progress 3D sub-box ── */
+.analysis-phase-box {
+  width: 100%;
+  max-width: 380px;
+  align-self: center;
+  background: rgba(13, 17, 23, 0.75);
+  border: 1px solid rgba(0, 217, 255, 0.20);
+  border-radius: 14px;
+  box-shadow: 0 0 18px rgba(0, 217, 255, 0.08),
+              inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.analysis-phase-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.analysis-phase-label {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.analysis-phase-pct {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--color-text-faint);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* ── Progress bar track ── */
+.analysis-progress-track {
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.analysis-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  will-change: width;
+}
+
+/* ── Step dots ── */
+.analysis-steps {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding-top: 2px;
+}
+
+.analysis-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.analysis-step__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  transform: translateZ(0);
+}
+
+.analysis-step__label {
+  font-size: 7px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+}
+
+/* ── Status pill ── */
+.analysis-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 217, 255, 0.06);
+  border: 1px solid rgba(0, 217, 255, 0.15);
+  border-radius: 12px;
+  padding: 5px 14px;
+  white-space: nowrap;
+  margin-top: 6px;
+}
+
+.analysis-status-pill__label {
+  font-size: 11px;
+  color: var(--color-primary-bright);
+  font-weight: 600;
+}
+
+.analysis-status-pill__meta {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Terminal ── */
+.analysis-terminal {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 217, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.analysis-terminal__titlebar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.analysis-terminal__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.analysis-terminal__dot--red { background: #ff5f57; }
+.analysis-terminal__dot--yellow { background: #ffbd2e; }
+.analysis-terminal__dot--green { background: #28ca41; }
+
+.analysis-terminal__title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+.analysis-terminal__body {
+  padding: 6px 10px;
+  height: 90px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.analysis-terminal__line {
+  transform: translateZ(0);
+}
+
+.analysis-terminal__prompt {
+  color: #28ca41;
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+/* ── Pipeline stats (right-bottom) ── */
+.analysis-pipeline-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+/* ── Config rows (left-bottom) ── */
+.analysis-config-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+/* ── Scrollbar styling for terminal ── */
+.analysis-terminal__body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.analysis-terminal__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.analysis-terminal__body::-webkit-scrollbar-thumb {
+  background: rgba(0, 217, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* ── Animation keyframes ── */
+@keyframes logFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
