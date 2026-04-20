@@ -86,17 +86,22 @@ def _append_log(job_id: str, message: str) -> None:
             _job_store[job_id]["logs"].append(message)
 
 
+def _update_progress_pct(job_id: str, pct: float) -> None:
+    """Thread-safe progress percentage update."""
+    with _store_lock:
+        if job_id in _job_store:
+            _job_store[job_id]["progress"] = pct
+
 def _update_progress(
     job_id: str, processed: int, total: int
 ) -> None:
-    """Thread-safe progress update."""
+    """Thread-safe progress update for Phase 3 (scales 40% -> 100%)."""
     with _store_lock:
         if job_id in _job_store:
             _job_store[job_id]["processed"] = processed
-            _job_store[job_id]["progress"] = (
-                (processed / total) * 100
-                if total > 0 else 0.0
-            )
+            base_pct = 40.0
+            phase3_pct = (processed / total) * 60.0 if total > 0 else 0.0
+            _job_store[job_id]["progress"] = base_pct + phase3_pct
 
 
 def _cleanup_expired_jobs():
@@ -240,6 +245,10 @@ def _process_bulk_job(
                     )
                 except Exception:
                     pass
+                
+                # Update progress for Phase 1 (0 -> 15%)
+                if (idx + 1) % 10 == 0 or idx == total - 1:
+                    _update_progress_pct(job_id, (idx + 1) / total * 15.0)
 
             # Count languages for log
             from collections import Counter
@@ -312,6 +321,9 @@ def _process_bulk_job(
                     for idx, text in zip(indices, texts):
                         translated_texts[idx] = text
                         trans_methods[idx] = "failed"
+                
+                # Update progress for Phase 2 (15 -> 40%)
+                _update_progress_pct(job_id, min(40.0, 15.0 + 25.0 * (len(indices) / max(1, non_en))))
 
             _append_log(
                 job_id,

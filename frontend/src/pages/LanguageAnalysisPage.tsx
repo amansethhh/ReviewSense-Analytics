@@ -1528,7 +1528,8 @@ export function LanguageAnalysisPage() {
             const rows = bResult?.results ?? []
             const processed = bResult?.processed ?? 0
             const total = bResult?.total_rows ?? 0
-            const progressPct = total > 0 ? Math.round((processed / total) * 100) : 0
+            // Use server-provided exact progress percentage which accounts for all 3 phases
+            const progressPct = bResult?.progress ? Math.round(bResult.progress) : (total > 0 ? Math.round((processed / total) * 100) : 0)
             const speed = bElapsed > 0 ? (processed / bElapsed).toFixed(1) : '0.0'
             const avgConf = rows.length > 0 ? (rows.reduce((s, r) => s + r.confidence, 0) / rows.length).toFixed(1) : '—'
             const errorCount = rows.filter(r => r.sentiment === 'error' || r.sentiment === 'unknown').length
