@@ -824,9 +824,8 @@ export function BulkAnalysisPage() {
           <div style={{
             display: 'grid',
             gridTemplateColumns: '190px 1fr 190px',
-            gridTemplateRows: '1fr 1fr',
+            gridTemplateRows: '152px 152px',
             gap: '12px',
-            height: '340px',
           }}>
 
             {/* ── TOP-LEFT: Live Stats ── */}
@@ -978,15 +977,15 @@ export function BulkAnalysisPage() {
               </div>
             </CyberCard>
 
-            {/* ── CENTER: Loader + Terminal (spans both rows) ── */}
+            {/* ── CENTER: Loader + Progress Box + Status Pill + Terminal ── */}
             <div style={{
               gridColumn: 2, gridRow: '1 / 3',
               display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              gap: '6px',
+              alignItems: 'center', justifyContent: 'flex-start',
+              gap: '8px', paddingTop: '8px',
             }}>
-              {/* Cyber loader — properly spaced away from card header */}
-              <div style={{ margin: '-60px 0 -20px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              {/* CyberLoader — negative margins reduce its visual footprint */}
+              <div style={{ margin: '-55px 0 -18px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <CyberLoader scale={0.78} />
               </div>
 

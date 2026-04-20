@@ -1581,9 +1581,8 @@ export function LanguageAnalysisPage() {
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: '190px 1fr 190px',
-                gridTemplateRows: '1fr 1fr',
+                gridTemplateRows: '152px 152px',
                 gap: '12px',
-                height: '340px',
               }}>
 
                 {/* ── TOP-LEFT: Live Stats ── */}
@@ -1747,11 +1746,11 @@ export function LanguageAnalysisPage() {
                 <div style={{
                   gridColumn: 2, gridRow: '1 / 3',
                   display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center',
-                  gap: 0,
+                  alignItems: 'center', justifyContent: 'flex-start',
+                  gap: '8px', paddingTop: '8px',
                 }}>
-                  {/* CyberLoader — properly spaced away from card header */}
-                  <div style={{ marginBottom: '-20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  {/* CyberLoader — negative margins reduce its visual footprint */}
+                  <div style={{ margin: '-55px 0 -18px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <CyberLoader scale={0.78} />
                   </div>
 
@@ -1793,7 +1792,6 @@ export function LanguageAnalysisPage() {
                         backdropFilter: 'blur(10px)',
                         padding: '12px 16px 10px',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                        marginBottom: '10px',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', width: '100%' }}>
                           <span
@@ -1837,10 +1835,7 @@ export function LanguageAnalysisPage() {
                     )
                   })()}
 
-                  {/* Spacer pushes status pill to visual centre */}
-                  <div style={{ flex: 1 }} />
-
-                  {/* Status pill — centred between progress box and terminal */}
+                  {/* Status pill */}
                   <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: '8px',
                     background: 'rgba(0, 217, 255, 0.06)', border: '1px solid rgba(0, 217, 255, 0.15)',
@@ -1853,9 +1848,6 @@ export function LanguageAnalysisPage() {
                       {processed}/{total || '?'} · {Math.floor(bElapsed / 60)}m {bElapsed % 60}s
                     </span>
                   </div>
-
-                  {/* Spacer pushes terminal down */}
-                  <div style={{ flex: 1 }} />
 
                   {/* Terminal logs */}
 
