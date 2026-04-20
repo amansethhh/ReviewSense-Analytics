@@ -8,6 +8,7 @@
     "dev:frontend": "cd frontend && npm run dev",
     "dev:full": "concurrently --names BACKEND,FRONTEND --prefix-colors bgBlue.bold,bgMagenta.bold --kill-others \"npm run dev:backend\" \"wait-on http-get://localhost:8000/health && npm run dev:frontend\"",
     "kill:ports": "npx -y kill-port 8000 5173 5174",
+    "prestart": "npm run kill:ports",
     "start": "npm run dev:full",
     "install:all": "npm install && cd frontend && npm install"
   },
