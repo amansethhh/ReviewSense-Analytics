@@ -940,16 +940,28 @@ export function LanguageAnalysisPage() {
                     <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-positive)', fontWeight: 600, letterSpacing: '0.02em' }}>
                       Auto-detect enabled
                     </span>
-                    <span style={{ width: '1px', height: '12px', background: 'rgba(0,217,255,0.25)', flexShrink: 0 }} />
+                    {/* Vertical separator */}
+                    <span style={{
+                      width: '1px', height: '12px',
+                      background: 'rgba(0,217,255,0.25)',
+                      flexShrink: 0,
+                      alignSelf: 'center',
+                      display: 'block',
+                    }} />
+                    {/* Character counter — aligned to centre of separator */}
                     <span className="char-count" style={{
                       fontSize: 'var(--text-xs)',
                       fontFamily: 'var(--font-mono)',
+                      lineHeight: 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
                       color: text.length > 4750 ? 'var(--color-negative)'
                         : text.length > 4000 ? 'var(--color-warning)'
                         : 'var(--color-text-muted)',
                     }}>
                       {text.length.toLocaleString()} / 5,000
                     </span>
+
                   </div>
                 </div>
               </div>

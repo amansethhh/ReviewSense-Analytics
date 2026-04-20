@@ -87,10 +87,16 @@ def _append_log(job_id: str, message: str) -> None:
 
 
 def _update_progress_pct(job_id: str, pct: float) -> None:
-    """Thread-safe progress percentage update."""
+    """Thread-safe progress update — MONOTONICALLY INCREASING only.
+    Prevents progress bar from going backwards when parallel futures
+    complete out-of-order (Phase 1 detection race condition).
+    """
     with _store_lock:
         if job_id in _job_store:
-            _job_store[job_id]["progress"] = pct
+            current = _job_store[job_id].get("progress", 0.0)
+            if pct > current:  # Never decrease — only advance
+                _job_store[job_id]["progress"] = pct
+
 
 def _update_progress(
     job_id: str, processed: int, total: int

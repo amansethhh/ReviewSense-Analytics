@@ -1,6 +1,6 @@
 {
   "translation_counts": {
-    "helsinki_success": 69,
+    "helsinki_success": 70,
     "google_success": 0,
     "failed": 0,
     "skipped_english": 51,
@@ -8,7 +8,7 @@
   },
   "language_counts": {
     "sv": {
-      "count": 1,
+      "count": 2,
       "failed": 0
     },
     "en": {

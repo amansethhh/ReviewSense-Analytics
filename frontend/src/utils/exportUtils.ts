@@ -133,6 +133,13 @@ tr:nth-child(even) td{background:rgba(13,17,23,.45)}
 
 /* ── 3D Section header box ── */
 .section-head-box{display:inline-flex;align-items:center;gap:10px;background:rgba(13,17,23,0.8);border:1px solid rgba(45,212,191,0.22);border-radius:14px;padding:8px 22px;box-shadow:0 0 16px rgba(0,217,255,0.08);width:auto}
+
+/* ── KPI review count sub-box ── */
+.kpi-count-box{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:5px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);border-radius:10px;font-size:11px;color:#8b949e;font-family:'Courier New',monospace;box-shadow:inset 0 1px 0 rgba(255,255,255,0.05),0 2px 6px rgba(0,0,0,0.2)}
+.kpi-count-box .count-num{font-weight:800;font-size:13px;margin-right:2px}
+.kpi-pos .kpi-count-box .count-num{color:#22c55e}
+.kpi-neg .kpi-count-box .count-num{color:#f43f5e}
+.kpi-neu .kpi-count-box .count-num{color:#f59e0b}
 `
 
 // ─── Language Detection ───────────────────────
@@ -413,6 +420,12 @@ export function generateUniversalPDF(opts: {
 }) {
   const { title, subtitle, rows, summary: s, mode, topKeywords, trendBatches, filename, absaAspects, sarcasmEnabled } = opts
 
+  // Compute absolute review counts from percentages (used in PDF KPI cards)
+  const posCount = Math.round(s.positive_pct / 100 * s.total_analyzed)
+  const negCount = Math.round(s.negative_pct / 100 * s.total_analyzed)
+  const neuCount = s.total_analyzed - posCount - negCount  // ensures total sums exactly
+
+
   // Enrich rows with lang + translation for language mode
   type EnrichedRow = ReviewRow & { lang: string; translation: string }
   const enriched: EnrichedRow[] = rows.map(r => {
@@ -493,9 +506,9 @@ export function generateUniversalPDF(opts: {
 
 <div class="kpis">
   <div class="kpi kpi-tot"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.total}<h2>Total Reviews</h2></div></div><div class="value">${s.total_analyzed}</div></div>
-  <div class="kpi kpi-pos"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.pos}<h2>Positive</h2></div></div><div class="value">${s.positive_pct}%</div></div>
-  <div class="kpi kpi-neg"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.neg}<h2>Negative</h2></div></div><div class="value">${s.negative_pct}%</div></div>
-  <div class="kpi kpi-neu"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.neu}<h2>Neutral</h2></div></div><div class="value">${s.neutral_pct}%</div></div>
+  <div class="kpi kpi-pos"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.pos}<h2>Positive</h2></div></div><div class="value">${s.positive_pct}%</div><div class="kpi-count-box"><span class="count-num">${posCount}</span> reviews</div></div>
+  <div class="kpi kpi-neg"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.neg}<h2>Negative</h2></div></div><div class="value">${s.negative_pct}%</div><div class="kpi-count-box"><span class="count-num">${negCount}</span> reviews</div></div>
+  <div class="kpi kpi-neu"><div class="section-head" style="margin-bottom:12px"><div class="section-head-box">${kpiSVGs.neu}<h2>Neutral</h2></div></div><div class="value">${s.neutral_pct}%</div><div class="kpi-count-box"><span class="count-num">${neuCount}</span> reviews</div></div>
 </div>
 
 <div class="section">
@@ -516,9 +529,9 @@ export function generateUniversalPDF(opts: {
         <div style="width:${Math.max(s.neutral_pct,1)}%;background:#f59e0b;color:#000">${s.neutral_pct}%</div>
       </div>
       <div class="dist-legend">
-        <span><span class="dot" style="background:#22c55e"></span>Positive (${s.positive_pct}%)</span>
-        <span><span class="dot" style="background:#f43f5e"></span>Negative (${s.negative_pct}%)</span>
-        <span><span class="dot" style="background:#f59e0b"></span>Neutral (${s.neutral_pct}%)</span>
+        <span><span class="dot" style="background:#22c55e"></span>Positive — <strong style="color:#22c55e">${posCount}</strong> (${s.positive_pct}%)</span>
+        <span><span class="dot" style="background:#f43f5e"></span>Negative — <strong style="color:#f43f5e">${negCount}</strong> (${s.negative_pct}%)</span>
+        <span><span class="dot" style="background:#f59e0b"></span>Neutral — <strong style="color:#f59e0b">${neuCount}</strong> (${s.neutral_pct}%)</span>
       </div>
     </div>
   </div>
