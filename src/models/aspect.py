@@ -183,10 +183,26 @@ def _extract_builtin(text: str) -> list[str]:
     return found
 
 
+def _is_non_latin_text(text: str, threshold: float = 0.20) -> bool:
+    """Return True if >20% of characters are non-Latin (indicates translation failure)."""
+    if not text:
+        return True
+    non_latin = sum(1 for c in text if ord(c) > 0x036F)
+    return non_latin / max(len(text), 1) > threshold
+
+
 def extract_aspects(text: str) -> list[str]:
-    """Extract noun-chunk aspects using best available method."""
+    """Extract noun-chunk aspects using best available method.
+
+    FIX-5: Returns [] for non-Latin text to prevent character-level fragments
+    from CJK/Arabic/Devanagari scripts when translation has failed.
+    """
     text = str(text or "").strip()
     if not text:
+        return []
+
+    # FIX-5: Non-Latin guard — spaCy/TextBlob fail on CJK/Arabic/Devanagari
+    if _is_non_latin_text(text):
         return []
 
     # Try each layer

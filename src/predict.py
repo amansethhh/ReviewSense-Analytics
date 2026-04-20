@@ -23,8 +23,9 @@ logger = logging.getLogger("reviewsense")
 # ═══════════════════════════════════════════════════════════════
 
 CONFIDENCE_THRESHOLD = 0.72   # below this = model uncertain
-POLARITY_LOW  = -0.35         # above this = not strongly negative
-POLARITY_HIGH = +0.35         # below this = not strongly positive
+POLARITY_LOW  = -0.35         # below this = strongly negative
+POLARITY_HIGH = +0.35         # above this = strongly positive
+POLARITY_WEAK = 0.35          # |polarity| below this = genuinely neutral zone
 
 # ═══════════════════════════════════════════════════════════════
 # CONSTANTS — Short-text guard terms (ADD-ON 1)
@@ -139,31 +140,52 @@ def apply_short_text_guard(text: str,
 
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 6 — Neutral correction (Problem 1)
+# STEP 6 — Neutral correction (Problem 1 — bidirectional)
 # ═══════════════════════════════════════════════════════════════
 
 def apply_neutral_correction(pred_class: int,
                               confidence: float,
                               polarity: float) -> dict:
-    """Post-inference Neutral override using confidence + TextBlob polarity.
+    """Post-inference bidirectional neutral correction.
 
-    Fires AFTER model prediction. Uses two independent signals:
-      - Model confidence below CONFIDENCE_THRESHOLD (uncertain)
-      - TextBlob polarity in neutral zone (|polarity| < 0.35)
+    Two correction modes:
 
-    Override to Neutral ONLY when ALL three conditions are met:
-      1. pred_class is NOT already Neutral (1)
-      2. confidence < CONFIDENCE_THRESHOLD
-      3. abs(polarity) < 0.35
+    MODE A — Collapse to Neutral (existing logic):
+      If pred is Positive/Negative, confidence < 0.72, AND polarity weak (<0.35)
+      → correct to Neutral (model is uncertain and text is genuinely neutral)
+
+    MODE B — Elevate FROM Neutral (new — fixes 85% neutral overcorrection):
+      If pred is Neutral, confidence < 0.72, AND polarity STRONG (>0.35)
+      → correct to Positive or Negative based on polarity direction
+      (model returned Neutral but TextBlob says text is clearly polarized)
 
     Returns dict with corrected pred_class, neutral_corrected flag, and reason.
     """
     neutral_corrected = False
     correction_reason = ""
 
-    if (pred_class != 1
+    # MODE B: Neutral → Positive/Negative (primary fix for overcorrection)
+    if (pred_class == 1
             and confidence < CONFIDENCE_THRESHOLD
-            and abs(polarity) < 0.35):
+            and abs(polarity) >= POLARITY_WEAK):
+        if polarity > 0:
+            new_class = 2  # Positive
+        else:
+            new_class = 0  # Negative
+        logger.info(
+            "Neutral elevation applied: Neutral → %s, conf=%.3f, pol=%.3f",
+            LABEL_MAP.get(new_class, "?"), confidence, polarity,
+        )
+        correction_reason = (
+            f"Strong polarity ({polarity:.3f}) overrides low-confidence Neutral ({confidence:.2f})"
+        )
+        pred_class = new_class
+        neutral_corrected = True
+
+    # MODE A: Positive/Negative → Neutral (original logic)
+    elif (pred_class != 1
+            and confidence < CONFIDENCE_THRESHOLD
+            and abs(polarity) < POLARITY_WEAK):
         logger.info(
             "Neutral correction applied: pred=%s, conf=%.3f, pol=%.3f",
             LABEL_MAP.get(pred_class, "?"), confidence, polarity,

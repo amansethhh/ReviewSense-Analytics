@@ -47,15 +47,21 @@ LANGUAGE_FLAGS = {
 # ADD-ON 3 — Unicode script ranges for non-Latin detection
 # ═══════════════════════════════════════════════════════════════
 
-CYRILLIC_RANGE    = range(0x0400, 0x04FF)
-ARABIC_RANGE      = range(0x0600, 0x06FF)
-CJK_RANGE         = range(0x4E00, 0x9FFF)
-HANGUL_RANGE      = range(0xAC00, 0xD7AF)
-DEVANAGARI_RANGE  = range(0x0900, 0x097F)
-# BUG-2 FIX: Japanese kana ranges — must be checked BEFORE CJK
-HIRAGANA_RANGE    = range(0x3040, 0x309F)
-KATAKANA_RANGE    = range(0x30A0, 0x30FF)
-THAI_RANGE        = range(0x0E01, 0x0E59)
+import re
+
+# Fast regex patterns for each script (replaces char-by-char iteration)
+_RE_HIRAGANA   = re.compile(r'[\u3040-\u309f]')
+_RE_KATAKANA   = re.compile(r'[\u30a0-\u30ff]')
+_RE_HANGUL     = re.compile(r'[\uac00-\ud7af]')
+_RE_CJK        = re.compile(r'[\u4e00-\u9fff]')
+_RE_ARABIC     = re.compile(r'[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff]')
+_RE_CYRILLIC   = re.compile(r'[\u0400-\u04ff]')
+_RE_DEVANAGARI = re.compile(r'[\u0900-\u097f]')
+_RE_BENGALI    = re.compile(r'[\u0980-\u09ff]')
+_RE_TAMIL      = re.compile(r'[\u0b80-\u0bff]')
+_RE_THAI       = re.compile(r'[\u0e00-\u0e7f]')
+
+_SCRIPT_THRESHOLD = 0.15  # min ratio of script chars to trigger detection
 
 
 def detect_script(text: str) -> str | None:
@@ -66,28 +72,35 @@ def detect_script(text: str) -> str | None:
 
     BUG-2 FIX: Japanese kana (Hiragana/Katakana) is checked BEFORE CJK
     to prevent misclassifying Japanese text as Chinese.
+    Uses fast regex instead of slow char-by-char iteration.
     """
-    has_cjk = False
-    for char in text:
-        cp = ord(char)
-        if cp in CYRILLIC_RANGE:
-            return "ru"
-        if cp in ARABIC_RANGE:
-            return "ar"
-        # Japanese kana detection — takes priority over CJK
-        if cp in HIRAGANA_RANGE or cp in KATAKANA_RANGE:
-            return "ja"
-        if cp in CJK_RANGE:
-            has_cjk = True  # defer — check for kana first
-        if cp in HANGUL_RANGE:
-            return "ko"
-        if cp in DEVANAGARI_RANGE:
-            return "hi"
-        if cp in THAI_RANGE:
-            return "th"
-    # Only return Chinese if CJK was found but no kana
-    if has_cjk:
+    if not text:
+        return None
+
+    total = max(len(text), 1)
+
+    # CRITICAL: Japanese kana BEFORE Chinese CJK
+    kana = len(_RE_HIRAGANA.findall(text)) + len(_RE_KATAKANA.findall(text))
+    if kana > 0:  # ANY kana = Japanese
+        return "ja"
+
+    if len(_RE_HANGUL.findall(text)) / total > _SCRIPT_THRESHOLD:
+        return "ko"
+    if len(_RE_CJK.findall(text)) / total > _SCRIPT_THRESHOLD:
         return "zh"
+    if len(_RE_ARABIC.findall(text)) / total > _SCRIPT_THRESHOLD:
+        return "ar"
+    if len(_RE_CYRILLIC.findall(text)) / total > _SCRIPT_THRESHOLD:
+        return "ru"
+    if len(_RE_DEVANAGARI.findall(text)) / total > _SCRIPT_THRESHOLD:
+        return "hi"
+    if len(_RE_BENGALI.findall(text)) / total > _SCRIPT_THRESHOLD:
+        return "bn"
+    if len(_RE_TAMIL.findall(text)) / total > _SCRIPT_THRESHOLD:
+        return "ta"
+    if len(_RE_THAI.findall(text)) / total > _SCRIPT_THRESHOLD:
+        return "th"
+
     return None
 
 
@@ -137,25 +150,28 @@ def detect_language_safe(text: str) -> str:
     """Full language detection hierarchy (replaces bare langdetect.detect).
 
     Priority order:
-      1. Hinglish pre-check (code-switched Roman Hindi)
-      2. Unicode script analysis (non-Latin scripts — highest confidence)
+      1. Unicode script analysis (non-Latin scripts — highest confidence, fastest)
+      2. Hinglish pre-check (code-switched Roman Hindi)
       3. langdetect with confidence thresholding
       4. Fallback to English
+
+    FIXED: Unicode MUST be Tier 1 so Devanagari text is not misclassified
+    as Hinglish (Hinglish markers scan Latin-script words only).
     """
     text = str(text or "").strip()
     if not text:
         return "en"
 
-    # Tier 1: Hinglish
-    if detect_hinglish(text):
-        logger.info("Hinglish detected in: '%s...'", text[:50])
-        return "hi"
-
-    # Tier 2: Unicode block (non-Latin scripts always identifiable)
+    # Tier 1: Unicode block (non-Latin scripts always identifiable)
     script_lang = detect_script(text)
     if script_lang:
         logger.debug("Unicode script detected: %s", script_lang)
         return script_lang
+
+    # Tier 2: Hinglish (only on Latin-script text, so safe after Unicode check)
+    if detect_hinglish(text):
+        logger.info("Hinglish detected in: '%s...'", text[:50])
+        return "hi"
 
     # Tier 3: langdetect with confidence threshold
     lang, prob = detect_language_with_confidence(text)

@@ -12,9 +12,9 @@ from src.models.language import LANGUAGE_NAMES, LANGUAGE_FLAGS
 def detect_and_translate(text):
     """Detect language and translate non-English text to English.
 
-    Uses Helsinki-NLP/opus-mt-mul-en for offline translation,
-    with googletrans as fallback. Enhanced with Hinglish detection
-    and translation quality validation.
+    Uses deep-translator (GoogleTranslator) with degenerate output
+    detection and in-process translation cache.
+    Hinglish text bypasses translation and goes directly to inference.
     """
     from src.models.language import detect_language
     from src.models.translation import translate_to_english

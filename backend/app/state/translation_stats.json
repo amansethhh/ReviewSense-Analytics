@@ -1,6 +1,6 @@
 {
   "translation_counts": {
-    "helsinki_success": 64,
+    "helsinki_success": 69,
     "google_success": 0,
     "failed": 0,
     "skipped_english": 51,
@@ -44,11 +44,11 @@
       "failed": 0
     },
     "fr": {
-      "count": 9,
+      "count": 10,
       "failed": 0
     },
     "hi": {
-      "count": 9,
+      "count": 10,
       "failed": 0
     },
     "fi": {
@@ -60,14 +60,18 @@
       "failed": 0
     },
     "de": {
-      "count": 7,
+      "count": 8,
       "failed": 0
     },
     "ja": {
-      "count": 4,
+      "count": 5,
       "failed": 0
     },
     "unknown": {
+      "count": 1,
+      "failed": 0
+    },
+    "pl": {
       "count": 1,
       "failed": 0
     }

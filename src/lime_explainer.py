@@ -1,19 +1,20 @@
 """LIME explanation helpers for ReviewSense Analytics.
 
 Optimized for speed: reduced num_samples (100), cached results via
-@st.cache_data, transformer-based prediction function.
+functools.lru_cache (256 entries), transformer-based prediction function.
 
 ADD-ON 4: Feature filter to suppress stopword and low-magnitude LIME artifacts.
+FIX-5: Non-Latin guard — skip LIME on non-Latin text (translation failures).
 """
 
 from __future__ import annotations
 
+import functools
 import html
 import re
 from typing import Callable
 
 import numpy as np
-import streamlit as st
 from lime.lime_text import LimeTextExplainer
 
 from src.config import LABEL_MAP
@@ -24,6 +25,18 @@ CLASS_NAMES = [LABEL_MAP[label] for label in CLASS_LABELS]
 # Reduced from default for 10x speed improvement
 LIME_NUM_SAMPLES = 100
 LIME_NUM_FEATURES = 6
+
+# ═══════════════════════════════════════════════════════════════
+# FIX-5 — Non-Latin text guard
+# ═══════════════════════════════════════════════════════════════
+
+def _is_non_latin(text: str, threshold: float = 0.15) -> bool:
+    """Return True if >15% of characters are non-Latin (translation failure guard)."""
+    if not text:
+        return True
+    non_latin = sum(1 for c in text if ord(c) > 0x036F)
+    return non_latin / max(len(text), 1) > threshold
+
 
 # ═══════════════════════════════════════════════════════════════
 # ADD-ON 4 — LIME feature filter constants
@@ -97,16 +110,21 @@ def filter_lime_features(features: list[tuple[str, float]],
     return filtered
 
 
-@st.cache_data(show_spinner=False, ttl=3600)
+@functools.lru_cache(maxsize=256)
 def explain_prediction(text, num_features=LIME_NUM_FEATURES):
     """Create a LIME explanation for a text prediction.
 
+    FIX-5: Returns [] for non-Latin text (translation failure guard).
     Results are cached for 1 hour — repeat analyses are instant.
     Uses reduced num_samples (100) for ~10x speedup.
     ADD-ON 4: Results are filtered via filter_lime_features() before return.
     """
     source_text = str(text or "").strip()
     if not source_text or len(source_text) < 5:
+        return []
+
+    # FIX-5: Non-Latin guard — LIME tokenizes non-Latin as individual chars
+    if _is_non_latin(source_text):
         return []
 
     prediction_function = _get_prediction_function()

@@ -1,24 +1,20 @@
 """
-W4-4 / Phase-6: Translation client with timeout wrapper and
-exponential backoff retry logic.
+Translation client with circuit breaker + timeout wrapper.
 
-Wraps deep-translator's GoogleTranslator with:
-  - Per-attempt 4s timeout via ThreadPoolExecutor future
-  - 3 retry attempts with exponential backoff (0.5s, 1.0s, 2.0s)
-  - Detailed per-attempt logging (no silent failures)
+CRITICAL FIX: Added circuit breaker that detects ModuleNotFoundError on the
+first call and permanently marks deep_translator as unavailable. This prevents
+the 12–24s per-review hang caused by 3 retries × 4s timeout when the package
+is not installed. The circuit re-tests on server restart.
 
-Import is deferred to function body per constraint C4 to prevent
-import errors on servers where the package is not installed.
-
-NOTE: GoogleTranslator (deep-translator) is used as Tier 2.
-In environments without outbound HTTP to translate.googleapis.com,
-this tier will always fail and the system degrades to Tier 3
-(raw prediction on untranslated text). This is intentional.
-To test Google reachability: python backend/tests/test_google_translate_live.py
+Architecture:
+  - Attempt 1: GoogleTranslator with 3s timeout
+  - Retry 2-3: Only on network errors, NOT on import errors
+  - Circuit breaker: ModuleNotFoundError → fail immediately on all future calls
 """
 
 import time
 import logging
+import threading
 from concurrent.futures import (
     ThreadPoolExecutor,
     TimeoutError as FuturesTimeoutError,
@@ -28,13 +24,39 @@ from typing import Tuple
 logger = logging.getLogger("reviewsense.translation_client")
 
 MAX_RETRIES = 3
-BASE_DELAY_S = 0.5        # 0.5s → 1.0s → 2.0s
-_GOOGLE_TIMEOUT_S = 4.0   # per-attempt wall-clock cap
+BASE_DELAY_S = 0.3         # 0.3s → 0.6s → 1.2s (reduced from 0.5s)
+_GOOGLE_TIMEOUT_S = 3.0    # reduced from 4.0s — fail faster per attempt
 
-# Dedicated executor — kept alive for the process lifetime so we
-# don't pay thread-creation cost on every call.
+# ── Circuit breaker state ─────────────────────────────────────────────────────
+# _package_available: None = untested, True = OK, False = broken
+_circuit_lock = threading.Lock()
+_package_available: bool | None = None
+
+
+def _check_package_availability() -> bool:
+    """Test if deep_translator is importable. Cached after first check."""
+    global _package_available
+    with _circuit_lock:
+        if _package_available is not None:
+            return _package_available
+        try:
+            import importlib
+            importlib.import_module("deep_translator")
+            _package_available = True
+            logger.info("[CIRCUIT] deep_translator package: AVAILABLE")
+        except ImportError:
+            _package_available = False
+            logger.error(
+                "[CIRCUIT] deep_translator package NOT INSTALLED. "
+                "All translations will use original text. "
+                "Run: pip install deep-translator==1.11.4"
+            )
+        return _package_available
+
+
+# ── Dedicated executor ────────────────────────────────────────────────────────
 _google_executor = ThreadPoolExecutor(
-    max_workers=2,
+    max_workers=3,
     thread_name_prefix="google_translate",
 )
 
@@ -46,14 +68,14 @@ def _google_translate_with_timeout(
     timeout: float = _GOOGLE_TIMEOUT_S,
 ) -> str:
     """
-    Run GoogleTranslator.translate() in a thread with a hard
-    wall-clock timeout.  Raises TimeoutError if the call exceeds
-    `timeout` seconds.
-
-    Uses concurrent.futures so it works identically on Windows
-    and Unix (no SIGALRM required).
+    Run GoogleTranslator.translate() in a thread with a hard wall-clock timeout.
+    Raises TimeoutError if the call exceeds `timeout` seconds.
+    Raises ImportError if deep_translator is not installed (circuit break).
     """
-    # C4: deferred import
+    # C4: deferred import — but check circuit first
+    if not _check_package_availability():
+        raise ImportError("deep_translator is not installed — circuit open")
+
     from deep_translator import GoogleTranslator
 
     future = _google_executor.submit(
@@ -80,11 +102,8 @@ def translate_with_retry(
     Translate text using GoogleTranslator with per-attempt timeout
     and exponential backoff retry.
 
-    Args:
-        text:        The text to translate.
-        source_lang: Source language code (e.g. 'es', 'fr', 'auto').
-        target_lang: Target language code (default 'en').
-        timeout:     Per-attempt wall-clock cap in seconds.
+    CRITICAL FIX: ImportError (missing package) triggers circuit breaker
+    and fails immediately — no retries, no 12s hang.
 
     Returns:
         Tuple of (translated_text, status) where status is
@@ -111,6 +130,14 @@ def translate_with_retry(
                 "Google translate attempt %d/%d: empty result",
                 attempt + 1, MAX_RETRIES,
             )
+
+        except ImportError as e:
+            # CIRCUIT BREAKER: package not installed — fail immediately
+            # Do NOT retry, do NOT wait — would be 12s of wasted time
+            logger.error(
+                "[CIRCUIT] Aborting translation — package unavailable: %s", e
+            )
+            return (text, "failed")
 
         except TimeoutError as e:
             last_error = e

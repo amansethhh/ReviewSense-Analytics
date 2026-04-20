@@ -39,8 +39,8 @@ SUFFIX_PATTERN = re.compile(
 
 BATCH_SIZE = 30         # Max reviews per concatenated request
 BATCH_DELIMITER = ' ||| '
-MAX_RETRIES = 3
-_GOOGLE_TIMEOUT_S = 8.0  # per-batch timeout
+MAX_RETRIES = 2         # reduced from 3 — fewer retries on transient errors
+_GOOGLE_TIMEOUT_S = 4.0  # reduced from 8s — fail faster per batch
 
 # Dedicated executor for batch translation
 _batch_executor = ThreadPoolExecutor(
@@ -61,10 +61,23 @@ def _google_translate_batch(
     source_code: str,
     timeout: float = _GOOGLE_TIMEOUT_S,
 ) -> Optional[str]:
-    """Translate concatenated text via Google with timeout."""
+    """Translate concatenated text via Google with timeout.
+
+    CIRCUIT BREAKER: Returns None immediately if deep_translator
+    is not installed — prevents 8s hang per batch.
+    """
+    # Circuit breaker — fail immediately if package unavailable
     try:
         from deep_translator import GoogleTranslator
+    except ImportError:
+        logger.error(
+            "[CIRCUIT] deep_translator not installed — "
+            "batch translation unavailable. "
+            "Run: pip install deep-translator==1.11.4"
+        )
+        return None
 
+    try:
         future = _batch_executor.submit(
             lambda: GoogleTranslator(
                 source=source_code, target='en'
@@ -113,16 +126,18 @@ def _translate_individually_google(
     results = []
     try:
         from deep_translator import GoogleTranslator
-        for text in texts:
-            try:
-                t = GoogleTranslator(
-                    source=source_code, target='en'
-                ).translate(text)
-                results.append(_clean_translation(t) if t else text)
-            except Exception:
-                results.append(text)
     except ImportError:
-        results = list(texts)
+        logger.error("[CIRCUIT] deep_translator not installed — skipping individual fallback")
+        return list(texts)
+
+    for text in texts:
+        try:
+            t = GoogleTranslator(
+                source=source_code, target='en'
+            ).translate(text)
+            results.append(_clean_translation(t) if t else text)
+        except Exception:
+            results.append(text)
     return results
 
 

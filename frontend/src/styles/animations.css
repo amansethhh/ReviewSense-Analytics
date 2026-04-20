@@ -16,7 +16,12 @@
   will-change: transform, opacity;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
 }
+
 
 /* ── 0-PRE. RS ANIMATED LOGO ───────────────────────── */
 

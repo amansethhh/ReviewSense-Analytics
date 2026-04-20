@@ -15,8 +15,7 @@ from typing import Callable
 
 logger = logging.getLogger("reviewsense")
 
-import streamlit as st
-
+import functools
 from src.models.language import detect_language
 from src.models.translation import translate_to_english
 from src.models.sentiment import predict as sentiment_predict
@@ -192,22 +191,21 @@ def _apply_post_processing(text: str, sentiment: dict) -> dict:
     }
 
 
-@st.cache_resource
+@functools.lru_cache(maxsize=1)
 def preload_models():
     """Eagerly load and cache all models on first call."""
     from src.models.sentiment import _load_sentiment_model
     from src.models.sarcasm_model import _load_irony_model
-    from src.models.translation import _load_helsinki_model
 
     s_tok, s_model = _load_sentiment_model()
     i_tok, i_model = _load_irony_model()
-    t_tok, t_model = _load_helsinki_model()
 
     return {
         "sentiment_loaded": s_model is not None,
         "sarcasm_loaded": i_model is not None,
-        "translation_loaded": t_model is not None,
+        "translation_loaded": True,   # deep-translator is lazy-loaded
     }
+
 
 
 # ═══════════════════════════════════════════════════════════════
