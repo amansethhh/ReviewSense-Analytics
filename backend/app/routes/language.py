@@ -1,4 +1,4 @@
-﻿"""
+"""
 Language detection, translation, and sentiment analysis route.
 
 MASTER FIX: Complete system stabilization.
@@ -128,20 +128,22 @@ def detect_language_adaptive(text: str) -> tuple:
     if re.search(r'[а-яА-ЯёЁ]', text_clean):
         return ("ru", 1.0)  # Cyrillic → Russian
 
-    if re.search(r'[あ-んア-ン]', text_clean):
-        return ("ja", 1.0)  # Japanese kana
+    # BUG-2 FIX: Japanese MUST be detected BEFORE Chinese.
+    # Japanese uses Hiragana/Katakana mixed with CJK.
+    if re.search(r'[\u3040-\u309f\u30a0-\u30ff]', text_clean):
+        return ("ja", 1.0)  # Japanese kana (Hiragana or Katakana)
 
     if re.search(r'[\u4e00-\u9fff]', text_clean):
-        # CJK unified — could be Chinese or Japanese.
-        # If no kana, assume Chinese.
-        if not re.search(r'[あ-んア-ン]', text_clean):
+        # CJK unified — only Chinese if no Japanese kana markers
+        if not re.search(r'[\u3040-\u309f\u30a0-\u30ff]', text_clean):
             return ("zh-cn", 0.95)
 
     if re.search(r'[א-ת]', text_clean):
         return ("he", 1.0)  # Hebrew
 
     # L1: Polish character-based detection (before langdetect)
-    if len(set(text_clean) & _POLISH_CHARS) >= 2:
+    # BUG-2/8 FIX: Lower threshold to 1 for Polish diacritics detection
+    if len(set(text_clean) & _POLISH_CHARS) >= 1:
         return ("pl", 1.0)
 
     # ── Adaptive threshold based on text length ───────────
@@ -168,7 +170,8 @@ def detect_language_adaptive(text: str) -> tuple:
             logger.debug("Portuguese markers found — overriding es → pt")
             return ("pt", max(top_lang.prob, 0.85))
 
-        # L3: Reject unsupported language codes
+        # L3/BUG-2 FIX: Reject unsupported/garbage language codes
+        # (e.g. "eu" for "European" which is not a valid ISO code)
         if top_lang.lang not in _SUPPORTED_LANG_CODES:
             logger.warning(
                 f"Unsupported lang code '{top_lang.lang}' — "
@@ -176,7 +179,7 @@ def detect_language_adaptive(text: str) -> tuple:
             )
             if len(langs) > 1 and langs[1].lang in _SUPPORTED_LANG_CODES:
                 return (langs[1].lang, langs[1].prob)
-            return ("unknown", 0.0)
+            return ("en", 0.0)  # Default to English, not unknown
 
         # English requires higher check: non-ASCII ratio
         if top_lang.lang == "en":
@@ -214,8 +217,53 @@ def _is_confidently_english(text: str) -> bool:
 
 
 # ══════════════════════════════════════════════════════════
-# FIX-1: Translation with two-tier fallback + validation
+# BUG-1 FIX: Degenerate translation output detection
 # ══════════════════════════════════════════════════════════
+
+# Known degenerate Helsinki-NLP outputs — model sometimes produces
+# these garbage strings instead of actual translations.
+DEGENERATE_OUTPUTS = frozenset({
+    "...", "…", ".", "..", "....", ".....",
+    "—", "--", "----",
+    "the", "a", "i", "it", "is",
+    "yes", "no", "ok", "okay",
+    "null", "none", "undefined",
+    "the the the", "a a a",
+})
+
+
+def _is_degenerate(translated: str, original: str) -> bool:
+    """Detect degenerate/garbage translations from Helsinki-NLP.
+
+    BUG-1 FIX: Catches:
+      1. Known degenerate outputs (ellipsis, punctuation-only, etc.)
+      2. Single repeated token (e.g. "the the the the")
+      3. Translation shorter than 3 chars for inputs > 10 chars
+      4. Low plausible-char ratio (< 50% alphanumeric)
+    """
+    t = translated.strip().lower()
+
+    # Known degenerate patterns
+    if t in DEGENERATE_OUTPUTS:
+        return True
+
+    # Single repeated token detection
+    tokens = t.split()
+    if len(tokens) >= 3 and len(set(tokens)) == 1:
+        return True
+
+    # Too short for meaningful translation
+    if len(original) > 10 and len(t) < 3:
+        return True
+
+    # Low plausible character ratio (mostly punctuation/symbols)
+    if len(t) > 0:
+        alpha_count = sum(1 for c in t if c.isalnum() or c.isspace())
+        if alpha_count / len(t) < 0.50:
+            return True
+
+    return False
+
 
 def _validate_translation_quality(
     original: str,
@@ -292,57 +340,80 @@ def _translate_with_fallback(
     """
     warnings: list[str] = []
 
+    # BUG-1 FIX: Arabic is force-routed to Google Translate
+    # because Helsinki ar→en produces consistently degenerate output.
+    LANGUAGES_FORCE_GOOGLE = {"ar"}
+
     # === TIER 1: Helsinki-NLP (via existing pipeline) ===
-    try:
-        from src.translator import detect_and_translate
+    if source_lang not in LANGUAGES_FORCE_GOOGLE:
+        try:
+            from src.translator import detect_and_translate
 
-        lang_result = detect_and_translate(text)
-        if isinstance(lang_result, dict):
-            helsinki_text = lang_result.get(
-                "translated_text", "")
-            was_translated = lang_result.get(
-                "was_translated", False)
+            lang_result = detect_and_translate(text)
+            if isinstance(lang_result, dict):
+                helsinki_text = lang_result.get(
+                    "translated_text", "")
+                was_translated = lang_result.get(
+                    "was_translated", False)
 
-            if helsinki_text and was_translated:
-                helsinki_text = _strip_language_suffix(helsinki_text)
-                quality = _validate_translation_quality(
-                    text, helsinki_text, source_lang)
-                if quality >= 0.70:
+                if helsinki_text and was_translated:
+                    helsinki_text = _strip_language_suffix(helsinki_text)
+
+                    # BUG-1 FIX: Check for degenerate output FIRST
+                    if _is_degenerate(helsinki_text, text):
+                        warnings.append(
+                            "Helsinki produced degenerate output, "
+                            "falling back to Google"
+                        )
+                        logger.warning(
+                            "Degenerate Helsinki output for "
+                            "%s: '%s' → '%s'",
+                            source_lang, text[:50],
+                            helsinki_text[:50],
+                        )
+                    else:
+                        quality = _validate_translation_quality(
+                            text, helsinki_text, source_lang)
+                        if quality >= 0.70:
+                            return {
+                                "translated_text": helsinki_text,
+                                "method": "helsinki",
+                                "confidence": quality,
+                                "detected_language": lang_result.get(
+                                    "detected_language", source_lang),
+                                "language_name": lang_result.get(
+                                    "language_name", "Unknown"),
+                                "was_translated": True,
+                                "warnings": [],
+                            }
+                        else:
+                            warnings.append(
+                                f"Helsinki quality low "
+                                f"({quality:.0%}), using fallback"
+                            )
+                elif helsinki_text:
+                    # Not flagged as translated — might be
+                    # English already
                     return {
                         "translated_text": helsinki_text,
                         "method": "helsinki",
-                        "confidence": quality,
+                        "confidence": 0.8,
                         "detected_language": lang_result.get(
                             "detected_language", source_lang),
                         "language_name": lang_result.get(
                             "language_name", "Unknown"),
-                        "was_translated": True,
+                        "was_translated": False,
                         "warnings": [],
                     }
-                else:
-                    warnings.append(
-                        f"Helsinki quality low "
-                        f"({quality:.0%}), using fallback"
-                    )
-            elif helsinki_text:
-                # Not flagged as translated — might be
-                # English already
-                return {
-                    "translated_text": helsinki_text,
-                    "method": "helsinki",
-                    "confidence": 0.8,
-                    "detected_language": lang_result.get(
-                        "detected_language", source_lang),
-                    "language_name": lang_result.get(
-                        "language_name", "Unknown"),
-                    "was_translated": False,
-                    "warnings": [],
-                }
-    except Exception as e:
-        logger.warning(
-            f"Helsinki-NLP failed for {source_lang}: {e}")
+        except Exception as e:
+            logger.warning(
+                f"Helsinki-NLP failed for {source_lang}: {e}")
+            warnings.append(
+                f"Helsinki error: {str(e)[:50]}")
+    else:
         warnings.append(
-            f"Helsinki error: {str(e)[:50]}")
+            f"Skipping Helsinki for {source_lang} "
+            f"(force-Google language)")
 
     # === TIER 2: deep-translator (Google) with retry ===
     try:
@@ -418,8 +489,11 @@ def _apply_sentiment_corrections(
     from app.sentiment_corrections import (
         apply_sentiment_corrections,
     )
+    # BUG-3 FIX: Pass polarity to enable polarity floor check
     corrected_sent, corrected_conf, was_corrected = (
-        apply_sentiment_corrections(text, sentiment, confidence)
+        apply_sentiment_corrections(
+            text, sentiment, confidence, polarity=polarity
+        )
     )
     if was_corrected:
         return (corrected_sent, corrected_conf, 0.0)

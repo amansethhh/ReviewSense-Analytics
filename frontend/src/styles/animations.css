@@ -3,6 +3,21 @@
    Must be imported AFTER components.css
    ════════════════════════════════════════════════════ */
 
+/* ── BUG-6 FIX: GPU compositing optimization ──────────
+   Promote animated elements to their own compositor layer.
+   Prevents repaints & layout thrashing that cause flicker. */
+.sidebar__logo svg,
+.neural-btn,
+.cyber-card,
+.panel-card,
+.loading-pulse,
+[class*="animate-"],
+[class*="glow-"] {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
 /* ── 0-PRE. RS ANIMATED LOGO ───────────────────────── */
 
 @keyframes rs-spin-cw {

@@ -812,9 +812,10 @@ export function LanguageAnalysisPage() {
         negative: d.negative,
         neutral: d.neutral,
         avgPolarity: d.count > 0 ? d.totalPolarity / d.count : 0,
-        dominantSentiment: d.positive >= d.negative && d.positive >= d.neutral
+        // BUG-5 FIX: Use average polarity thresholds, NOT count mode
+        dominantSentiment: (d.count > 0 ? d.totalPolarity / d.count : 0) > 0.20
           ? 'positive'
-          : d.negative >= d.positive && d.negative >= d.neutral
+          : (d.count > 0 ? d.totalPolarity / d.count : 0) < -0.20
           ? 'negative'
           : 'neutral',
       }))

@@ -24,6 +24,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // BUG-6 FIX: Disable CSS code splitting to prevent animation
+    // flickering when stylesheets load at different times
+    cssCodeSplit: false,
     rollupOptions: {
       output: {
         manualChunks: {

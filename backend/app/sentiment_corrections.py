@@ -85,9 +85,14 @@ def apply_sentiment_corrections(
     text: str,
     sentiment: str,
     confidence: float,
+    polarity: float = 0.0,
 ) -> Tuple[str, float, bool]:
     """
     Apply post-prediction corrections to the raw model output.
+
+    BUG-3 FIX: Now requires polarity parameter. All neutral
+    corrections are gated by a strict polarity floor of |0.35|
+    to prevent overcorrection of genuinely opinionated reviews.
 
     Returns:
         (corrected_sentiment, corrected_confidence, was_corrected)
@@ -99,8 +104,9 @@ def apply_sentiment_corrections(
        confidence < 70% -> NEUTRAL
     3. Mixed positive+negative words + "but" + POSITIVE
        sentiment + confidence < 70% -> NEUTRAL
-    4. S2: Neutral zone — keyword + confidence gate
+    4. S2: Neutral zone — keyword + confidence gate + POLARITY FLOOR
     5. S3: Strong negative keyword override
+    6. Short-text negation guard (BUG-3 FIX)
     """
     text_lower = text.lower().strip()
     if not text_lower:
@@ -143,23 +149,40 @@ def apply_sentiment_corrections(
             )
             return "negative", max(confidence, 70.0), True
 
+    # ── BUG-3 FIX: Strict polarity floor for neutral corrections ──
+    # Only apply neutral corrections if polarity is genuinely
+    # weak/ambiguous. If |polarity| >= 0.35, the review has
+    # clear positive or negative tone — DO NOT override to neutral.
+    polarity_is_weak = abs(polarity) < 0.35
+
     # S2: Neutral zone — confidence-gated + keyword override
-    # Only applies to borderline POSITIVE predictions
-    if sentiment == "positive" and confidence < 55.0:
+    # BUG-3 FIX: Added polarity floor check
+    if sentiment == "positive" and confidence < 48.0 and polarity_is_weak:
         # Low-confidence positive in neutral polarity zone
         logger.info(
-            "[OVERRIDE] Neutral zone (low confidence): "
-            "'%s' -> NEUTRAL", text[:60]
+            "[OVERRIDE] Neutral zone (low confidence + weak polarity): "
+            "'%s' -> NEUTRAL (polarity=%.3f)", text[:60], polarity
         )
         return "neutral", max(confidence, 40.0), True
 
-    if sentiment == "positive" and confidence < 70.0:
+    if sentiment == "positive" and confidence < 70.0 and polarity_is_weak:
         if _match_signal(text_lower, NEUTRAL_SIGNALS):
             logger.info(
                 "[OVERRIDE] Neutral keyword rule applied: "
-                "'%s' -> NEUTRAL", text[:60]
+                "'%s' -> NEUTRAL (polarity=%.3f)", text[:60], polarity
             )
             return "neutral", max(confidence, 45.0), True
+
+    # ── BUG-3 FIX: Short-text negation guard ──
+    # Short texts (<8 words) with "not" or "no" + weak polarity
+    # should not be overridden to neutral without clear signal
+    word_count = len(text_lower.split())
+    if (word_count < 8
+            and sentiment == "negative"
+            and re.search(r'\b(not|no|never|don[\'t]*|won[\'t]*)\b', text_lower)
+            and polarity_is_weak):
+        # Keep the model's negative prediction for short negation texts
+        return sentiment, confidence, False
 
     return sentiment, confidence, False
 

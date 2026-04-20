@@ -47,11 +47,15 @@ LANGUAGE_FLAGS = {
 # ADD-ON 3 — Unicode script ranges for non-Latin detection
 # ═══════════════════════════════════════════════════════════════
 
-CYRILLIC_RANGE   = range(0x0400, 0x04FF)
-ARABIC_RANGE     = range(0x0600, 0x06FF)
-CJK_RANGE        = range(0x4E00, 0x9FFF)
-HANGUL_RANGE     = range(0xAC00, 0xD7AF)
-DEVANAGARI_RANGE = range(0x0900, 0x097F)
+CYRILLIC_RANGE    = range(0x0400, 0x04FF)
+ARABIC_RANGE      = range(0x0600, 0x06FF)
+CJK_RANGE         = range(0x4E00, 0x9FFF)
+HANGUL_RANGE      = range(0xAC00, 0xD7AF)
+DEVANAGARI_RANGE  = range(0x0900, 0x097F)
+# BUG-2 FIX: Japanese kana ranges — must be checked BEFORE CJK
+HIRAGANA_RANGE    = range(0x3040, 0x309F)
+KATAKANA_RANGE    = range(0x30A0, 0x30FF)
+THAI_RANGE        = range(0x0E01, 0x0E59)
 
 
 def detect_script(text: str) -> str | None:
@@ -59,19 +63,31 @@ def detect_script(text: str) -> str | None:
 
     Returns ISO language code if non-Latin script detected, else None.
     Unicode detection takes priority over all other methods.
+
+    BUG-2 FIX: Japanese kana (Hiragana/Katakana) is checked BEFORE CJK
+    to prevent misclassifying Japanese text as Chinese.
     """
+    has_cjk = False
     for char in text:
         cp = ord(char)
         if cp in CYRILLIC_RANGE:
             return "ru"
         if cp in ARABIC_RANGE:
             return "ar"
+        # Japanese kana detection — takes priority over CJK
+        if cp in HIRAGANA_RANGE or cp in KATAKANA_RANGE:
+            return "ja"
         if cp in CJK_RANGE:
-            return "zh"
+            has_cjk = True  # defer — check for kana first
         if cp in HANGUL_RANGE:
             return "ko"
         if cp in DEVANAGARI_RANGE:
             return "hi"
+        if cp in THAI_RANGE:
+            return "th"
+    # Only return Chinese if CJK was found but no kana
+    if has_cjk:
+        return "zh"
     return None
 
 

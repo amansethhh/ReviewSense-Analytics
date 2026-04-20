@@ -344,9 +344,12 @@ async def predict(
     from app.sentiment_corrections import (
         apply_sentiment_corrections,
     )
+    # BUG-3 FIX: Pass polarity to enable polarity floor check
+    polarity_raw = float(result.get("polarity", 0.0))
     sentiment_raw, confidence_pct, _was_corrected = (
         apply_sentiment_corrections(
-            request.text, sentiment_raw, confidence_pct
+            request.text, sentiment_raw, confidence_pct,
+            polarity=polarity_raw,
         )
     )
 

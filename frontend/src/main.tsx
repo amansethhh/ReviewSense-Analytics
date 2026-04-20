@@ -16,10 +16,20 @@ if (redirect) {
   window.history.replaceState(null, '', redirect)
 }
 
-ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
-).render(
+// BUG-6 FIX: Disable StrictMode in production to prevent
+// double-mount animation flickering. StrictMode causes React
+// to mount→unmount→remount every component, which resets
+// CSS keyframe animations and causes a visible flicker.
+const isDev = import.meta.env.DEV
+
+const AppTree = isDev ? (
   <React.StrictMode>
     <App />
   </React.StrictMode>
+) : (
+  <App />
 )
+
+ReactDOM.createRoot(
+  document.getElementById('root') as HTMLElement
+).render(AppTree)
