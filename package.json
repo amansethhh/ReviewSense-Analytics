@@ -4,11 +4,12 @@
   "private": true,
   "description": "ReviewSense Analytics — Unified dev launcher for FastAPI + Vite React",
   "scripts": {
-    "dev:backend": "cd backend && python start_backend.py",
+    "dev:backend": "venv\\Scripts\\python.exe backend\\start_backend.py",
     "dev:frontend": "cd frontend && npm run dev",
-    "dev:full": "npm run kill:ports && concurrently --names BACKEND,FRONTEND --prefix-colors bgBlue.bold,bgMagenta.bold --kill-others \"npm run dev:backend\" \"wait-on http-get://localhost:8000/health && npm run dev:frontend\"",
+    "dev:full": "concurrently --names BACKEND,FRONTEND --prefix-colors bgBlue.bold,bgMagenta.bold --kill-others \"npm run dev:backend\" \"wait-on http-get://localhost:8000/health && npm run dev:frontend\"",
     "kill:ports": "npx -y kill-port 8000 5173 5174",
-    "start": "npm run dev:full"
+    "start": "npm run dev:full",
+    "install:all": "npm install && cd frontend && npm install"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
