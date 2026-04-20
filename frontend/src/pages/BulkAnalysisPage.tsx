@@ -826,10 +826,11 @@ export function BulkAnalysisPage() {
             gridTemplateColumns: '190px 1fr 190px',
             gridTemplateRows: '1fr 1fr',
             gap: '12px',
+            height: '340px',
           }}>
 
             {/* ── TOP-LEFT: Live Stats ── */}
-            <CyberCard style={{ gridColumn: 1, gridRow: 1 }}>
+            <CyberCard style={{ gridColumn: 1, gridRow: 1, minHeight: '148px' }}>
               <PanelBadge icon={<Icon3DPulse />} label="Live Stats"
                 bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1, justifyContent: 'center' }}>

@@ -1583,6 +1583,7 @@ export function LanguageAnalysisPage() {
                 gridTemplateColumns: '190px 1fr 190px',
                 gridTemplateRows: '1fr 1fr',
                 gap: '12px',
+                height: '340px',
               }}>
 
                 {/* ── TOP-LEFT: Live Stats ── */}
