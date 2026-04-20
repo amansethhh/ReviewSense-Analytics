@@ -151,9 +151,10 @@ def apply_sentiment_corrections(
 
     # ── BUG-3 FIX: Strict polarity floor for neutral corrections ──
     # Only apply neutral corrections if polarity is genuinely
-    # weak/ambiguous. If |polarity| >= 0.35, the review has
+    # weak/ambiguous. If |polarity| >= 0.25, the review has
     # clear positive or negative tone — DO NOT override to neutral.
-    polarity_is_weak = abs(polarity) < 0.35
+    # ACCURACY FIX: Tightened from 0.35 → 0.25 to reduce overcorrection.
+    polarity_is_weak = abs(polarity) < 0.25
 
     # S2: Neutral zone — confidence-gated + keyword override
     # BUG-3 FIX: Added polarity floor check

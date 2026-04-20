@@ -334,16 +334,15 @@ export function BulkAnalysisPage() {
   const [file, setFile] = useState<File | null>(null)
   const [prevLogCount, setPrevLogCount] = useState(0)
 
-  // Timer: tick a local `now` state every second while processing.
-  // Elapsed is derived from the persisted startedAt timestamp,
-  // so it is always accurate — even after navigating away and back.
-  const [_now, setNow] = useState(Date.now())
+  // Timer: elapsed is derived from startedAt without re-rendering every second.
+  // Only re-render when poll data changes (every 500ms), not on a separate 1s tick.
+  const nowRef = useRef(Date.now())
   useEffect(() => {
     if (stage !== 'processing') return
-    const h = setInterval(() => setNow(Date.now()), 1000)
+    const h = setInterval(() => { nowRef.current = Date.now() }, 1000)
     return () => clearInterval(h)
   }, [stage])
-  const elapsed = startedAt ? Math.floor((_now - startedAt) / 1000) : 0
+  const elapsed = startedAt ? Math.floor((nowRef.current - startedAt) / 1000) : 0
 
   const {
     result: bulkResult, error, columns: bulkColumns,
@@ -986,19 +985,84 @@ export function BulkAnalysisPage() {
                 <CyberLoader scale={0.85} />
               </div>
 
-              {/* Progress bar */}
+              {/* Phase-aware progress bar */}
               <div style={{ width: '80%', maxWidth: '300px', alignSelf: 'center' }}>
+                {/* Phase label */}
+                {(() => {
+                  const phase = result?.phase
+                  const PHASE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
+                    detecting:   { label: 'Detecting Languages', emoji: '🔍', color: '#00d9ff' },
+                    translating: { label: 'Translating',        emoji: '🌐', color: '#a78bfa' },
+                    analyzing:   { label: 'Analyzing Sentiment', emoji: '⚡', color: '#00ff88' },
+                    done:        { label: 'Finalizing',          emoji: '✅', color: '#22c55e' },
+                    init:        { label: 'Initializing',        emoji: '🚀', color: '#fde047' },
+                  }
+                  const cfg = PHASE_CONFIG[phase ?? 'init'] ?? PHASE_CONFIG.init
+                  return (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      marginBottom: '6px', fontSize: '10px',
+                      fontFamily: 'var(--font-mono)',
+                    }}>
+                      <span style={{ fontSize: '12px' }}>{cfg.emoji}</span>
+                      <span style={{ color: cfg.color, fontWeight: 600, letterSpacing: '0.04em' }}>
+                        {cfg.label}
+                      </span>
+                      <span style={{ color: 'var(--color-text-faint)', marginLeft: 'auto' }}>
+                        {progressPct}%
+                      </span>
+                    </div>
+                  )
+                })()}
+                {/* Progress bar track */}
                 <div style={{
-                  height: '4px', borderRadius: '2px',
+                  height: '5px', borderRadius: '3px',
                   background: 'rgba(255,255,255,0.06)',
                   overflow: 'hidden',
                 }}>
                   <div style={{
-                    height: '100%', borderRadius: '2px',
-                    background: 'linear-gradient(90deg, #00d9ff, #00ff88)',
+                    height: '100%', borderRadius: '3px',
+                    background: (() => {
+                      const ph = result?.phase
+                      if (ph === 'detecting')   return 'linear-gradient(90deg, #00d9ff, #0ea5e9)'
+                      if (ph === 'translating') return 'linear-gradient(90deg, #a78bfa, #7c3aed)'
+                      if (ph === 'done')        return 'linear-gradient(90deg, #22c55e, #16a34a)'
+                      return 'linear-gradient(90deg, #00d9ff, #00ff88)'
+                    })(),
                     width: `${progressPct}%`,
                     transition: 'width 0.4s ease',
                   }} />
+                </div>
+                {/* Phase step dots */}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  marginTop: '5px',
+                }}>
+                  {[
+                    { key: 'detecting',   label: 'Detect', pct: 15 },
+                    { key: 'translating', label: 'Translate', pct: 40 },
+                    { key: 'analyzing',   label: 'Analyze', pct: 68 },
+                    { key: 'done',        label: 'Done', pct: 100 },
+                  ].map(step => {
+                    const done = progressPct >= step.pct
+                    const active = result?.phase === step.key
+                    return (
+                      <div key={step.key} style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
+                      }}>
+                        <div style={{
+                          width: '6px', height: '6px', borderRadius: '50%',
+                          background: done ? '#00ff88' : 'rgba(255,255,255,0.15)',
+                          boxShadow: active ? '0 0 6px #00ff88' : 'none',
+                          transition: 'all 0.3s ease',
+                        }} />
+                        <span style={{
+                          fontSize: '8px', color: done ? 'var(--color-text-muted)' : 'var(--color-text-faint)',
+                          fontFamily: 'var(--font-mono)',
+                        }}>{step.label}</span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 

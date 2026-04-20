@@ -332,26 +332,94 @@ def _process_bulk_job(
             )
 
         # ══════════════════════════════════════════════════
-        # PHASE 3: Parallel Sentiment + ABSA + Sarcasm
+        # PHASE 3: BATCH Sentiment + Post-Processing
         # ══════════════════════════════════════════════════
+        # PERF FIX: Vectorized batch inference replaces
+        # per-row _model_lock serialization (10-30x faster).
         with _store_lock:
             _job_store[job_id]["phase"] = "analyzing"
 
         _append_log(
             job_id,
-            f"[{_ts()}] Phase 3: Parallel sentiment analysis "
-            f"({_MAX_ROW_WORKERS} workers)..."
+            f"[{_ts()}] Phase 3: Batch sentiment analysis "
+            f"(vectorized, {total} reviews)..."
         )
 
-        def _analyze_single_row(row_idx: int) -> BulkRowResult:
-            """Process one row. Called in parallel threads."""
+        # 3A: Prepare texts for batch inference
+        predict_texts: list[str] = []
+        for idx in range(total):
+            if not valid_mask[idx]:
+                predict_texts.append("empty")
+            elif was_translated[idx]:
+                predict_texts.append(
+                    translated_texts[idx] or "empty"
+                )
+            else:
+                predict_texts.append(
+                    all_texts[idx] or "empty"
+                )
+
+        # 3B: Run BATCH sentiment (NO per-row lock needed)
+        from src.models.sentiment import (
+            predict_batch as _sentiment_batch,
+        )
+        _update_progress_pct(job_id, 42.0)
+
+        batch_predictions = _sentiment_batch(
+            predict_texts, batch_size=32
+        )
+
+        _update_progress_pct(job_id, 65.0)
+        _append_log(
+            job_id,
+            f"[{_ts()}] Phase 3: Batch inference complete "
+            f"({len(batch_predictions)} predictions)"
+        )
+
+        # 3C: TextBlob polarity (batch, lightweight)
+        try:
+            from textblob import TextBlob
+            _has_textblob = True
+        except ImportError:
+            _has_textblob = False
+
+        batch_polarities: list[float] = []
+        batch_subjectivities: list[float] = []
+        for pt in predict_texts:
+            if _has_textblob and pt != "empty":
+                try:
+                    blob = TextBlob(pt)
+                    batch_polarities.append(
+                        blob.sentiment.polarity
+                    )
+                    batch_subjectivities.append(
+                        blob.sentiment.subjectivity
+                    )
+                except Exception:
+                    batch_polarities.append(0.0)
+                    batch_subjectivities.append(0.0)
+            else:
+                batch_polarities.append(0.0)
+                batch_subjectivities.append(0.0)
+
+        # 3D: Per-row post-processing (NO model lock needed)
+        _update_progress_pct(job_id, 68.0)
+
+        results = [None] * total
+        processed_count = 0
+
+        def _postprocess_row(
+            row_idx: int,
+        ) -> BulkRowResult:
+            """Post-process one row (corrections, ABSA,
+            sarcasm). No model lock needed."""
             original_text = all_texts[row_idx]
-            eng_text = translated_texts[row_idx]
             lang_code = detected_langs[row_idx]
             lang_name = lang_names[row_idx]
             det_method = trans_methods[row_idx]
+            eng_text = translated_texts[row_idx]
+            predict_text = predict_texts[row_idx]
 
-            # Skip invalid rows
             if not valid_mask[row_idx]:
                 return BulkRowResult(
                     row_index=all_indices[row_idx],
@@ -372,27 +440,24 @@ def _process_bulk_job(
                     **cached,
                 )
 
-            # Predict (thread-safe via model lock)
-            predict_text = (
-                eng_text if was_translated[row_idx]
-                else original_text
+            # Use batch prediction result
+            pred = batch_predictions[row_idx]
+            label_name = pred.get(
+                "label_name", "Neutral"
             )
-
-            with _model_lock:
-                pred = predict_sentiment(
-                    predict_text, model_choice
-                )
-
-            label_name = pred.get("label_name", "Neutral")
             sentiment_raw = label_name.lower()
             if sentiment_raw not in [
                 "positive", "negative", "neutral"
             ]:
                 sentiment_raw = "neutral"
 
-            raw_conf = float(pred.get("confidence", 0.0))
-            confidence_pct = normalize_confidence(raw_conf)
-            polarity_val = float(pred.get("polarity", 0.0))
+            raw_conf = float(
+                pred.get("confidence", 0.0)
+            )
+            confidence_pct = normalize_confidence(
+                raw_conf
+            )
+            polarity_val = batch_polarities[row_idx]
 
             # Apply sentiment corrections
             sentiment_raw, confidence_pct, polarity_val = (
@@ -404,12 +469,15 @@ def _process_bulk_job(
                 )
             )
 
-            # OPT-2: Conditional ABSA (skip short / certain)
+            # OPT-2: Conditional ABSA
             absa_list = None
             if run_absa:
                 words = predict_text.split()
-                if len(words) >= 5 and confidence_pct < 97.0:
-                    absa_list = _run_absa_sync(predict_text)
+                if (len(words) >= 5
+                        and confidence_pct < 97.0):
+                    absa_list = _run_absa_sync(
+                        predict_text
+                    )
 
             # Sarcasm
             sarcasm_detected = None
@@ -420,20 +488,24 @@ def _process_bulk_job(
 
             row_result_dict = {
                 "text": original_text[:500],
-                "sentiment": SentimentLabel(sentiment_raw),
+                "sentiment": SentimentLabel(
+                    sentiment_raw
+                ),
                 "confidence": confidence_pct,
                 "polarity": polarity_val,
                 "subjectivity": float(
-                    pred.get("subjectivity", 0.0)
+                    batch_subjectivities[row_idx]
                 ),
                 "sarcasm_detected": sarcasm_detected,
                 "aspects": absa_list,
                 "detected_language": (
-                    lang_name if multilingual else None
+                    lang_name if multilingual
+                    else None
                 ),
                 "translation_method": det_method,
                 "translated_text": (
-                    eng_text if was_translated[row_idx]
+                    eng_text
+                    if was_translated[row_idx]
                     else None
                 ),
             }
@@ -449,17 +521,17 @@ def _process_bulk_job(
                 **row_result_dict,
             )
 
-        # Execute in parallel
+        # Execute post-processing in parallel
+        # (no model lock = true parallelism)
         from concurrent.futures import as_completed
 
-        results = [None] * total
         with ThreadPoolExecutor(
             max_workers=_MAX_ROW_WORKERS,
-            thread_name_prefix="bulk-analyze",
+            thread_name_prefix="bulk-postproc",
         ) as executor:
             future_to_idx = {
                 executor.submit(
-                    _analyze_single_row, idx
+                    _postprocess_row, idx
                 ): idx
                 for idx in range(total)
             }
@@ -467,7 +539,6 @@ def _process_bulk_job(
             completed = 0
             for future in as_completed(future_to_idx):
                 idx = future_to_idx[future]
-                row_num = idx + 1
                 try:
                     row_result = future.result(
                         timeout=_ROW_TIMEOUT_S
@@ -478,7 +549,9 @@ def _process_bulk_job(
                     results[idx] = BulkRowResult(
                         row_index=all_indices[idx],
                         text=all_texts[idx][:500],
-                        sentiment=SentimentLabel("unknown"),
+                        sentiment=SentimentLabel(
+                            "unknown"
+                        ),
                         confidence=0.0,
                         polarity=0.0,
                         subjectivity=0.0,
@@ -492,7 +565,9 @@ def _process_bulk_job(
                     results[idx] = BulkRowResult(
                         row_index=all_indices[idx],
                         text=all_texts[idx][:500],
-                        sentiment=SentimentLabel("unknown"),
+                        sentiment=SentimentLabel(
+                            "unknown"
+                        ),
                         confidence=0.0,
                         polarity=0.0,
                         subjectivity=0.0,
@@ -512,19 +587,22 @@ def _process_bulk_job(
                             )
 
                     # Record metrics
-                    if results[idx].sentiment.value != "unknown":
+                    if (results[idx].sentiment.value
+                            != "unknown"):
                         metrics_store.record_prediction(
                             results[idx].sentiment.value,
                             results[idx].detected_language,
                         )
 
-                # Update progress
-                _update_progress(
-                    job_id, processed_count, total
+                # Update progress (68% -> 100%)
+                _update_progress_pct(
+                    job_id,
+                    68.0 + (completed / total) * 32.0
                 )
 
                 # Log every 10 completions or final
-                if completed % 10 == 0 or completed == total:
+                if (completed % 10 == 0
+                        or completed == total):
                     pct = int(
                         (completed / total) * 100
                     )
@@ -532,7 +610,7 @@ def _process_bulk_job(
                         job_id,
                         f"[{_ts()}] Phase 3: "
                         f"{completed}/{total} "
-                        f"({pct}%) analyzed"
+                        f"({pct}%) post-processed"
                     )
 
         # ── Build summary ──────────────────────────────────

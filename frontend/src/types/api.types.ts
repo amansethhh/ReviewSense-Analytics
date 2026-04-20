@@ -88,6 +88,8 @@ export interface BulkJobResult {
   summary?:   BulkSummary    | null
   error?:     string | null
   logs:       string[]
+  /** Active pipeline phase: 'init' | 'detecting' | 'translating' | 'analyzing' | 'done' */
+  phase?:     string | null
 }
 
 export interface BulkSummary {

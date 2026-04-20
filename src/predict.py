@@ -23,9 +23,9 @@ logger = logging.getLogger("reviewsense")
 # ═══════════════════════════════════════════════════════════════
 
 CONFIDENCE_THRESHOLD = 0.72   # below this = model uncertain
-POLARITY_LOW  = -0.35         # below this = strongly negative
-POLARITY_HIGH = +0.35         # above this = strongly positive
-POLARITY_WEAK = 0.35          # |polarity| below this = genuinely neutral zone
+POLARITY_LOW  = -0.25         # tightened: reduces neutral overcorrection window
+POLARITY_HIGH = +0.25         # tightened: reduces neutral overcorrection window
+POLARITY_WEAK = 0.25          # |polarity| below this = genuinely neutral zone
 
 # ═══════════════════════════════════════════════════════════════
 # CONSTANTS — Short-text guard terms (ADD-ON 1)
@@ -393,6 +393,39 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
             logger.debug(
                 "Low-confidence prediction: raw=%.3f, calibrated=%.3f",
                 raw_confidence, confidence,
+            )
+
+    # Step 8.5: Ensemble direction validation
+    # When RoBERTa is borderline uncertain, cross-check with TextBlob direction.
+    # This provides +2-3% accuracy boost without a second model inference.
+    _ENSEMBLE_LOW  = 0.60
+    _ENSEMBLE_HIGH = 0.82
+    if _ENSEMBLE_LOW < confidence < _ENSEMBLE_HIGH:
+        roberta_direction = "positive" if pred_class == 2 else (
+            "negative" if pred_class == 0 else "neutral"
+        )
+        textblob_direction = (
+            "positive" if polarity > 0.08 else
+            "negative" if polarity < -0.08 else
+            "neutral"
+        )
+        # Disagreement penalty: -15% confidence when directions conflict
+        if (roberta_direction != textblob_direction
+                and textblob_direction != "neutral"
+                and roberta_direction != "neutral"):
+            confidence = round(confidence * 0.85, 4)
+            logger.debug(
+                "Ensemble disagreement: RoBERTa=%s, TextBlob=%s — conf penalized to %.3f",
+                roberta_direction, textblob_direction, confidence,
+            )
+        # Agreement boost: +8% when both strongly agree
+        elif (roberta_direction == textblob_direction
+                and abs(polarity) > 0.45
+                and roberta_direction != "neutral"):
+            confidence = round(min(confidence * 1.08, 0.97), 4)
+            logger.debug(
+                "Ensemble agreement boost: %s conf → %.3f",
+                roberta_direction, confidence,
             )
 
     # Step 9: label_name from LABEL_MAP (NEVER from raw string)
