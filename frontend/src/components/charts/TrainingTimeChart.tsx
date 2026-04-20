@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -20,7 +21,7 @@ const DATA = [
   { name: 'RandomForest', time: 4.7 },
 ]
 
-export function TrainingTimeChart() {
+export const TrainingTimeChart = memo(function TrainingTimeChart() {
   return (
     <ResponsiveContainer width="100%" height={280}>
       <BarChart data={DATA} margin={{ left: 10, right: 30, bottom: 5 }}>
@@ -48,4 +49,4 @@ export function TrainingTimeChart() {
       </BarChart>
     </ResponsiveContainer>
   )
-}
+})

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, ReferenceLine,
@@ -33,7 +34,7 @@ function generateROCPoints(auc: number) {
   ]
 }
 
-export function ROCAUCChart({ models }: Props) {
+export const ROCAUCChart = memo(function ROCAUCChart({ models }: Props) {
   // Build combined data
   const allPoints = [0, 0.1, 0.3, 0.7, 1]
   const data = allPoints.map((fpr, i) => {
@@ -80,4 +81,4 @@ export function ROCAUCChart({ models }: Props) {
       </LineChart>
     </ResponsiveContainer>
   )
-}
+})

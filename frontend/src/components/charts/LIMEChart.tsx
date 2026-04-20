@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
@@ -29,7 +30,7 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-export function LIMEChart({ features }: Props) {
+export const LIMEChart = memo(function LIMEChart({ features }: Props) {
   const sorted = [...features]
     .sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight))
     .slice(0, 10)
@@ -65,4 +66,4 @@ export function LIMEChart({ features }: Props) {
       </BarChart>
     </ResponsiveContainer>
   )
-}
+})

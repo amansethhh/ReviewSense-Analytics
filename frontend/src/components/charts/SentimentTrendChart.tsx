@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -24,7 +25,7 @@ const tooltipStyle = {
   color: '#e6edf3',
 }
 
-export function SentimentTrendChart({ data }: Props) {
+export const SentimentTrendChart = memo(function SentimentTrendChart({ data }: Props) {
   // No data — render an awaiting state instead of fake default months
   if (!data || data.length === 0) {
     return (
@@ -92,4 +93,4 @@ export function SentimentTrendChart({ data }: Props) {
       </LineChart>
     </ResponsiveContainer>
   )
-}
+})

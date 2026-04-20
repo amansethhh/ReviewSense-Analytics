@@ -1,4 +1,3 @@
-import React from 'react'
 import ReactDOM from 'react-dom/client'
 import '@fontsource/geist/400.css'
 import '@fontsource/geist/500.css'
@@ -16,20 +15,10 @@ if (redirect) {
   window.history.replaceState(null, '', redirect)
 }
 
-// BUG-6 FIX: Disable StrictMode in production to prevent
-// double-mount animation flickering. StrictMode causes React
-// to mount→unmount→remount every component, which resets
-// CSS keyframe animations and causes a visible flicker.
-const isDev = import.meta.env.DEV
-
-const AppTree = isDev ? (
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-) : (
-  <App />
-)
-
+// PERF FIX: StrictMode removed entirely — it causes double
+// mount→unmount→remount which resets CSS keyframe animations
+// and triggers unnecessary re-renders. The app uses ErrorBoundary
+// for error handling, making StrictMode's benefits redundant.
 ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
-).render(AppTree)
+).render(<App />)

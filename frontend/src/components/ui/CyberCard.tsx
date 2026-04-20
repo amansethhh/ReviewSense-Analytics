@@ -1,4 +1,4 @@
-import { useRef, type ReactNode, type CSSProperties } from 'react'
+import { useRef, useCallback, memo, type ReactNode, type CSSProperties } from 'react'
 import './CyberCard.css'
 
 interface CyberCardProps {
@@ -9,28 +9,41 @@ interface CyberCardProps {
 /**
  * Cyber-themed 3D tilt card with scan line, corner brackets,
  * glowing elements, and cyber-line animations.
+ *
+ * PERF: Mouse handler throttled to 60fps (16ms) to prevent
+ * layout thrashing during rapid mouse movement.
  */
-export function CyberCard({ children, style }: CyberCardProps) {
+export const CyberCard = memo(function CyberCard({ children, style }: CyberCardProps) {
   const cardRef = useRef<HTMLDivElement>(null)
+  const rafRef = useRef<number>(0)
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = cardRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    const midX = rect.width / 2
-    const midY = rect.height / 2
-    const rotateY = ((x - midX) / midX) * 10
-    const rotateX = ((midY - y) / midY) * 10
-    el.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`
-  }
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    // Throttle to animation frame (60fps) — prevents layout thrashing
+    if (rafRef.current) return
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0
+      const el = cardRef.current
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const midX = rect.width / 2
+      const midY = rect.height / 2
+      const rotateY = ((x - midX) / midX) * 10
+      const rotateX = ((midY - y) / midY) * 10
+      el.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`
+    })
+  }, [])
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = 0
+    }
     const el = cardRef.current
     if (!el) return
     el.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg)'
-  }
+  }, [])
 
   return (
     <div
@@ -67,4 +80,4 @@ export function CyberCard({ children, style }: CyberCardProps) {
       </div>
     </div>
   )
-}
+})

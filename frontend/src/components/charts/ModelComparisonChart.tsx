@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   RadarChart, PolarGrid, PolarAngleAxis,
   Radar, Tooltip, Legend,
@@ -57,7 +58,7 @@ function RadiusTickLabels(props: Record<string, unknown>) {
   )
 }
 
-export function ModelComparisonChart({ models }: Props) {
+export const ModelComparisonChart = memo(function ModelComparisonChart({ models }: Props) {
   const metrics = ['Accuracy', 'Macro F1', 'Weighted F1', 'Precision', 'AUC']
 
   const data = metrics.map(m => {
@@ -128,4 +129,4 @@ export function ModelComparisonChart({ models }: Props) {
       </RadarChart>
     </ResponsiveContainer>
   )
-}
+})

@@ -1875,38 +1875,165 @@
 }
 
 /* ═══════════════════════════════════════════════════════
-   BUG-6 FIX: Anti-flicker animation system
+   PERF: CSS containment — isolate animated elements
+   from causing full-page layout recalculations.
    ═══════════════════════════════════════════════════════ */
 
-/* Animated entrance cards with will-change cleanup */
-.animated-card {
-  opacity: 0;
-  transform: translateY(20px) translateZ(0);
-  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+.cyber-card,
+.cyber-card__scan-line,
+.cyber-card__lines,
+.cyber-card__glow {
+  contain: layout style;
 }
 
-.animated-card.animate-in {
-  opacity: 1;
-  transform: translateY(0) translateZ(0);
+.card {
+  contain: layout style;
+  position: relative;
 }
 
-/* Hardware-accelerated compositing for animated elements */
-.animated-card,
-.chart-container,
-.result-panel {
-  -webkit-transform-style: preserve-3d;
-  transform-style: preserve-3d;
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
-  transform: translateZ(0);
+/* Orbital / Cyber loaders — prevent layout pollution */
+.orbital-loader,
+.cyber-loader-wrap,
+.neural-loader {
+  contain: layout style paint;
 }
 
-/* Chart containers — prevent re-render flicker */
-.chart-container canvas,
-.chart-container svg {
-  will-change: auto !important;
-  backface-visibility: hidden;
+/* ═══════════════════════════════════════════════════════
+   MOBILE RESPONSIVE — comprehensive content layout
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Tablet breakpoint (≤1024px) ── */
+@media (max-width: 1024px) {
+  .page-content {
+    padding: var(--space-4);
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  .chart-row {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Mobile breakpoint (≤768px) ── */
+@media (max-width: 768px) {
+  .page-content {
+    padding: var(--space-3);
+    max-width: 100%;
+  }
+
+  /* KPI grid → 2 columns on mobile */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: var(--space-3) !important;
+  }
+
+  /* Charts stack vertically */
+  .chart-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: var(--space-3) !important;
+  }
+
+  /* Processing grid → single column stack */
+  .card > div[style*="gridTemplateColumns: '190px 1fr 190px'"],
+  .card > div[style*="grid-template-columns"] {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* Results table scrolls horizontally */
+  .results-table-wrap,
+  .preview-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .results-table,
+  .preview-table {
+    min-width: 600px;
+  }
+
+  /* Form rows stack */
+  .form-row {
+    flex-direction: column !important;
+    gap: var(--space-3) !important;
+  }
+
+  /* Export buttons wrap */
+  .export-row {
+    gap: var(--space-2);
+  }
+  .export-btn {
+    flex: 1 1 auto;
+    min-width: 100px;
+    justify-content: center;
+  }
+
+  /* Cards: reduce hover lift on touch */
+  .card:hover {
+    transform: translateY(-1px) !important;
+  }
+
+  /* Sidebar toggle → adjust for collapsed sidebar */
+  .sidebar-toggle-btn {
+    left: 64px !important;
+  }
+}
+
+/* ── Small mobile breakpoint (≤480px) ── */
+@media (max-width: 480px) {
+  .page-content {
+    padding: var(--space-2);
+  }
+
+  /* KPI grid → single column */
+  .kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Reduce card padding */
+  .card-body {
+    padding: var(--space-3);
+  }
+
+  /* Full width buttons */
+  .neural-btn--lg {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Smaller fonts for mobile */
+  .kpi-card__value {
+    font-size: var(--text-lg) !important;
+  }
+
+  .topbar__title {
+    font-size: var(--text-base);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   ANIMATION STABILITY: Force all animations to running
+   state and ensure no implicit pausing
+   ═══════════════════════════════════════════════════════ */
+
+/* Sidebar logo must always animate */
+.sidebar__logo svg,
+.sidebar__status-dot,
+.neural-btn__dots::before,
+.orbital-loader__ring,
+.orbital-loader__core,
+.cyber-card__scan-line,
+.cyber-card__lines span {
+  animation-play-state: running !important;
+}
+
+/* Card border spin — ensure always active */
+.card::before {
+  animation-play-state: running !important;
 }
 
 /* Respect reduced motion preferences */
@@ -1925,3 +2052,4 @@
     transform: none !important;
   }
 }
+

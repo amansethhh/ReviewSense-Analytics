@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, LabelList,
@@ -43,7 +44,7 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-export function LanguageDistChart({ data }: Props) {
+export const LanguageDistChart = memo(function LanguageDistChart({ data }: Props) {
   if (!data.length) return null
   const indexed = data.map((d, i) => ({ ...d, _idx: i }))
 
@@ -77,4 +78,4 @@ export function LanguageDistChart({ data }: Props) {
       </BarChart>
     </ResponsiveContainer>
   )
-}
+})

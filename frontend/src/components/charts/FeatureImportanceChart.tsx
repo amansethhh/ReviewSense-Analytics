@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
@@ -58,7 +59,7 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-export function FeatureImportanceChart({ features }: Props) {
+export const FeatureImportanceChart = memo(function FeatureImportanceChart({ features }: Props) {
   const data = (features ?? DEFAULT_FEATURES).slice(0, 20)
 
   return (
@@ -83,4 +84,4 @@ export function FeatureImportanceChart({ features }: Props) {
       </BarChart>
     </ResponsiveContainer>
   )
-}
+})

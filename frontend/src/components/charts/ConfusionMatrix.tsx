@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { memo } from 'react'
 import type { ConfusionMatrixData } from '@/types/api.types'
 
 interface Props { data: ConfusionMatrixData }
 
-export function ConfusionMatrix({ data }: Props) {
+export const ConfusionMatrix = memo(function ConfusionMatrix({ data }: Props) {
   const maxVal = Math.max(...data.matrix.flat())
 
   return (
@@ -47,4 +47,4 @@ export function ConfusionMatrix({ data }: Props) {
       </div>
     </div>
   )
-}
+})

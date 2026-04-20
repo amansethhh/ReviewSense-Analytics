@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
@@ -36,7 +37,7 @@ function CustomTooltip({ active, payload, label }: any) {
   )
 }
 
-export function TopKeywordsChart({ keywords }: Props) {
+export const TopKeywordsChart = memo(function TopKeywordsChart({ keywords }: Props) {
   const data = keywords.slice(0, 10)
 
   return (
@@ -66,4 +67,4 @@ export function TopKeywordsChart({ keywords }: Props) {
       </BarChart>
     </ResponsiveContainer>
   )
-}
+})

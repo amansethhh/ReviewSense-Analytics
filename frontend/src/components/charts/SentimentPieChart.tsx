@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   PieChart, Pie, Cell, Tooltip,
   ResponsiveContainer, Legend,
@@ -38,7 +39,7 @@ function CustomTooltip({ active, payload }: any) {
   )
 }
 
-export function SentimentPieChart({
+export const SentimentPieChart = memo(function SentimentPieChart({
   positive, negative, neutral,
 }: Props) {
   const data = [
@@ -84,4 +85,4 @@ export function SentimentPieChart({
       </PieChart>
     </ResponsiveContainer>
   )
-}
+})

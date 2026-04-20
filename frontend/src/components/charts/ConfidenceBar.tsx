@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell,
@@ -13,7 +14,7 @@ const COLORS: Record<string, string> = {
   neutral:  '#f59e0b',
 }
 
-export function ConfidenceBar({ probabilities }: Props) {
+export const ConfidenceBar = memo(function ConfidenceBar({ probabilities }: Props) {
   const data = Object.entries(probabilities).map(
     ([label, value]) => ({
       label: label.charAt(0).toUpperCase() + label.slice(1),
@@ -58,4 +59,4 @@ export function ConfidenceBar({ probabilities }: Props) {
       </BarChart>
     </ResponsiveContainer>
   )
-}
+})

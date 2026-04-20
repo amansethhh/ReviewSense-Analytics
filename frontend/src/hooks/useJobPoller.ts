@@ -51,9 +51,9 @@ function start(job: PollJob): void {
         return
       }
 
-      // Schedule next poll
+      // Schedule next poll — 500ms balances responsiveness vs re-render load
       if (_registry.has(jobId)) {
-        _registry.set(jobId, setTimeout(poll, 250))
+        _registry.set(jobId, setTimeout(poll, 500))
       }
     } catch {
       const count = (_errCounts.get(jobId) ?? 0) + 1
