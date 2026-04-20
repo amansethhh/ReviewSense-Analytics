@@ -222,10 +222,10 @@ export function LiveStatsCard({ processed, total, speed, avgConf, errorCount, pr
     { label: 'Progress', value: `${progressPct}%`, color: '#fde047' },
   ]
   return (
-    <CyberCard style={{ gridColumn: 1, gridRow: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <CyberCard className="analysis-card" style={{ gridColumn: 1, gridRow: 1 }}>
       <PanelBadge icon={<Icon3DPulse />} label="Live Stats"
         bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1, justifyContent: 'center' }}>
+      <div className="analysis-card-body">
         {stats.map(s => (
           <div key={s.label} className="analysis-stat-row">
             <span className="analysis-stat-label">{s.label}</span>
@@ -243,10 +243,10 @@ export function LiveStatsCard({ processed, total, speed, avgConf, errorCount, pr
 
 export function ConfigCard({ rows }: { rows: Array<[string, string]> }) {
   return (
-    <CyberCard style={{ gridColumn: 1, gridRow: 2, height: '100%', opacity: 0.85, display: 'flex', flexDirection: 'column' }}>
+    <CyberCard className="analysis-card" style={{ gridColumn: 1, gridRow: 2, opacity: 0.85 }}>
       <PanelBadge icon={<Icon3DGearPanel />} label="Config"
         bg="rgba(167,139,250,0.06)" border="rgba(167,139,250,0.18)" color="#a78bfa" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
+      <div className="analysis-card-body" style={{ fontSize: '11px' }}>
         {rows.map(([k, v]) => (
           <div key={k} className="analysis-config-row">
             <span style={{ color: 'var(--color-text-faint)' }}>{k}</span>
@@ -269,10 +269,10 @@ export function SentimentDonutChart({ hasSentimentData, posPct, neuPct, negPct, 
   hasSentimentData: boolean; posPct: number; neuPct: number; negPct: number; sentTotal: number | string;
 }) {
   return (
-    <CyberCard style={{ gridColumn: 3, gridRow: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <CyberCard className="analysis-card" style={{ gridColumn: 3, gridRow: 1 }}>
       <PanelBadge icon={<Icon3DSentimentPie />} label="Sentiment"
         bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', flex: 1, justifyContent: 'center' }}>
+      <div className="analysis-card-body" style={{ alignItems: 'center' }}>
         {hasSentimentData ? (
           <>
             <div
@@ -308,14 +308,16 @@ export function SentimentDonutChart({ hasSentimentData, posPct, neuPct, negPct, 
             </div>
           </>
         ) : (
-          <div className="analysis-awaiting">
-            <div className="analysis-awaiting__ring" style={{ border: '2px dashed rgba(34,197,94,0.3)' }}>
-              <div style={{
-                fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
-                fontFamily: 'var(--font-mono)',
-              }}>0</div>
+          <div className="analysis-chart-container">
+            <div className="analysis-awaiting">
+              <div className="analysis-awaiting__ring" style={{ border: '2px dashed rgba(34,197,94,0.3)' }}>
+                <div style={{
+                  fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                  fontFamily: 'var(--font-mono)',
+                }}>0</div>
+              </div>
+              <div className="analysis-awaiting__text">Awaiting data…</div>
             </div>
-            <div className="analysis-awaiting__text">Awaiting data…</div>
           </div>
         )}
       </div>
@@ -332,10 +334,10 @@ export function PipelineStatsCard({ hasSentimentData, rows }: {
   rows: Array<{ label: string; value: number | string; color: string }>;
 }) {
   return (
-    <CyberCard style={{ gridColumn: 3, gridRow: 2, height: '100%', opacity: 0.85, display: 'flex', flexDirection: 'column' }}>
+    <CyberCard className="analysis-card" style={{ gridColumn: 3, gridRow: 2, opacity: 0.85 }}>
       <PanelBadge icon={<Icon3DPulse />} label="Pipeline"
         bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px', flex: 1, justifyContent: 'center' }}>
+      <div className="analysis-card-body" style={{ fontSize: '11px' }}>
         {hasSentimentData ? (
           rows.map(s => (
             <div key={s.label} className="analysis-pipeline-row">
@@ -344,14 +346,16 @@ export function PipelineStatsCard({ hasSentimentData, rows }: {
             </div>
           ))
         ) : (
-          <div className="analysis-awaiting">
-            <div className="analysis-awaiting__ring" style={{ border: '2px dashed rgba(0,217,255,0.3)' }}>
-              <div style={{
-                fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
-                fontFamily: 'var(--font-mono)',
-              }}>0</div>
+          <div className="analysis-chart-container">
+            <div className="analysis-awaiting">
+              <div className="analysis-awaiting__ring" style={{ border: '2px dashed rgba(0,217,255,0.3)' }}>
+                <div style={{
+                  fontSize: '11px', fontWeight: 700, color: 'var(--color-text-faint)',
+                  fontFamily: 'var(--font-mono)',
+                }}>0</div>
+              </div>
+              <div className="analysis-awaiting__text">Awaiting data…</div>
             </div>
-            <div className="analysis-awaiting__text">Awaiting data…</div>
           </div>
         )}
       </div>
@@ -366,7 +370,7 @@ export function PipelineStatsCard({ hasSentimentData, rows }: {
 export function CircularLoader() {
   return (
     <div className="analysis-loader-wrap">
-      <CyberLoader />
+      <CyberLoader scale={0.85} />
     </div>
   )
 }

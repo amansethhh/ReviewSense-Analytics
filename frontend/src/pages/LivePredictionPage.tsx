@@ -617,7 +617,10 @@ ${data.sarcasm ? `
                   <path d="M3 12h18M5 7h14M5 17h14" stroke="url(#det-glob-lp)" strokeWidth="1" opacity="0.35" />
                   <circle cx="12" cy="12" r="2" fill="url(#det-glob-lp)" opacity="0.8" />
                 </svg>
-                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-positive)', fontWeight: 600, letterSpacing: '0.02em' }}>
+                <span style={{
+                  fontSize: 'var(--text-xs)', color: 'var(--color-positive)', fontWeight: 600, letterSpacing: '0.02em',
+                  lineHeight: 1, display: 'inline-flex', alignItems: 'center', margin: 0, padding: 0, position: 'relative', top: 0
+                }}>
                   Auto-detect enabled
                 </span>
                 <span style={{
@@ -630,6 +633,10 @@ ${data.sarcasm ? `
                   lineHeight: 1,
                   display: 'inline-flex',
                   alignItems: 'center',
+                  margin: 0,
+                  padding: 0,
+                  position: 'relative',
+                  top: 0,
                   color: text.length > 9500 ? 'var(--color-negative)'
                     : text.length > 8000 ? 'var(--color-warning)'
                     : 'var(--color-text-muted)',

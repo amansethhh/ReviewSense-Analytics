@@ -4,6 +4,7 @@ import './CyberCard.css'
 interface CyberCardProps {
   children: ReactNode
   style?: CSSProperties
+  className?: string
 }
 
 /**
@@ -13,7 +14,7 @@ interface CyberCardProps {
  * PERF: Mouse handler throttled to 60fps (16ms) to prevent
  * layout thrashing during rapid mouse movement.
  */
-export const CyberCard = memo(function CyberCard({ children, style }: CyberCardProps) {
+export const CyberCard = memo(function CyberCard({ children, style, className = '' }: CyberCardProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const rafRef = useRef<number>(0)
 
@@ -47,7 +48,7 @@ export const CyberCard = memo(function CyberCard({ children, style }: CyberCardP
 
   return (
     <div
-      className="cyber-card"
+      className={`cyber-card ${className}`.trim()}
       ref={cardRef}
       style={style}
       onMouseMove={handleMouseMove}

@@ -8,16 +8,46 @@
 /* ── Main 3-column grid ── */
 .analysis-grid {
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: 300px 1fr 300px;
   gap: 24px;
-  align-items: stretch;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: center;
 }
 
 /* ── Side panels (left col / right col) ── */
 .analysis-grid__panel {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+}
+
+.analysis-card {
+  height: 240px;
+  min-height: 240px;
+  max-height: 240px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  overflow: hidden;
+  position: relative;
+}
+
+.analysis-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-height: 100%;
+  overflow: hidden;
+  gap: 4px;
+}
+
+.analysis-chart-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: 100%;
 }
 
@@ -33,19 +63,29 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  padding: 16px 0;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.analysis-grid__center > * {
+  margin: 0 !important;
 }
 
 /* ── Panel badge header ── */
 .analysis-panel-badge {
+  height: 40px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
   align-self: center;
   border-radius: 10px;
-  padding: 5px 14px;
-  margin-bottom: 24px;
+  padding: 0 14px;
+  margin-bottom: 12px;
+}
+
+.analysis-card .cyber-card__content {
+  padding: 20px !important;
 }
 
 /* ── Panel stat rows ── */
@@ -53,7 +93,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: 4px 0;
+  width: 100%;
 }
 
 .analysis-stat-label {
@@ -62,6 +103,13 @@
   color: var(--color-text-faint);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  top: 0;
 }
 
 .analysis-stat-value {
@@ -70,6 +118,13 @@
   font-family: var(--font-mono);
   color: var(--color-text);
   transition: all 0.3s ease;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  top: 0;
 }
 
 /* ── Donut chart ── */
@@ -102,9 +157,20 @@
 .analysis-sent-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 10px;
   margin-bottom: 4px;
-  margin-top: 12px;
+  margin-top: 10px;
+}
+
+.analysis-sent-row > span {
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  top: 0;
 }
 
 .analysis-sent-bar {
@@ -161,9 +227,7 @@
 
 /* ── Phase progress 3D sub-box ── */
 .analysis-phase-box {
-  width: 100%;
-  max-width: 380px;
-  align-self: center;
+  width: 420px;
   background: rgba(13, 17, 23, 0.75);
   border: 1px solid rgba(0, 217, 255, 0.20);
   border-radius: 14px;
@@ -175,7 +239,6 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  margin-bottom: 24px;
 }
 
 .analysis-phase-header {
@@ -261,7 +324,6 @@
   border-radius: 12px;
   padding: 5px 14px;
   white-space: nowrap;
-  margin-top: 6px;
 }
 
 .analysis-status-pill__label {
@@ -278,13 +340,15 @@
 
 /* ── Terminal ── */
 .analysis-terminal {
-  width: 100%;
-  max-width: 480px;
+  width: 420px;
+  height: 140px;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(0, 217, 255, 0.1);
   border-radius: 10px;
   overflow: hidden;
-  margin-top: 6px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
 }
 
 .analysis-terminal__titlebar {
@@ -320,7 +384,7 @@
 
 .analysis-terminal__body {
   padding: 6px 10px;
-  height: 90px;
+  height: 105px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -344,14 +408,40 @@
 .analysis-pipeline-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 11px;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.analysis-pipeline-row > span {
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  top: 0;
 }
 
 /* ── Config rows (left-bottom) ── */
 .analysis-config-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 11px;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.analysis-config-row > span {
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  top: 0;
 }
 
 /* ── Scrollbar styling for terminal ── */
