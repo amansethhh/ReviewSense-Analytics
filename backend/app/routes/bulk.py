@@ -921,10 +921,17 @@ async def get_bulk_status(job_id: str):
         BulkJobStatus.completed.value,
         "completed",
     )
+    # Build live sentiment counts from ALL accumulated results
+    # (not the capped 50 window — gives accurate real-time totals for live panels)
+    live_pos     = sum(1 for r in all_results if r.get('sentiment') == 'positive')
+    live_neg     = sum(1 for r in all_results if r.get('sentiment') == 'negative')
+    live_neu     = sum(1 for r in all_results if r.get('sentiment') == 'neutral')
+    live_sarcasm = sum(1 for r in all_results if r.get('sarcasm_detected'))
+
+    # FIX-2: Cap results payload — last 50 during processing, full at completion
     if is_done:
         streamed_results = all_results if all_results else None
     elif all_results:
-        # Send only last 50 rows during processing (live panels only need recent data)
         streamed_results = all_results[-50:]
     else:
         streamed_results = None
@@ -932,7 +939,12 @@ async def get_bulk_status(job_id: str):
     return BulkJobResult(**{
         **job,
         "results": streamed_results,
+        "live_pos": live_pos,
+        "live_neg": live_neg,
+        "live_neu": live_neu,
+        "live_sarcasm": live_sarcasm,
     })
+
 
 
 @router.get(

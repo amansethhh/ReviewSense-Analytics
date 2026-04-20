@@ -79,17 +79,22 @@ export interface BulkRowResult {
 }
 
 export interface BulkJobResult {
-  job_id:     string
-  status:     BulkJobStatus
-  progress:   number
-  total_rows: number
-  processed:  number
-  results?:   BulkRowResult[] | null
-  summary?:   BulkSummary    | null
-  error?:     string | null
-  logs:       string[]
+  job_id:       string
+  status:       BulkJobStatus
+  progress:     number
+  total_rows:   number
+  processed:    number
+  results?:     BulkRowResult[] | null
+  summary?:     BulkSummary    | null
+  error?:       string | null
+  logs:         string[]
   /** Active pipeline phase: 'init' | 'detecting' | 'translating' | 'analyzing' | 'done' */
-  phase?:     string | null
+  phase?:       string | null
+  /** Cumulative live sentiment counts from ALL processed rows (not the 50-row streaming window) */
+  live_pos?:     number | null
+  live_neg?:     number | null
+  live_neu?:     number | null
+  live_sarcasm?: number | null
 }
 
 export interface BulkSummary {

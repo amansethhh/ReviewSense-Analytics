@@ -123,15 +123,21 @@ class BulkRowResult(BaseModel):
 
 
 class BulkJobResult(BaseModel):
-    job_id:      str
-    status:      BulkJobStatus
-    progress:    float = Field(..., ge=0.0, le=100.0)
-    total_rows:  int
-    processed:   int
-    results:     Optional[list[BulkRowResult]] = None
-    summary:     Optional[dict[str, Any]] = None
-    error:       Optional[str] = None
-    logs:        list[str] = Field(default_factory=list)
+    job_id:       str
+    status:       BulkJobStatus
+    progress:     float = Field(..., ge=0.0, le=100.0)
+    total_rows:   int
+    processed:    int
+    results:      Optional[list[BulkRowResult]] = None
+    summary:      Optional[dict[str, Any]] = None
+    error:        Optional[str] = None
+    logs:         list[str] = Field(default_factory=list)
+    phase:        Optional[str] = None
+    # Live cumulative sentiment counts (accurate totals, not 50-row window)
+    live_pos:     Optional[int] = None
+    live_neg:     Optional[int] = None
+    live_neu:     Optional[int] = None
+    live_sarcasm: Optional[int] = None
 
 
 # ── /language ──────────────────────────────────────────────

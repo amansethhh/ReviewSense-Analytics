@@ -794,17 +794,18 @@ export function BulkAnalysisPage() {
         const avgConf = rows.length > 0 ? (rows.reduce((s, r) => s + r.confidence, 0) / rows.length).toFixed(1) : '—'
         const errorCount = rows.filter(r => r.sentiment === 'error' || r.sentiment === 'unknown').length
 
-        // ── Live sentiment distribution ──
-        const posCount = rows.filter(r => r.sentiment === 'positive').length
-        const negCount = rows.filter(r => r.sentiment === 'negative').length
-        const neuCount = rows.filter(r => r.sentiment === 'neutral').length
+        // ── Live sentiment distribution — use server-provided cumulative counts
+        // (NOT from rows[] which is capped at 50 for network efficiency)
+        const posCount     = result?.live_pos     ?? rows.filter(r => r.sentiment === 'positive').length
+        const negCount     = result?.live_neg     ?? rows.filter(r => r.sentiment === 'negative').length
+        const neuCount     = result?.live_neu     ?? rows.filter(r => r.sentiment === 'neutral').length
+        const sarcasmCount = result?.live_sarcasm ?? rows.filter(r => r.sarcasm_detected).length
         const sentRealTotal = posCount + negCount + neuCount
         const hasSentimentData = sentRealTotal > 0
         const sentTotal = sentRealTotal || 1
         const posPct = Math.round((posCount / sentTotal) * 100)
         const negPct = Math.round((negCount / sentTotal) * 100)
         const neuPct = 100 - posPct - negPct
-        const sarcasmCount = rows.filter(r => r.sarcasm_detected).length
 
 
 

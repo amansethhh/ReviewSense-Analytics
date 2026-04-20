@@ -1548,10 +1548,11 @@ export function LanguageAnalysisPage() {
             const avgConf = rows.length > 0 ? (rows.reduce((s, r) => s + r.confidence, 0) / rows.length).toFixed(1) : '—'
             const errorCount = rows.filter(r => r.sentiment === 'error' || r.sentiment === 'unknown').length
 
-            // ── Live sentiment distribution ──
-            const posCount = rows.filter(r => r.sentiment === 'positive').length
-            const negCount = rows.filter(r => r.sentiment === 'negative').length
-            const neuCount = rows.filter(r => r.sentiment === 'neutral').length
+            // ── Live sentiment distribution — use server-provided cumulative counts
+            // (NOT from rows[] which is capped at 50 for network efficiency)
+            const posCount     = bResult?.live_pos     ?? rows.filter(r => r.sentiment === 'positive').length
+            const negCount     = bResult?.live_neg     ?? rows.filter(r => r.sentiment === 'negative').length
+            const neuCount     = bResult?.live_neu     ?? rows.filter(r => r.sentiment === 'neutral').length
             const sentRealTotal = posCount + negCount + neuCount
             const hasSentimentData = sentRealTotal > 0
             const sentTotal = sentRealTotal || 1
@@ -1741,105 +1742,108 @@ export function LanguageAnalysisPage() {
                   </div>
                 </CyberCard>
 
-                {/* ── CENTER: Loader + Terminal (spans both rows) ── */}
+                {/* ── CENTER: Loader + Progress Box + Status Pill + Terminal ── */}
                 <div style={{
                   gridColumn: 2, gridRow: '1 / 3',
                   display: 'flex', flexDirection: 'column',
                   alignItems: 'center', justifyContent: 'center',
-                  gap: '6px',
+                  gap: 0,
                 }}>
-                  {/* Cyber loader — scaled to fit center */}
-                  <div style={{ margin: '-85px 0 -40px 0', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <CyberLoader scale={0.85} />
+                  {/* CyberLoader — properly spaced away from card header */}
+                  <div style={{ marginBottom: '-20px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <CyberLoader scale={0.78} />
                   </div>
 
-                  {/* Phase-aware progress bar */}
-                  <div style={{ width: '80%', maxWidth: '300px', alignSelf: 'center' }}>
-                    {/* Phase label */}
-                    {(() => {
-                      const phase = bResult?.phase
-                      const PHASE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
-                        detecting:   { label: 'Detecting Languages', emoji: '🔍', color: '#00d9ff' },
-                        translating: { label: 'Translating',        emoji: '🌐', color: '#a78bfa' },
-                        analyzing:   { label: 'Analyzing Sentiment', emoji: '⚡', color: '#00ff88' },
-                        done:        { label: 'Finalizing',          emoji: '✅', color: '#22c55e' },
-                        init:        { label: 'Initializing',        emoji: '🚀', color: '#fde047' },
-                      }
-                      const cfg = PHASE_CONFIG[phase ?? 'init'] ?? PHASE_CONFIG.init
-                      return (
-                        <div style={{
-                          display: 'flex', alignItems: 'center', gap: '6px',
-                          marginBottom: '6px', fontSize: '10px',
-                          fontFamily: 'var(--font-mono)',
-                        }}>
-                          <span style={{ fontSize: '12px' }}>{cfg.emoji}</span>
-                          <span style={{ color: cfg.color, fontWeight: 600, letterSpacing: '0.04em' }}>
+                  {/* ── Phase Progress 3D Sub-Box ── */}
+                  {(() => {
+                    const phase = bResult?.phase
+
+                    const phaseIcons: Record<string, string> = {
+                      init:        `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="lpi0" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#fde047"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient></defs><circle cx="12" cy="12" r="10" stroke="url(#lpi0)" stroke-width="1.5" fill="url(#lpi0)" fill-opacity=".1"/><path d="M12 7v5l3 3" stroke="url(#lpi0)" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+                      detecting:   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="lpi1" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#00d9ff"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient></defs><circle cx="10" cy="10" r="6" stroke="url(#lpi1)" stroke-width="1.5" fill="url(#lpi1)" fill-opacity=".1"/><path d="M14.5 14.5l4 4" stroke="url(#lpi1)" stroke-width="2" stroke-linecap="round"/></svg>`,
+                      translating: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="lpi2" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs><circle cx="12" cy="12" r="9" stroke="url(#lpi2)" stroke-width="1.5" fill="url(#lpi2)" fill-opacity=".1"/><ellipse cx="12" cy="12" rx="4" ry="9" stroke="url(#lpi2)" stroke-width="1" fill="none" opacity=".5"/><path d="M3 12h18" stroke="url(#lpi2)" stroke-width="1" opacity=".4"/></svg>`,
+                      analyzing:   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="lpi3" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#00ff88"/><stop offset="100%" stop-color="#22c55e"/></linearGradient></defs><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" stroke="url(#lpi3)" stroke-width="1.5" stroke-linejoin="round" fill="url(#lpi3)" fill-opacity=".15"/></svg>`,
+                      done:        `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="lpi4" x1="0" y1="0" x2="24" y2="24"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#00ff88"/></linearGradient></defs><circle cx="12" cy="12" r="9" stroke="url(#lpi4)" stroke-width="1.5" fill="url(#lpi4)" fill-opacity=".12"/><path d="M8 12l3 3 5-5" stroke="url(#lpi4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+                    }
+
+                    const PHASE_CONFIG: Record<string, { label: string; color: string; grad: string }> = {
+                      init:        { label: 'Initializing',        color: '#fde047', grad: 'linear-gradient(90deg,#fde047,#f59e0b)' },
+                      detecting:   { label: 'Detecting Languages', color: '#00d9ff', grad: 'linear-gradient(90deg,#00d9ff,#0ea5e9)' },
+                      translating: { label: 'Translating',         color: '#a78bfa', grad: 'linear-gradient(90deg,#a78bfa,#7c3aed)' },
+                      analyzing:   { label: 'Analyzing Sentiment', color: '#00ff88', grad: 'linear-gradient(90deg,#00ff88,#22c55e)' },
+                      done:        { label: 'Finalizing',           color: '#22c55e', grad: 'linear-gradient(90deg,#22c55e,#16a34a)' },
+                    }
+                    const cfg = PHASE_CONFIG[phase ?? 'init'] ?? PHASE_CONFIG.init
+
+                    const STEPS = [
+                      { key: 'detecting',   label: 'Detect',    pct: 15  },
+                      { key: 'translating', label: 'Translate', pct: 40  },
+                      { key: 'analyzing',   label: 'Analyze',   pct: 68  },
+                      { key: 'done',        label: 'Done',      pct: 100 },
+                    ]
+
+                    return (
+                      <div style={{
+                        width: '72%', maxWidth: '280px', alignSelf: 'center',
+                        background: 'rgba(13,17,23,0.75)',
+                        border: '1px solid rgba(0,217,255,0.20)',
+                        borderRadius: '14px',
+                        boxShadow: '0 0 18px rgba(0,217,255,0.08), inset 0 1px 0 rgba(255,255,255,0.04)',
+                        backdropFilter: 'blur(10px)',
+                        padding: '12px 16px 10px',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
+                        marginBottom: '10px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', width: '100%' }}>
+                          <span
+                            dangerouslySetInnerHTML={{ __html: phaseIcons[phase ?? 'init'] ?? phaseIcons.init }}
+                            style={{ display: 'flex', flexShrink: 0 }}
+                          />
+                          <span style={{ fontSize: '10px', fontFamily: 'var(--font-mono)', color: cfg.color, fontWeight: 700, letterSpacing: '0.06em' }}>
                             {cfg.label}
                           </span>
-                          <span style={{ color: 'var(--color-text-faint)', marginLeft: 'auto' }}>
-                            {progressPct}%
-                          </span>
+                          <span style={{
+                            fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--color-text-faint)',
+                            background: 'rgba(255,255,255,0.05)', padding: '1px 6px', borderRadius: '6px',
+                            border: '1px solid rgba(255,255,255,0.07)',
+                          }}>{progressPct}%</span>
                         </div>
-                      )
-                    })()}
-                    {/* Progress bar track */}
-                    <div style={{
-                      height: '5px', borderRadius: '3px',
-                      background: 'rgba(255,255,255,0.06)',
-                      overflow: 'hidden',
-                    }}>
-                      <div style={{
-                        height: '100%', borderRadius: '3px',
-                        background: (() => {
-                          const ph = bResult?.phase
-                          if (ph === 'detecting')   return 'linear-gradient(90deg, #00d9ff, #0ea5e9)'
-                          if (ph === 'translating') return 'linear-gradient(90deg, #a78bfa, #7c3aed)'
-                          if (ph === 'done')        return 'linear-gradient(90deg, #22c55e, #16a34a)'
-                          return 'linear-gradient(90deg, #00d9ff, #00ff88)'
-                        })(),
-                        width: `${progressPct}%`,
-                        transition: 'width 0.4s ease',
-                      }} />
-                    </div>
-                    {/* Phase step dots */}
-                    <div style={{
-                      display: 'flex', justifyContent: 'space-between',
-                      marginTop: '5px',
-                    }}>
-                      {[
-                        { key: 'detecting',   label: 'Detect', pct: 15 },
-                        { key: 'translating', label: 'Translate', pct: 40 },
-                        { key: 'analyzing',   label: 'Analyze', pct: 68 },
-                        { key: 'done',        label: 'Done', pct: 100 },
-                      ].map(step => {
-                        const done = progressPct >= step.pct
-                        const active = bResult?.phase === step.key
-                        return (
-                          <div key={step.key} style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px',
-                          }}>
-                            <div style={{
-                              width: '6px', height: '6px', borderRadius: '50%',
-                              background: done ? '#00ff88' : 'rgba(255,255,255,0.15)',
-                              boxShadow: active ? '0 0 6px #00ff88' : 'none',
-                              transition: 'all 0.3s ease',
-                            }} />
-                            <span style={{
-                              fontSize: '8px', color: done ? 'var(--color-text-muted)' : 'var(--color-text-faint)',
-                              fontFamily: 'var(--font-mono)',
-                            }}>{step.label}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
+                        <div style={{ width: '100%', height: '4px', borderRadius: '3px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', borderRadius: '3px', background: cfg.grad,
+                            width: `${progressPct}%`, transition: 'width 0.5s ease',
+                            boxShadow: `0 0 6px ${cfg.color}55`,
+                          }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', paddingTop: '2px' }}>
+                          {STEPS.map(step => {
+                            const stepDone   = progressPct >= step.pct
+                            const stepActive = bResult?.phase === step.key
+                            return (
+                              <div key={step.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                                <div style={{
+                                  width: '7px', height: '7px', borderRadius: '50%',
+                                  background: stepDone ? '#00ff88' : 'rgba(255,255,255,0.12)',
+                                  boxShadow: stepActive ? '0 0 8px #00ff88' : 'none',
+                                  transition: 'all 0.3s ease',
+                                }} />
+                                <span style={{ fontSize: '7px', color: stepDone ? 'var(--color-text-muted)' : 'var(--color-text-faint)', fontFamily: 'var(--font-mono)' }}>{step.label}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
-                  {/* Status pill */}
+                  {/* Spacer pushes status pill to visual centre */}
+                  <div style={{ flex: 1 }} />
+
+                  {/* Status pill — centred between progress box and terminal */}
                   <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: '8px',
                     background: 'rgba(0, 217, 255, 0.06)', border: '1px solid rgba(0, 217, 255, 0.15)',
-                    borderRadius: '12px', padding: '5px 14px',
-                    whiteSpace: 'nowrap', marginTop: '6px',
+                    borderRadius: '12px', padding: '5px 14px', whiteSpace: 'nowrap',
                   }}>
                     <span style={{ fontSize: '11px', color: 'var(--color-primary-bright)', fontWeight: 600 }}>
                       Translating &amp; Analyzing
@@ -1849,7 +1853,11 @@ export function LanguageAnalysisPage() {
                     </span>
                   </div>
 
+                  {/* Spacer pushes terminal down */}
+                  <div style={{ flex: 1 }} />
+
                   {/* Terminal logs */}
+
                   <div style={{
                     width: '90%', maxWidth: '380px',
                     background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(0, 217, 255, 0.1)',
