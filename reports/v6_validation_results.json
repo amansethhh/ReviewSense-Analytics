@@ -1,0 +1,124 @@
+{
+  "accuracy": 1.0,
+  "accuracy_pct": 100.0,
+  "total": 13,
+  "correct": 13,
+  "confusion_matrix": {
+    "positive": {
+      "positive": 6,
+      "negative": 0,
+      "neutral": 0
+    },
+    "negative": {
+      "positive": 0,
+      "negative": 6,
+      "neutral": 0
+    },
+    "neutral": {
+      "positive": 0,
+      "negative": 0,
+      "neutral": 1
+    }
+  },
+  "error_cases": [],
+  "translations": [
+    {
+      "lang": "hi",
+      "text": "यह उत्पाद बहुत अच्छा है",
+      "translation": "This product is very good.",
+      "method": "nllb",
+      "valid": true
+    },
+    {
+      "lang": "fr",
+      "text": "Ce produit est excellent.",
+      "translation": "This product is excellent.",
+      "method": "nllb",
+      "valid": true
+    },
+    {
+      "lang": "ar",
+      "text": "هذا المنتج ممتاز.",
+      "translation": "This product is excellent.",
+      "method": "nllb",
+      "valid": true
+    },
+    {
+      "lang": "ja",
+      "text": "この製品は素晴らしいです。",
+      "translation": "This product is amazing.",
+      "method": "nllb",
+      "valid": true
+    }
+  ],
+  "sample_outputs": [
+    {
+      "lang": "en",
+      "text": "This product is excellent and I love it.",
+      "label": "positive",
+      "prediction": "positive",
+      "confidence": 90.98,
+      "model_used": "roberta"
+    },
+    {
+      "lang": "en",
+      "text": "This product is terrible and completely broken.",
+      "label": "negative",
+      "prediction": "negative",
+      "confidence": 87.02,
+      "model_used": "roberta"
+    },
+    {
+      "lang": "en",
+      "text": "It works as expected, nothing special.",
+      "label": "neutral",
+      "prediction": "neutral",
+      "confidence": 39.85,
+      "model_used": "roberta"
+    },
+    {
+      "lang": "hi",
+      "text": "यह उत्पाद बहुत अच्छा है",
+      "label": "positive",
+      "prediction": "positive",
+      "confidence": 43.37,
+      "model_used": "xlm-r"
+    },
+    {
+      "lang": "hi",
+      "text": "यह उत्पाद बहुत खराब है",
+      "label": "negative",
+      "prediction": "negative",
+      "confidence": 85.07,
+      "model_used": "xlm-r"
+    },
+    {
+      "lang": "fr",
+      "text": "Ce produit est excellent.",
+      "label": "positive",
+      "prediction": "positive",
+      "confidence": 86.87,
+      "model_used": "xlm-r"
+    },
+    {
+      "lang": "fr",
+      "text": "Ce produit est terrible.",
+      "label": "negative",
+      "prediction": "negative",
+      "confidence": 88.38,
+      "model_used": "xlm-r"
+    },
+    {
+      "lang": "de",
+      "text": "Dieses Produkt ist ausgezeichnet.",
+      "label": "positive",
+      "prediction": "positive",
+      "confidence": 44.69,
+      "model_used": "xlm-r"
+    }
+  ],
+  "batch_consistency_errors": [],
+  "mode_consistency_errors": [],
+  "processing_time_s": 24.76,
+  "avg_ms_per_sample": 1904.6
+}

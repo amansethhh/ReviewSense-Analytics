@@ -80,7 +80,10 @@ class SarcasmResult(BaseModel):
 
 
 class PredictResponse(BaseModel):
+    label:       Optional[SentimentLabel] = None
     sentiment:   SentimentLabel
+    raw_label:   str = "neutral"
+    is_uncertain: bool = False
     confidence:  float = Field(..., ge=0.0, le=100.0)
     polarity:    float = Field(..., ge=-1.0, le=1.0)
     subjectivity: float = Field(..., ge=0.0, le=1.0)
@@ -121,7 +124,10 @@ class BulkJobSubmitResponse(BaseModel):
 class BulkRowResult(BaseModel):
     row_index:   int
     text:        str
+    label:       Optional[SentimentLabel] = None
     sentiment:   SentimentLabel
+    raw_label:   str = "neutral"
+    is_uncertain: bool = False
     confidence:  float
     polarity:    float
     subjectivity: float
@@ -130,6 +136,7 @@ class BulkRowResult(BaseModel):
     detected_language: Optional[str] = None
     translation_method: Optional[str] = None
     translated_text: Optional[str] = None
+    translation: Optional[str] = None
     # V3 output contract fields
     analysis_input_source: str = "original"
     translation_failed:    bool = False
@@ -183,9 +190,13 @@ class LanguageResponse(BaseModel):
     language_code:          str
     detection_confidence:   float
     translated_text:        Optional[str] = None
+    translation:            Optional[str] = None
     translation_needed:     bool
     skipped_translation:    bool = False
+    label:                  Optional[SentimentLabel] = None
     sentiment:              SentimentLabel
+    raw_label:              str = "neutral"
+    is_uncertain:           bool = False
     confidence:             float
     polarity:               float
     subjectivity:           float

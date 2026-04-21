@@ -44,7 +44,18 @@ _SENTIMENT_WORDS = frozenset({
 })
 
 
-def validate_translation(
+def validate_translation(text: str, translated: str) -> bool:
+    """V6 strict translation validation contract."""
+    if len(str(translated or "").strip()) < 3:
+        return False
+    if str(translated or "").strip() == str(text or "").strip():
+        return False
+    if "[" in str(translated or ""):
+        return False
+    return True
+
+
+def validate_translation_details(
     original: str,
     translated: str,
     source_lang: str = "unknown",

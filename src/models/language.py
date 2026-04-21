@@ -63,6 +63,20 @@ _RE_THAI       = re.compile(r'[\u0e00-\u0e7f]')
 
 _SCRIPT_THRESHOLD = 0.15  # min ratio of script chars to trigger detection
 
+# V4 FIX 3: Common English sentiment words that appear in short reviews.
+# Used to guard against langdetect misrouting short English texts.
+_ENGLISH_SHORT_PATTERN = re.compile(
+    r'\b(worst|best|terrible|awful|amazing|great|good|bad|poor|excellent|'
+    r'perfect|horrible|fantastic|outstanding|dreadful|useless|broken|'
+    r'love|loved|hate|hated|nice|fine|okay|ok|mediocre|average|decent|'
+    r'highly recommend|do not recommend|waste of money|value for money|'
+    r'five stars|one star|two stars|three stars|four stars|'
+    r'not worth|worth|quality|product|service|delivery|'
+    r'disappointed|disappointing|satisfied|satisfying|'
+    r'returned|refund|cheap|expensive|overpriced)\b',
+    re.IGNORECASE
+)
+
 
 def detect_script(text: str) -> str | None:
     """Unicode block analysis for non-Latin script detection.
@@ -150,17 +164,41 @@ def detect_language_safe(text: str) -> str:
     """Full language detection hierarchy (replaces bare langdetect.detect).
 
     Priority order:
+      0. Short-text ASCII English guard (< 8 words, predominantly ASCII)
       1. Unicode script analysis (non-Latin scripts — highest confidence, fastest)
       2. Hinglish pre-check (code-switched Roman Hindi)
       3. langdetect with confidence thresholding
       4. Fallback to English
 
-    FIXED: Unicode MUST be Tier 1 so Devanagari text is not misclassified
-    as Hinglish (Hinglish markers scan Latin-script words only).
+    V4 FIX 3: Added Tier 0 to prevent short English phrases from being
+    misdetected and routed to XLM-R (which gives ~44% confidence for English).
     """
     text = str(text or "").strip()
     if not text:
         return "en"
+
+    words = text.split()
+
+    # Tier 0: Short-text ASCII English guard (V4 FIX 3)
+    # Statistical detectors fail on < 8 words of ASCII text.
+    # If text is predominantly ASCII, it cannot be CJK/Arabic/Hindi etc.
+    if len(words) <= 8:
+        ascii_chars = sum(1 for c in text if ord(c) < 128)
+        ascii_ratio = ascii_chars / max(len(text), 1)
+        if ascii_ratio > 0.80:
+            # Check for common English vocabulary
+            if _ENGLISH_SHORT_PATTERN.search(text):
+                logger.debug(
+                    "[LANG] Short-text English guard: matched vocab in '%s'", text[:50]
+                )
+                return "en"
+            # Pure ASCII short text → English default
+            # (Chinese/Japanese/Korean/Arabic/Hindi would never be ASCII)
+            if all(ord(c) < 128 for c in text.replace(' ', '')):
+                logger.debug(
+                    "[LANG] Short-text ASCII guard: pure ASCII '%s' → en", text[:50]
+                )
+                return "en"
 
     # Tier 1: Unicode block (non-Latin scripts always identifiable)
     script_lang = detect_script(text)

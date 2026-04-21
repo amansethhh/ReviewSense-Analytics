@@ -17,7 +17,7 @@ logger = logging.getLogger("reviewsense")
 
 import functools
 from src.models.language import detect_language
-from src.models.translation import translate_to_english
+from src.models.translation import translate_batch, translate_to_english
 from src.models.sentiment import predict as sentiment_predict
 from src.models.sentiment import predict_batch as sentiment_predict_batch
 from src.predict import (
@@ -55,25 +55,17 @@ def _translation_plausible(source: str, translated: str) -> bool:
 # Problem 2 — Translation validation (polarity inversion)
 # ═══════════════════════════════════════════════════════════════
 
-def validate_translation(original_text: str, translated_text: str) -> dict:
-    """Compare TextBlob polarity of original vs translated text."""
-    op, tp = 0.0, 0.0
-    try:
-        from textblob import TextBlob
-        op = TextBlob(original_text).sentiment.polarity
-        tp = TextBlob(translated_text).sentiment.polarity
-        flagged = (op > 0.25 and tp < -0.25) or (op < -0.25 and tp > 0.25)
-    except Exception:
-        flagged = False
-
-    return {
-        "translated_text": translated_text,
-        "translation_flagged": flagged,
-        "flag_reason": "Polarity inversion detected" if flagged else "",
-        "translation_confidence": "LOW" if flagged else "HIGH",
-        "original_polarity": round(op, 4),
-        "translated_polarity": round(tp, 4),
-    }
+def validate_translation(original_text: str, translated_text: str) -> bool:
+    """V6 strict translation validation."""
+    original = str(original_text or "").strip()
+    translated = str(translated_text or "").strip()
+    if len(translated) < 3:
+        return False
+    if translated == original:
+        return False
+    if "[" in translated:
+        return False
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -134,10 +126,10 @@ def _apply_post_processing(
 ) -> dict:
     """Apply the full post-processing pipeline to a single prediction.
 
-    V5 Pipeline order:
-      Step 4: Dual polarity (VADER + TextBlob) — English only (Ruleset 3)
-      Step 5: Short-text guard — English text (original or translated)
-      Step 6: Neutral correction v2 (Ruleset 4) — model-first
+    V6 Pipeline order:
+      Step 4: Dual polarity (TextBlob/VADER) for English only
+      Step 5: Short-text guard on original text only
+      Step 6: Neutral correction v2 model-first logic
       Step 7: Confidence calibration
       Step 8: Temperature scaling
     """
@@ -145,45 +137,32 @@ def _apply_post_processing(
     pred_class = sentiment["label"]
     raw_confidence = sentiment["confidence"]
 
-    # Step 4: Dual polarity — ENGLISH ONLY (V5 Ruleset 3)
+    # Step 4: Dual polarity - English only.
     # For non-English, returns (0.0, 0.0, 0.5) automatically
     polarity, vader_compound, subjectivity = compute_dual_polarity(text, lang_code)
 
-    # Step 5: Short-text guard
-    # For non-English inputs, use translated English text (if available)
-    # so English explicit terms can be matched. Model still ran on original.
+    # Step 5: Short-text guard on original text only.
+    # translated_text is accepted for backward compatibility but never used
+    # for sentiment decisions.
     guard_text = text
-    lc = (lang_code or "en").lower().strip()[:2]
-    if lc != "en" and translated_text and translated_text.strip():
-        guard_text = translated_text
-        logger.debug(
-            "[GUARD] Using translated text for short-text guard: '%s'",
-            guard_text[:50],
-        )
 
     guard_result = apply_short_text_guard(guard_text, pred_class, raw_confidence)
     pred_class = guard_result["pred_class"]
     confidence = guard_result["confidence"] if guard_result["guard_applied"] else raw_confidence
     guard_applied = guard_result["guard_applied"]
 
-    # Step 6: Neutral correction v2 — model-first (V5 Ruleset 4)
+    # Step 6: Neutral correction v2 - model first.
     nc = apply_neutral_correction_v2(pred_class, confidence, polarity, vader_compound, lang_code)
     pred_class = nc["pred_class"]
     neutral_corrected = nc["neutral_corrected"]
     correction_reason = nc["correction_reason"]
 
-    # Step 7: Confidence calibration
+    # Step 7: V4 FIX 2 — No artificial confidence reduction
     confidence = calibrated_confidence(confidence, polarity, pred_class)
 
-    # Step 8: Temperature scaling (conditional)
+    # Step 8: V4 — Temperature scaling REMOVED from output confidence.
+    # Reducing confidence triggers neutral collapse for XLM-R at ~44%.
     temperature_scaled = False
-    if raw_confidence <= 0.92:
-        temp_probs = apply_temperature_scaling(scores)
-        temp_confidence = temp_probs[pred_class]
-        confidence = min(confidence, temp_confidence)
-        confidence = max(confidence, 0.30)
-        confidence = round(confidence, 4)
-        temperature_scaled = True
 
     label_name = LABEL_MAP[pred_class]
 
@@ -260,18 +239,14 @@ def run_pipeline(
 
         # Validate translation (Problem 2) — ENFORCEMENT
         if was_translated:
-            val = validate_translation(original, translated)
-            polarity_flipped = (
-                val.get("translation_flagged", False)
-                and abs(val.get("original_polarity", 0.0) if "original_polarity" in val else 0.0) > 0.15
-                and abs(val.get("translated_polarity", 0.0) if "translated_polarity" in val else 0.0) > 0.15
-            )
-            if polarity_flipped or val.get("translation_flagged", False):
+            if not validate_translation(original, translated):
                 # Fall back to original text — do NOT trust translation
                 translation_flagged = True
                 translation_status = "FALLBACK_PASSTHROUGH"
+                translated = original
+                was_translated = False
                 logger.warning(
-                    "Translation polarity flip | lang=%s | falling back to original text",
+                    "Invalid translation | lang=%s | falling back to original text",
                     lang_code,
                 )
 
@@ -288,7 +263,7 @@ def run_pipeline(
     pp = _apply_post_processing(
         analysis_input, sentiment,
         lang_code=lang_code,
-        translated_text=translated if was_translated else "",
+        translated_text="",
     )
 
     # Reduce confidence if translation flagged
@@ -401,19 +376,20 @@ def run_pipeline_batch(
 
     # Step 1+2: Language detection + translation
     _progress(5, "🌐 Detecting languages...")
-    translated_texts = []
+    from collections import defaultdict
+
+    translated_texts = list(clean_texts)
     lang_infos = []
-    translation_statuses = []
-    translation_flags = []
+    translation_statuses = ["OK"] * total
+    translation_flags = [False] * total
     hinglish_flags = []
+    translation_groups: dict[str, list[int]] = defaultdict(list)
 
     for i, text in enumerate(clean_texts):
         if not text:
-            translated_texts.append("")
             lang_infos.append({"code": "unknown", "name": "Unknown", "flag_emoji": "🏳️",
-                               "was_translated": False, "hinglish_detected": False})
-            translation_statuses.append("OK")
-            translation_flags.append(False)
+                               "was_translated": False, "hinglish_detected": False,
+                               "translated": ""})
             hinglish_flags.append(False)
             continue
 
@@ -421,40 +397,63 @@ def run_pipeline_batch(
         lang_code = lang["code"]
         is_hinglish = lang.get("hinglish_detected", False)
         hinglish_flags.append(is_hinglish)
+        lang_infos.append({**lang, "was_translated": False, "translated": text})
 
-        if is_hinglish:
-            translated_texts.append(text)
-            lang_infos.append({**lang, "was_translated": False, "translated": text})
-            translation_statuses.append("OK")
-            translation_flags.append(False)
-        elif lang_code not in ("en", "unknown"):
-            tr_result = safe_translate(text, lang_code)
-            tr_text = tr_result["translated_text"]
-            was_tr = tr_text.strip().lower() != text.strip().lower()
-            translated_texts.append(tr_text if was_tr else text)
-            lang_infos.append({**lang, "was_translated": was_tr, "translated": tr_text})
-            translation_statuses.append(tr_result["translation_status"])
-
-            # Validate translation
-            if was_tr:
-                val = validate_translation(text, tr_text)
-                translation_flags.append(val["translation_flagged"])
-            else:
-                translation_flags.append(False)
-        else:
-            translated_texts.append(text)
-            lang_infos.append({**lang, "was_translated": False, "translated": text})
-            translation_statuses.append("OK")
-            translation_flags.append(False)
+        if not is_hinglish and lang_code not in ("en", "unknown"):
+            translation_groups[lang_code].append(i)
 
         if i % 2 == 0:
             pct = 5 + int((i + 1) / total * 20)
             flag = lang.get("flag_emoji", "🏳️")
             _progress(pct, f"🔍 {i+1}/{total} | {flag} {lang['name']}")
 
+    if translation_groups:
+        _progress(20, "🌐 Translating non-English reviews in batches...")
+        groups_done = 0
+        for lang_code, indices in translation_groups.items():
+            batch_texts = [clean_texts[idx] for idx in indices]
+            try:
+                batch_translations = translate_batch(batch_texts, lang_code)
+            except Exception as exc:
+                logger.warning("Batch translation failed for %s: %s", lang_code, exc)
+                batch_translations = batch_texts
+            if len(batch_translations) != len(batch_texts):
+                logger.warning(
+                    "Batch translation length mismatch for %s: expected %d got %d",
+                    lang_code,
+                    len(batch_texts),
+                    len(batch_translations),
+                )
+                batch_translations = batch_texts
+
+            for idx, original, translated in zip(indices, batch_texts, batch_translations):
+                if validate_translation(original, translated):
+                    translated_texts[idx] = translated
+                    lang_infos[idx] = {
+                        **lang_infos[idx],
+                        "was_translated": True,
+                        "translated": translated,
+                    }
+                else:
+                    translated_texts[idx] = original
+                    lang_infos[idx] = {
+                        **lang_infos[idx],
+                        "was_translated": False,
+                        "translated": original,
+                    }
+                    translation_statuses[idx] = "FALLBACK_PASSTHROUGH"
+                    translation_flags[idx] = True
+
+            groups_done += 1
+            _progress(
+                20 + int(groups_done / max(1, len(translation_groups)) * 5),
+                f"🌐 Batch translated {groups_done}/{len(translation_groups)} language groups",
+            )
+
     # Step 3: Batch sentiment
     _progress(25, f"⚡ Running sentiment model on {total} reviews...")
-    sentiments = sentiment_predict_batch(translated_texts)
+    lang_codes = [li.get("code", "en") for li in lang_infos]
+    sentiments = sentiment_predict_batch(clean_texts, lang_codes=lang_codes)
     _progress(60, "✅ Sentiment analysis complete")
 
     # Step 4: Batch sarcasm (transformer-based)
@@ -462,7 +461,7 @@ def run_pipeline_batch(
     if enable_sarcasm:
         _progress(60, f"🎭 Running sarcasm detection on {total} reviews...")
         from src.models.sarcasm_model import predict_batch as sarcasm_predict_batch
-        sarcasm_results = sarcasm_predict_batch(translated_texts)
+        sarcasm_results = sarcasm_predict_batch(clean_texts)
         _progress(80, "✅ Sarcasm detection complete")
 
     # Step 5: Per-row aspect analysis
@@ -471,7 +470,7 @@ def run_pipeline_batch(
         _progress(80, "🔬 Running aspect analysis...")
         try:
             from src.models.aspect import analyze_aspects
-            for i, at in enumerate(translated_texts):
+            for i, at in enumerate(clean_texts):
                 if at:
                     try:
                         aspect_lists[i] = analyze_aspects(at)
@@ -487,18 +486,22 @@ def run_pipeline_batch(
     for i in range(total):
         try:
             sent = sentiments[i]
-            analysis_text = translated_texts[i] or clean_texts[i]
+            analysis_text = clean_texts[i]
+            li = lang_infos[i]
 
             # Apply full post-processing pipeline
-            pp = _apply_post_processing(analysis_text, sent)
+            pp = _apply_post_processing(
+                analysis_text,
+                sent,
+                lang_code=li.get("code", "en"),
+                translated_text="",
+            )
 
             # Reduce confidence if translation flagged
             confidence = pp["confidence"]
             if translation_flags[i]:
                 confidence = round(confidence * 0.85, 4)
                 confidence = max(confidence, 0.40)
-
-            li = lang_infos[i]
 
             # Bulk sarcasm detection (rule-based, ADD-ON 7 guards included)
             bulk_sarc = detect_sarcasm_bulk(analysis_text, pp["label"], confidence)
@@ -597,4 +600,3 @@ def _empty_result() -> dict:
         "translation_failed": False,
         "aspects": [],
     }
-

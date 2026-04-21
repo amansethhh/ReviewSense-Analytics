@@ -63,7 +63,7 @@ _ROW_TIMEOUT_S: float = 15.0
 
 # Performance: Scale workers based on CPU cores
 import multiprocessing as _mp
-_MAX_ROW_WORKERS = min(4, _mp.cpu_count() or 2)
+_MAX_ROW_WORKERS = min(2, _mp.cpu_count() or 2)
 
 # Dedicated executor for per-row timeout isolation.
 _row_executor = ThreadPoolExecutor(
@@ -318,10 +318,10 @@ def _process_bulk_job(
                     continue
                 lang_groups[lc].append((idx, all_texts[idx]))
 
-            # PERF FIX: Translate all language groups IN PARALLEL
-            # Each language group is an independent Google Translate batch
-            # No dependency between groups → run concurrently
+            # PERF FIX: Translate all language groups in parallel.
+            # Each language group is an independent NLLB batch.
             from app.utils.batch_translate import translate_batch_for_lang
+            from src.models.translation import validate_translation
             translate_lock = threading.Lock()
             translate_done = [0]
 
@@ -334,10 +334,11 @@ def _process_bulk_job(
                 try:
                     batch_results = translate_batch_for_lang(texts, lang)
                     with translate_lock:
-                        for idx, result in zip(indices, batch_results):
-                            translated_texts[idx] = result
-                            trans_methods[idx] = "google_batch"
-                            was_translated[idx] = True
+                        for idx, text, result in zip(indices, texts, batch_results):
+                            ok = validate_translation(text, result)
+                            translated_texts[idx] = result if ok else text
+                            trans_methods[idx] = "nllb" if ok else "failed"
+                            was_translated[idx] = ok
                             translate_done[0] += 1
                 except Exception as e:
                     logger.warning(
@@ -417,7 +418,7 @@ def _process_bulk_job(
         batch_predictions = _sentiment_batch(
             predict_texts,
             lang_codes=predict_lang_codes,
-            batch_size=32,
+            batch_size=8,
         )
 
         _update_progress_pct(job_id, 65.0)
@@ -432,6 +433,14 @@ def _process_bulk_job(
         _update_progress_pct(job_id, 68.0)
 
         completed = 0
+        from src.config import LABEL_MAP
+        from src.predict import (
+            apply_neutral_correction_v2,
+            apply_short_text_guard,
+            apply_temperature_scaling,
+            calibrated_confidence,
+            compute_dual_polarity,
+        )
 
         def _postprocess_row(
             row_idx: int,
@@ -465,29 +474,15 @@ def _process_bulk_job(
                     **cached,
                 )
 
-            # Use batch prediction result
+            # Use batch prediction result, then mirror src.predict
+            # post-processing so bulk and single outputs match.
             pred = batch_predictions[row_idx]
-            label_name = pred.get(
-                "label_name", "Neutral"
-            )
-            sentiment_raw = label_name.lower()
-            if sentiment_raw not in [
-                "positive", "negative", "neutral"
-            ]:
-                sentiment_raw = "neutral"
-
             raw_conf = float(
                 pred.get("confidence", 0.0)
-            )
-            confidence_pct = normalize_confidence(
-                raw_conf
             )
             # RULE 2: Polarity on ORIGINAL TEXT ONLY
             # Translation NEVER affects polarity/sentiment
             try:
-                from src.predict import (
-                    compute_dual_polarity,
-                )
                 polarity_val, vader_compound, subjectivity_val = (
                     compute_dual_polarity(
                         original_text, lang_code,
@@ -498,15 +493,49 @@ def _process_bulk_job(
                 vader_compound = 0.0
                 subjectivity_val = 0.0
 
-            # Apply sentiment corrections
-            sentiment_raw, confidence_pct, polarity_val = (
-                _apply_sentiment_corrections(
-                    predict_text,
-                    sentiment_raw,
-                    confidence_pct,
-                    polarity_val,
-                )
+            pred_class = int(pred.get("label", 1))
+            guard_result = apply_short_text_guard(
+                original_text, pred_class, raw_conf
             )
+            pred_class = guard_result["pred_class"]
+            confidence = (
+                guard_result["confidence"]
+                if guard_result["guard_applied"]
+                else raw_conf
+            )
+            nc_result = apply_neutral_correction_v2(
+                pred_class,
+                confidence,
+                polarity_val,
+                vader_compound,
+                lang_code,
+            )
+            pred_class = nc_result["pred_class"]
+            confidence = calibrated_confidence(
+                confidence, polarity_val, pred_class
+            )
+            # V4 FIX: Temperature scaling and ensemble penalty REMOVED.
+            # Reducing confidence triggers neutral collapse for XLM-R at ~44%.
+            # The model label is trusted; confidence is reported as-is.
+
+            label_name = LABEL_MAP.get(pred_class, "Neutral")
+            sentiment_raw = label_name.lower()
+            if sentiment_raw not in [
+                "positive", "negative", "neutral"
+            ]:
+                sentiment_raw = "neutral"
+            confidence_pct = normalize_confidence(confidence)
+
+            # English-only app corrections. Non-English must keep XLM-R label.
+            if lang_code[:2] == "en":
+                sentiment_raw, confidence_pct, polarity_val = (
+                    _apply_sentiment_corrections(
+                        predict_text,
+                        sentiment_raw,
+                        confidence_pct,
+                        polarity_val,
+                    )
+                )
 
             # OPT-2: Conditional ABSA
             absa_list = None
@@ -535,9 +564,14 @@ def _process_bulk_job(
 
             row_result_dict = {
                 "text": original_text[:500],
+                "label": SentimentLabel(
+                    sentiment_raw
+                ),
                 "sentiment": SentimentLabel(
                     sentiment_raw
                 ),
+                "raw_label": label_name.lower(),
+                "is_uncertain": False,
                 "confidence": confidence_pct,
                 "polarity": polarity_val,
                 "subjectivity": float(subjectivity_val),
@@ -552,6 +586,11 @@ def _process_bulk_job(
                     eng_text
                     if was_translated[row_idx]
                     else None
+                ),
+                "translation": (
+                    eng_text
+                    if was_translated[row_idx]
+                    else original_text
                 ),
                 # V3 output contract fields
                 "analysis_input_source": (

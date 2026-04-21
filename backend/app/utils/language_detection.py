@@ -116,6 +116,13 @@ HINGLISH_MARKERS = [
     "kaafi", "sahi", "galat", "bakwas", "bekar", "mast",
 ]
 
+_SHORT_ENGLISH_MARKERS = frozenset({
+    "amazing", "awful", "bad", "best", "broken", "decent",
+    "excellent", "fantastic", "good", "great", "horrible",
+    "love", "loved", "neutral", "nice", "not", "okay", "poor",
+    "service", "slow", "terrible", "worst",
+})
+
 
 def detect_hinglish(text: str) -> bool:
     """Detect Hinglish (Hindi + English code-switching).
@@ -285,6 +292,17 @@ def detect_language_robust(text: str) -> dict:
             "confidence": 0.90,
             "method": "hinglish_detection",
             "is_hinglish": True,
+        }
+
+    words = set(re.findall(r'\b[a-zA-Z]+\b', text.lower()))
+    ascii_ratio = sum(c.isascii() for c in text) / max(len(text), 1)
+    if ascii_ratio >= 0.95 and words & _SHORT_ENGLISH_MARKERS:
+        return {
+            "language": "en",
+            "language_name": "English",
+            "confidence": 0.95,
+            "method": "english_lexical_guard",
+            "is_hinglish": False,
         }
 
     # Tier 3: langdetect with disambiguation

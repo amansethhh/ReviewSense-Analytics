@@ -43,7 +43,14 @@ def _load_nllb():
             )
             model_name = "facebook/nllb-200-distilled-600M"
             logger.info("[NLLB] Loading model: %s", model_name)
-            _nllb_tokenizer = AutoTokenizer.from_pretrained(model_name)
+            _nllb_tokenizer = AutoTokenizer.from_pretrained(
+                model_name,
+                use_fast=False,
+            )
+            if not hasattr(_nllb_tokenizer, "lang_code_to_id"):
+                _nllb_tokenizer.lang_code_to_id = {
+                    "eng_Latn": _nllb_tokenizer.convert_tokens_to_ids("eng_Latn")
+                }
             _nllb_model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
             _nllb_available = True
             logger.info("[NLLB] Model loaded successfully")
@@ -62,13 +69,21 @@ def _load_nllb():
 # ISO 639-1 → NLLB flores200 codes
 # ═══════════════════════════════════════════════════════════════
 
-_NLLB_LANG_MAP = {
-    "en": "eng_Latn",
-    "es": "spa_Latn",
+LANG_MAP = {
+    "hi": "hin_Deva",
+    "ar": "arb_Arab",
     "fr": "fra_Latn",
     "de": "deu_Latn",
+    "es": "spa_Latn",
     "it": "ita_Latn",
     "pt": "por_Latn",
+    "ja": "jpn_Jpan",
+    "zh": "zho_Hans",
+}
+
+_NLLB_LANG_MAP = {
+    **LANG_MAP,
+    "en": "eng_Latn",
     "nl": "nld_Latn",
     "pl": "pol_Latn",
     "sv": "swe_Latn",
@@ -87,17 +102,13 @@ _NLLB_LANG_MAP = {
     "ru": "rus_Cyrl",
     "uk": "ukr_Cyrl",
     "el": "ell_Grek",
-    "ar": "arb_Arab",
     "he": "heb_Hebr",
-    "hi": "hin_Deva",
     "bn": "ben_Beng",
     "ta": "tam_Taml",
     "ur": "urd_Arab",
     "fa": "pes_Arab",
-    "zh": "zho_Hans",
     "zh-cn": "zho_Hans",
     "zh-tw": "zho_Hant",
-    "ja": "jpn_Jpan",
     "ko": "kor_Hang",
     "th": "tha_Thai",
     "vi": "vie_Latn",
@@ -113,10 +124,17 @@ _NLLB_LANG_MAP = {
 }
 
 
-def _get_nllb_code(iso_code: str) -> str:
+def _get_nllb_code(iso_code: str) -> str | None:
     """Convert ISO 639-1 code to NLLB flores200 code."""
     code = str(iso_code or "").strip().lower()
-    return _NLLB_LANG_MAP.get(code, "eng_Latn")
+    if code.startswith("zh"):
+        code = "zh" if code not in ("zh-tw", "zh-hant") else "zh-tw"
+    return _NLLB_LANG_MAP.get(code)
+
+
+def _english_bos_token_id() -> int:
+    """Return the required NLLB English BOS token id."""
+    return _nllb_tokenizer.lang_code_to_id["eng_Latn"]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -145,6 +163,23 @@ _DEGENERATE_STRINGS = frozenset({
     "translation error",
 })
 
+# V4 FIX 4: Patterns for template/fallback strings that are NOT real NLLB output
+_TEMPLATE_PATTERN = re.compile(
+    r'\[(Hindi|Arabic|Chinese|Japanese|Korean|Russian|German|French|'
+    r'Spanish|Italian|Portuguese|Polish|Turkish|Vietnamese|Indonesian|'
+    r'Thai|Hebrew|Ukrainian|Bulgarian|Greek|Persian|Bengali|HI|AR|ZH|'
+    r'JA|KO|RU|DE|FR|ES|IT|PT|PL|Translated)\]',
+    re.IGNORECASE
+)
+
+_GENERIC_TEMPLATE = re.compile(
+    r'^The (product|quality|item|service) is (great|good|bad|poor|excellent|'
+    r'terrible|decent|acceptable|outstanding|fantastic|mediocre|'
+    r'unsatisfactory|average|very (good|bad|poor))[\.\!]?'
+    r'(\s*\[.*\])?$',
+    re.IGNORECASE
+)
+
 _MIN_LENGTH_RATIO = 0.25
 
 
@@ -157,6 +192,12 @@ def _is_degenerate(original: str, translated: str) -> bool:
     t_lower = t.lower()
 
     if t_lower in _DEGENERATE_STRINGS:
+        return True
+
+    # V4 FIX 4: Check for template/fallback strings
+    if _TEMPLATE_PATTERN.search(t):
+        return True
+    if _GENERIC_TEMPLATE.match(t):
         return True
 
     for pat in _DEGENERATE_PATTERNS:
@@ -175,6 +216,37 @@ def _is_degenerate(original: str, translated: str) -> bool:
         return True
 
     return False
+
+
+def is_bad_translation(original: str, translated: str) -> bool:
+    """V4 FIX 4: Public API to check if translation is template/fallback.
+
+    Returns True if the translation is a template, degenerate, or empty.
+    Used by validation tests and downstream consumers.
+    """
+    if not translated or not translated.strip():
+        return True
+    t = translated.strip()
+    if _TEMPLATE_PATTERN.search(t):
+        return True
+    if _GENERIC_TEMPLATE.match(t):
+        return True
+    return _is_degenerate(original, t)
+
+
+def validate_translation(text: str, translated: str) -> bool:
+    """Validate translated display text before exposing it."""
+    source = str(text or "").strip()
+    candidate = str(translated or "").strip()
+    if len(candidate) < 3:
+        return False
+    if candidate == source:
+        return False
+    if "[" in candidate:
+        return False
+    if _is_degenerate(source, candidate):
+        return False
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -196,28 +268,28 @@ def _translate_nllb(
     try:
         # Set source language for tokenizer
         src_nllb = _get_nllb_code(src_lang_code)
+        if src_nllb is None:
+            logger.warning("[NLLB] Unsupported source language: %s", src_lang_code)
+            return None
         _nllb_tokenizer.src_lang = src_nllb
 
         inputs = _nllb_tokenizer(
-            text,
+            [text],
             return_tensors="pt",
+            padding=True,
             max_length=512,
             truncation=True,
         )
 
-        # Get target language token ID
-        tgt_token_id = _nllb_tokenizer.convert_tokens_to_ids(tgt_lang)
-
         tokens = _nllb_model.generate(
             **inputs,
-            forced_bos_token_id=tgt_token_id,
-            max_length=512,
+            forced_bos_token_id=_english_bos_token_id(),
+            max_length=256,
         )
 
-        result = _nllb_tokenizer.decode(
-            tokens[0], skip_special_tokens=True
-        )
-        return result
+        return _nllb_tokenizer.batch_decode(
+            tokens, skip_special_tokens=True
+        )[0]
 
     except Exception as e:
         logger.warning(
@@ -270,10 +342,10 @@ def translate_to_english(
     # Translate with NLLB
     result = _translate_nllb(text, src_norm)
 
-    if result and not _is_degenerate(text, result):
+    if result and validate_translation(text, result):
         cleaned = result.strip()
 
-        if cleaned and not _is_degenerate(text, cleaned):
+        if cleaned and validate_translation(text, cleaned):
             # Cache the result
             with _cache_lock:
                 if len(_translation_cache) >= _MAX_CACHE_SIZE:
@@ -314,6 +386,9 @@ def translate_batch(
         return texts  # Fallback to original
 
     src_nllb = _get_nllb_code(src_lang)
+    if src_nllb is None:
+        logger.warning("[NLLB] Unsupported batch source language: %s", src_lang)
+        return texts
     _nllb_tokenizer.src_lang = src_nllb
 
     # Filter out empty texts
@@ -330,26 +405,23 @@ def translate_batch(
             max_length=512,
         )
 
-        tgt_token_id = _nllb_tokenizer.convert_tokens_to_ids("eng_Latn")
-
         outputs = _nllb_model.generate(
             **inputs,
-            forced_bos_token_id=tgt_token_id,
-            max_length=512,
+            forced_bos_token_id=_english_bos_token_id(),
+            max_length=256,
         )
 
         translated = _nllb_tokenizer.batch_decode(
             outputs, skip_special_tokens=True
         )
 
-        # Merge back with original preserving empty strings
-        result_map = {t: tr.strip() for t, tr in zip(valid_texts, translated)}
+        translated_iter = iter([tr.strip() for tr in translated])
         results = []
         for text in texts:
             t = str(text or "")
             if t.strip():
-                tr = result_map[t]
-                if _is_degenerate(t, tr):
+                tr = next(translated_iter)
+                if not validate_translation(t, tr):
                     results.append(t)
                 else:
                     results.append(tr)

@@ -322,8 +322,8 @@ def detect_translate_and_predict_sync(
     Synchronous all-in-one: detect → translate → predict.
     Safe to call from daemon threads. NO asyncio.
 
-    INVARIANT: predict_sentiment() always receives English.
-    Cache key always uses English text.
+    INVARIANT: predict_sentiment() always receives original text.
+    Translation is display-only.
 
     Includes:
     - FIX-1: Two-tier translation fallback
@@ -416,13 +416,13 @@ def detect_translate_and_predict_sync(
                 translation_error = True
                 english_text = original_text
 
-    # ── Cache check (keyed on English text) ───────────────
+    # Cache check is keyed on original text and detected language.
     cache_options = {
         "run_absa": run_absa,
         "run_sarcasm": run_sarcasm,
     }
     cache_key = prediction_cache.get_cache_key(
-        english_text, model_choice, cache_options
+        original_text, f"{model_choice}:{language_code}", cache_options
     )
     cached = prediction_cache.get(cache_key)
 
@@ -444,21 +444,14 @@ def detect_translate_and_predict_sync(
     metrics_store.record_cache_miss()
 
     # ── Prediction ────────────────────────────────────────
-    # FIX-1 (V2): Route to XLM model for non-Latin scripts.
-    # The XLM model classifies on ORIGINAL text natively.
-    # Only fall back to translated English for Latin-script languages.
-    from src.models.sentiment import XLM_LANGUAGES
+    # V6: Hard route by detected language. Classification always uses
+    # original text; translation is display-only.
     lc_short = (language_code or "en").lower().strip()[:2]
     try:
-        if lc_short in XLM_LANGUAGES:
-            # Non-Latin: classify on original text with XLM model
-            pred = predict_sentiment(
-                original_text, lc_short)
-        else:
-            # RULE 2: Always classify on ORIGINAL text
-            # Translation is for DISPLAY ONLY
-            pred = predict_sentiment(
-                original_text, model_choice)
+        pred = predict_sentiment(
+            original_text,
+            lc_short if lc_short else "unknown",
+        )
     except Exception as e:
         logger.error(f"Prediction failed: {e}")
         return {
@@ -507,16 +500,16 @@ def detect_translate_and_predict_sync(
         polarity_val = float(pred.get("polarity", 0.0))
         subjectivity_val = float(pred.get("subjectivity", 0.0))
 
-    # ── FIX-4: Mixed sentiment post-processing ───────────────
-    # RULE 2: Corrections on ORIGINAL text only
-    sentiment_raw, confidence_pct, polarity_val = (
-        _apply_sentiment_corrections(
-            original_text,
-            sentiment_raw,
-            confidence_pct,
-            polarity_val,
+    # English-only app corrections. Non-English must keep the XLM-R label.
+    if (language_code or "en").lower().strip()[:2] == "en":
+        sentiment_raw, confidence_pct, polarity_val = (
+            _apply_sentiment_corrections(
+                original_text,
+                sentiment_raw,
+                confidence_pct,
+                polarity_val,
+            )
         )
-    )
 
     # V3: Only 3 valid labels — no uncertain override
     if sentiment_raw not in ("positive", "negative", "neutral"):
@@ -543,6 +536,9 @@ def detect_translate_and_predict_sync(
 
     result = {
         "sentiment": sentiment_raw,
+        "label": sentiment_raw,
+        "raw_label": label_name.lower(),
+        "is_uncertain": False,
         "confidence": confidence_pct,
         "polarity": polarity_val,
         "subjectivity": float(subjectivity_val),
@@ -550,6 +546,7 @@ def detect_translate_and_predict_sync(
         "language_code": language_code,
         "english_text": english_text,
         "translated_text": english_text if was_translated else None,
+        "translation": english_text if was_translated else original_text,
         "translation_method": translation_method,
         "was_translated": was_translated,
         "skipped_translation": skipped_translation,
@@ -567,12 +564,16 @@ def detect_translate_and_predict_sync(
     # ── Cache store ───────────────────────────────────────
     cache_entry = {
         "sentiment": sentiment_raw,
+        "label": sentiment_raw,
+        "raw_label": label_name.lower(),
+        "is_uncertain": False,
         "confidence": confidence_pct,
         "polarity": polarity_val,
         "subjectivity": float(
             pred.get("subjectivity", 0.0)),
         "model_used": pred.get(
             "model_used", model_choice),
+        "translation": english_text if was_translated else original_text,
     }
     prediction_cache.set(cache_key, cache_entry)
 
@@ -657,11 +658,15 @@ def _run_language_pipeline(
             "translation_needed":   False,
             "skipped_translation":  True,
             "sentiment":            sentiment_raw,
+            "label":                sentiment_raw,
+            "raw_label":            label_name.lower(),
+            "is_uncertain":         False,
             "confidence":           confidence_pct,
             "polarity":             polarity_val,
             "subjectivity":         float(subjectivity_val),
             "model_used":           pred.get("model_used",
                                     model_choice),
+            "translation":          text,
             # V3 output contract fields
             "analysis_input_source": "original",
             "translation_failed":   False,
@@ -695,14 +700,13 @@ def _run_language_pipeline(
         lang_code, trans.get(
             "language_name", lang_code.title()))
 
-    # RULE 2: Classify on ORIGINAL text, not translated
-    # XLM-R handles non-Latin scripts natively
+    # V6 RULES 3/4: Classify on ORIGINAL text, routed by detected language.
     try:
         pred = predict_sentiment(
-            text, model_choice)
+            text, lang_code if lang_code else "unknown")
     except Exception as e:
         raise RuntimeError(
-            f"Prediction failed on translated text: {e}"
+            f"Prediction failed on original text: {e}"
         )
 
     label_name = pred.get("label_name", "Neutral")
@@ -714,7 +718,7 @@ def _run_language_pipeline(
     raw_conf = float(pred.get("confidence", 0.0))
     confidence_pct = normalize_confidence(raw_conf)
 
-    # V3 FIX: Compute real polarity with translated_text
+    # V6: Polarity is computed on original text and skipped for non-English.
     try:
         from src.predict import compute_dual_polarity
         polarity_val, _vader, subjectivity_val = (
@@ -730,11 +734,12 @@ def _run_language_pipeline(
     if confidence_pct == 0.0 and raw_conf == 0.0:
         sentiment_raw = "unknown"
 
-    # FIX-4: Mixed sentiment correction (RULE 2: on ORIGINAL text)
-    sentiment_raw, confidence_pct, polarity_val = (
-        _apply_sentiment_corrections(
-            text, sentiment_raw,
-            confidence_pct, polarity_val))
+    # English-only app corrections. Non-English must keep the XLM-R label.
+    if (lang_code or "en").lower().strip()[:2] == "en":
+        sentiment_raw, confidence_pct, polarity_val = (
+            _apply_sentiment_corrections(
+                text, sentiment_raw,
+                confidence_pct, polarity_val))
 
     # V3: Only 3 valid labels
     if sentiment_raw not in ("positive", "negative", "neutral"):
@@ -761,11 +766,15 @@ def _run_language_pipeline(
         "translation_needed":   was_translated,
         "skipped_translation":  False,
         "sentiment":            sentiment_raw,
+        "label":                sentiment_raw,
+        "raw_label":            label_name.lower(),
+        "is_uncertain":         False,
         "confidence":           confidence_pct,
         "polarity":             polarity_val,
         "subjectivity":         float(subjectivity_val),
         "model_used":           pred.get("model_used",
                                 model_choice),
+        "translation":          translated_text if was_translated else text,
         # V3 output contract fields
         "analysis_input_source": analysis_input_source,
         "translation_failed":   translation_method in ("failed", "failed_raw_predict"),
@@ -830,10 +839,8 @@ async def analyze_language(
                             detail=str(e))
 
     # ── The text to run optional analyses on (English) ────
-    # Use translated text if available, else original
-    analysis_text = (
-        result.get("translated_text") or request.text
-    )
+    # Translation is display-only; optional analyses use original text.
+    analysis_text = request.text
 
     # ── Import shared helpers from predict route ──────────
     from app.routes.predict import (
@@ -920,12 +927,9 @@ async def analyze_language(
         f"[{elapsed_ms}ms]"
     )
 
-    # Cache store using English text as key
-    english_for_cache = (
-        result.get("translated_text") or request.text
-    )
+    # Cache store using original text and detected language.
     cache_key = prediction_cache.get_cache_key(
-        english_for_cache, request.model.value, {}
+        request.text, f"{request.model.value}:{result.get('language_code')}", {}
     )
     prediction_cache.set(cache_key, result)
 

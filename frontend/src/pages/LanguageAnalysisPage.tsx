@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo, type ChangeEvent } from 'react'
 import { SentimentBadge, AnalysisErrorSummary } from '@/components/ui/Badge'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { NeuralButton } from '@/components/ui/NeuralButton'
@@ -574,6 +574,62 @@ export function LanguageAnalysisPage() {
   const { confidenceThreshold } = appState
   const bulk = useBulk()
   const trendPoints = useTrendStore()
+  const [draftText, setDraftText] = useState(text)
+
+  useEffect(() => {
+    setDraftText(text)
+  }, [text])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (draftText !== text) setText(draftText)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [draftText, setText, text])
+
+  const handleTextChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setDraftText(e.target.value)
+    },
+    [],
+  )
+
+  const selectLanguageExample = useCallback(
+    (example: string) => {
+      setDraftText(example)
+      setText(example)
+    },
+    [setText],
+  )
+
+  const handleSingleSubmit = useCallback(() => {
+    const submissionText = draftText.trim()
+    if (!submissionText) return
+    setText(draftText)
+    setFeedbackSent(false)
+    setSelectedCorrection(null)
+    run({
+      text: submissionText,
+      model,
+      domain,
+      star_rating: starRating,
+      include_lime: includeLime,
+      include_absa: includeAbsa,
+      include_sarcasm: includeSarcasm,
+    })
+  }, [
+    draftText,
+    setText,
+    setFeedbackSent,
+    setSelectedCorrection,
+    run,
+    model,
+    domain,
+    starRating,
+    includeLime,
+    includeAbsa,
+    includeSarcasm,
+  ])
 
   // Timer: elapsed is derived from startedAt without re-rendering every second.
   const bNowRef = useRef(Date.now())
@@ -820,8 +876,8 @@ export function LanguageAnalysisPage() {
                 {LANGUAGES.map(lang => (
                   <div
                     key={lang.code}
-                    className={`lang-flag-card ${text === lang.example ? 'lang-flag-card--active' : ''}`}
-                    onClick={() => setText(lang.example)}
+                    className={`lang-flag-card ${draftText === lang.example ? 'lang-flag-card--active' : ''}`}
+                    onClick={() => selectLanguageExample(lang.example)}
                   >
                     <span className="lang-flag-card__flag">
                       <FlagSVG code={lang.code} size={72} />
@@ -844,7 +900,7 @@ export function LanguageAnalysisPage() {
                   <textarea id="lang-text" className="form-textarea"
                     style={{ minHeight: '160px' }}
                     placeholder="Enter a review in any language..."
-                    value={text} onChange={e => setText(e.target.value)} maxLength={5000} />
+                    value={draftText} onChange={handleTextChange} maxLength={5000} />
                 </NeuralInputWrap>
 
                 {/* Auto-detect badge — below textarea, centered, 3D pill */}
@@ -898,11 +954,11 @@ export function LanguageAnalysisPage() {
                       position: 'relative',
                       top: 0,
                       whiteSpace: 'nowrap',
-                      color: text.length > 9500 ? 'var(--color-negative)'
-                        : text.length > 8000 ? 'var(--color-warning)'
+                      color: draftText.length > 9500 ? 'var(--color-negative)'
+                        : draftText.length > 8000 ? 'var(--color-warning)'
                         : 'var(--color-text-muted)',
                     }}>
-                      {text.length.toLocaleString()} / 10,000
+                      {draftText.length.toLocaleString()} / 10,000
                     </span>
 
                   </div>
@@ -949,18 +1005,7 @@ export function LanguageAnalysisPage() {
 
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-5)' }}>
                 <NeuralButton size="lg" style={{ justifyContent: 'center', width: 'calc(100% - 8px)' }}
-                    onClick={() => {
-                      setFeedbackSent(false)
-                      setSelectedCorrection(null)
-                      run({
-                        text, model,
-                        domain,
-                        star_rating: starRating,
-                        include_lime: includeLime,
-                        include_absa: includeAbsa,
-                        include_sarcasm: includeSarcasm,
-                      })
-                    }} disabled={!text.trim() || loading}>
+                    onClick={handleSingleSubmit} disabled={!draftText.trim() || loading}>
                   {loading ? 'Analyzing...' : 'Detect & Analyze'}
                 </NeuralButton>
               </div>
@@ -1372,7 +1417,7 @@ export function LanguageAnalysisPage() {
 
               {/* Clear */}
               <div className="form-actions" style={{ justifyContent: 'center', marginTop: 'var(--space-4)' }}>
-                <NeuralButton variant="ghost" onClick={() => { _resetSingle(); setText(''); }}>
+                <NeuralButton variant="ghost" onClick={() => { _resetSingle(); setText(''); setDraftText(''); }}>
                   ← Clear &amp; Start Over
                 </NeuralButton>
               </div>

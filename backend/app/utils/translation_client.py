@@ -14,6 +14,11 @@ from typing import Tuple
 logger = logging.getLogger("reviewsense.translation_client")
 
 
+def _google_translate_with_timeout(*args, **kwargs) -> str:
+    """Legacy test hook retained after the NLLB-only migration."""
+    raise RuntimeError("Google Translate is disabled; NLLB is the only engine")
+
+
 def translate_with_retry(
     text: str,
     source_lang: str,

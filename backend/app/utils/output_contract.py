@@ -123,6 +123,8 @@ def format_prediction_output(
     polarity: float = 0.0,
     subjectivity: float = 0.0,
     analysis_input_source: str = "original",
+    translation: str = "",
+    translation_failed: bool = False,
     sarcasm_detected: bool = False,
     sarcasm_applied: bool = False,
     **extra: Any,
@@ -162,7 +164,11 @@ def format_prediction_output(
         # Core contract fields (V3)
         "label": final_label,
         "confidence": confidence,
+        "raw_label": raw_label,
+        "is_uncertain": is_uncertain,
         "analysis_input_source": analysis_input_source,
+        "translation": translation,
+        "translation_failed": translation_failed,
         "sarcasm_detected": sarcasm_detected,
         "sarcasm_applied": sarcasm_applied,
         # Standard fields
@@ -183,6 +189,8 @@ def format_bulk_row_output(
     polarity: float = 0.0,
     subjectivity: float = 0.0,
     analysis_input_source: str = "original",
+    translation: str = "",
+    translation_failed: bool = False,
     sarcasm_detected: Optional[bool] = None,
     **extra: Any,
 ) -> dict:
@@ -197,8 +205,13 @@ def format_bulk_row_output(
 
     output = {
         "sentiment": final_label,
+        "label": final_label,
         "confidence": confidence,
+        "raw_label": raw_label,
+        "is_uncertain": is_uncertain,
         "analysis_input_source": analysis_input_source,
+        "translation": translation,
+        "translation_failed": translation_failed,
         "sarcasm_detected": sarcasm_detected,
         "polarity": polarity,
         "subjectivity": subjectivity,

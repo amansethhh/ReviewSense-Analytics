@@ -391,7 +391,10 @@ async def predict(
     )
 
     response = PredictResponse(
+        label=SentimentLabel(sentiment_raw),
         sentiment=SentimentLabel(sentiment_raw),
+        raw_label=label_name.lower(),
+        is_uncertain=False,
         confidence=confidence_pct,
         polarity=float(result.get("polarity", 0.0)),
         subjectivity=float(result.get("subjectivity", 0.0)),
@@ -408,7 +411,7 @@ async def predict(
         language="English",
         language_code="en",
         analysis_input_source="original",
-        translation=None,
+        translation=request.text,
         translation_failed=False,
         neutral_corrected=_was_corrected,
         sarcasm_applied=sarcasm_applied,
@@ -426,4 +429,3 @@ async def predict(
     metrics_store.record_prediction(sentiment_raw, "English")
 
     return response
-

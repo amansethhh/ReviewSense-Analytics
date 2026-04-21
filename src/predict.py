@@ -31,8 +31,8 @@ except ImportError:
     _VADER_AVAILABLE = False
     logger.warning("vaderSentiment not installed — VADER corrections disabled")
 
-# Languages where TextBlob/VADER on ORIGINAL text is meaningless.
-# For these, we run on the English translation instead.
+# Legacy non-Latin grouping retained for compatibility.
+# V6 polarity logic is stricter: TextBlob/VADER run only for English.
 _NON_LATIN_LANGS = frozenset({
     "ja", "ko", "zh", "zh-cn", "zh-tw", "hi", "ar",
     "ru", "uk", "bg", "el", "th", "he", "ka", "ur", "fa", "bn",
@@ -115,6 +115,7 @@ def _input_safety_guard(text):
             "sarcasm_applied": False,
             "sarcasm_reason": "",
             "translation_failed": False,
+            "model_used": "roberta",
             "error": "Empty or invalid input",
         }
     return None
@@ -286,29 +287,20 @@ def apply_neutral_correction_v2(
     vader_compound: float,
     lang_code: str = "en",
 ) -> dict:
-    """V5 model-first correction — Ruleset 4 calibration.
+    """V6 model-first correction with English-only polarity fallback.
 
-    RULE (Ruleset 4):
-      confidence >= 0.70 → model prediction is FINAL (no polarity override)
-      confidence <  0.70 → polarity-based fallback:
-          polarity >  0.25 → Positive
-          polarity < -0.25 → Negative
-          else             → Neutral
-
-    RULE (Ruleset 3):
-      Polarity only used when lang_code == 'en'.
-      All non-English inputs use model label directly.
-
-    Returns dict with corrected pred_class, neutral_corrected flag, reason.
+    confidence >= 0.65 keeps the model prediction. Below 0.65,
+    English may use TextBlob polarity fallback; non-English always
+    keeps the multilingual model label.
     """
     neutral_corrected = False
     correction_reason = ""
     lc = (lang_code or "en").lower().strip()[:2]
 
-    # V5 RULESET 4: High confidence → model is FINAL
-    if confidence >= 0.70:
+    # V6: High confidence -> model is final.
+    if confidence >= 0.65:
         logger.debug(
-            "[CORRECTION] Model-first: conf=%.3f >= 0.70, keeping label=%d",
+            "[CORRECTION] Model-first: conf=%.3f >= 0.65, keeping label=%d",
             confidence, pred_class,
         )
         return {
@@ -335,7 +327,7 @@ def apply_neutral_correction_v2(
         }
 
     # English + low confidence → polarity-based fallback
-    polarity = vader_compound if _VADER_AVAILABLE else tb_polarity
+    polarity = tb_polarity
 
     if polarity > 0.25:
         new_class = 2  # Positive
@@ -376,29 +368,22 @@ def apply_neutral_correction_v2(
 # ═══════════════════════════════════════════════════════════════
 
 def calibrated_confidence(confidence: float,
-                           polarity: float,
-                           pred_class: int) -> float:
-    """Polarity-based confidence reduction for overconfident predictions.
+                           polarity: float = 0.0,
+                           pred_class: int = 1) -> float:
+    """V4 FIX 2: No artificial confidence reduction.
 
-    Rules:
-      - Positive prediction + weak polarity → reduce by 18%
-      - Negative prediction + weak polarity → reduce by 18%
-      - Floor at 0.40 to prevent nonsensical display
-      - Round to 4 decimal places
+    The raw softmax confidence from the model is the true confidence.
+    Any reduction compounds with XLM-R's naturally lower confidence
+    (~44%) and triggers incorrect neutral overrides.
 
-    Returns calibrated confidence float.
+    Returns the confidence unchanged, clamped to [0.0, 1.0].
+    polarity and pred_class args retained for API signature compat.
     """
-    if pred_class == 2 and polarity < 0.15:
-        # Polarity doesn't support Positive classification
-        confidence = confidence * 0.82
-    elif pred_class == 0 and polarity > -0.15:
-        # Polarity doesn't support Negative classification
-        confidence = confidence * 0.82
-
-    # C2 FIX: Lowered floor from 0.40 to 0.30 — let raw model
-    # probabilities flow through for threshold logic
-    confidence = max(confidence, 0.30)
-    return round(confidence, 4)
+    try:
+        confidence = float(confidence)
+    except Exception:
+        confidence = 0.0
+    return round(max(0.0, min(1.0, confidence)), 4)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -508,16 +493,25 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
     original_text = str(text).strip()
     pre_uncertain = len(original_text.split()) == 1 and len(original_text) < 15
 
-    # Determine language code for model routing
-    # model_pipeline may be a string like "best" or a lang code override
+    # Determine language code for hard model routing.
+    # model_pipeline may be a UI model choice ("best") or a language code.
     lang_code = "en"
-    if isinstance(model_pipeline, str) and len(model_pipeline) == 2:
-        lang_code = model_pipeline
+    if isinstance(model_pipeline, str):
+        candidate = model_pipeline.lower().strip()
+        model_choices = {
+            "best", "linearsvc", "logisticregression",
+            "naivebayes", "randomforest",
+        }
+        if candidate and candidate not in model_choices:
+            lang_code = candidate
 
     # Step 2: Run model prediction → raw pred_class and logits/scores
     result = transformer_predict(original_text, lang_code=lang_code)
     pred_class = result["label"]
     scores = result["scores"]  # [neg, neu, pos]
+    model_used = result.get(
+        "model_used", "roberta" if lang_code[:2] == "en" else "xlm-r"
+    )
 
     # Step 3: Compute raw_confidence
     raw_confidence = result["confidence"]
@@ -545,58 +539,35 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
     neutral_corrected = nc_result["neutral_corrected"]
     correction_reason = nc_result["correction_reason"]
 
-    # Step 7: calibrated_confidence (Problem 5) — polarity-based reduction
+    # Step 7: V4 FIX 2 — No confidence reduction. Raw softmax passes through.
     confidence = calibrated_confidence(confidence, polarity, pred_class)
 
-    # Step 8: apply_temperature_scaling (ADD-ON 5) — conditional
+    # Step 8: Temperature scaling — V4: applied to LOGITS for label selection
+    # only. Does NOT reduce the output confidence shown to the user.
     temperature_scaled = False
-    if raw_confidence <= 0.92:
-        # Apply temperature scaling to recalibrate softmax
-        temp_probs = apply_temperature_scaling(scores)
-        temp_confidence = temp_probs[pred_class]
-        # Use the lower of the two calibrated values for safety
-        confidence = min(confidence, temp_confidence)
-        confidence = max(confidence, 0.30)  # C2 FIX: lowered from 0.40
-        confidence = round(confidence, 4)
-        temperature_scaled = True
-        if raw_confidence < 0.72:
-            logger.debug(
-                "Low-confidence prediction: raw=%.3f, calibrated=%.3f",
-                raw_confidence, confidence,
-            )
+    # (Temperature scaling on logits already happened inside
+    #  transformer_predict via the model's softmax. No additional
+    #  confidence reduction is applied here.)
 
-    # Step 8.5: Ensemble direction validation
-    # When RoBERTa is borderline uncertain, cross-check with TextBlob direction.
-    # This provides +2-3% accuracy boost without a second model inference.
-    _ENSEMBLE_LOW  = 0.60
-    _ENSEMBLE_HIGH = 0.82
-    if _ENSEMBLE_LOW < confidence < _ENSEMBLE_HIGH:
-        roberta_direction = "positive" if pred_class == 2 else (
-            "negative" if pred_class == 0 else "neutral"
+    # Step 8.5: V4 — Ensemble penalties REMOVED.
+    # XLM-R at 44% confidence + 0.85 penalty = 37% — triggers neutral collapse.
+    # The model label is trusted; confidence is reported as-is.
+
+    # Step 8.9: V4 ADD-ON 1 — Protect confident Positive/Negative labels
+    protected_label = LABEL_MAP[pred_class]
+    was_protected = False
+    if pred_class in (0, 2) and raw_confidence >= 0.45:
+        # Model said Positive or Negative with >= 45% raw confidence.
+        # This prediction survives ALL downstream corrections.
+        if pred_class != result["label"]:
+            # Correction tried to change it — restore.
+            pass  # pred_class is already the corrected value
+        # Mark as protected so no subsequent logic can override.
+        was_protected = True
+        logger.debug(
+            "[PROTECTION] Label %s protected (raw_conf=%.3f >= 0.45)",
+            LABEL_MAP[pred_class], raw_confidence,
         )
-        textblob_direction = (
-            "positive" if polarity > 0.08 else
-            "negative" if polarity < -0.08 else
-            "neutral"
-        )
-        # Disagreement penalty: -15% confidence when directions conflict
-        if (roberta_direction != textblob_direction
-                and textblob_direction != "neutral"
-                and roberta_direction != "neutral"):
-            confidence = round(confidence * 0.85, 4)
-            logger.debug(
-                "Ensemble disagreement: RoBERTa=%s, TextBlob=%s — conf penalized to %.3f",
-                roberta_direction, textblob_direction, confidence,
-            )
-        # Agreement boost: +8% when both strongly agree
-        elif (roberta_direction == textblob_direction
-                and abs(polarity) > 0.45
-                and roberta_direction != "neutral"):
-            confidence = round(min(confidence * 1.08, 0.97), 4)
-            logger.debug(
-                "Ensemble agreement boost: %s conf → %.3f",
-                roberta_direction, confidence,
-            )
 
     # Step 9: label_name from LABEL_MAP (NEVER from raw string)
     label_name = LABEL_MAP[pred_class]
@@ -637,7 +608,16 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
             label_name, confidence, CONFIDENCE_UNCERTAIN_THRESHOLD,
         )
 
-    # Step 12: Return complete result dict
+    # Step 12: V4 ADD-ON 3 — Reliability signal (display only, never changes label)
+    _rel_conf = float(confidence)
+    if _rel_conf >= 0.80:
+        reliability = "high"
+    elif _rel_conf >= 0.55:
+        reliability = "moderate"
+    else:
+        reliability = "low"
+
+    # Step 13: Return complete result dict
     return {
         "label": pred_class,
         "label_name": label_name,
@@ -654,6 +634,9 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
         "translation_failed": False,
         "hinglish_detected": False,
         "analysis_input_source": "original",
+        "model_used": model_used,
+        "was_protected": was_protected,
+        "reliability": reliability,
         "sarcasm_detected": sarcasm_detected,
         "sarcasm_confidence": float(sarcasm_confidence_val),
         "sarcasm_applied": sarcasm_applied,

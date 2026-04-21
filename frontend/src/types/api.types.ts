@@ -42,7 +42,10 @@ export interface SarcasmResult {
 }
 
 export interface PredictResponse {
+  label?:        SentimentLabel | null
   sentiment:     SentimentLabel
+  raw_label?:    string
+  is_uncertain?: boolean
   confidence:    number        // 0–100
   polarity:      number        // -1 to 1
   subjectivity:  number        // 0–1
@@ -52,6 +55,8 @@ export interface PredictResponse {
   sarcasm?:       SarcasmResult | null
   model_used:    string
   processing_ms: number
+  translation?:  string | null
+  translation_failed?: boolean
 }
 
 // ── /bulk ───────────────────────────────────────────
@@ -67,7 +72,10 @@ export interface BulkJobSubmitResponse {
 export interface BulkRowResult {
   row_index:            number
   text:                 string
+  label?:               SentimentLabel | null
   sentiment:            SentimentLabel
+  raw_label?:           string
+  is_uncertain?:        boolean
   confidence:           number
   polarity:             number
   subjectivity:         number
@@ -76,6 +84,8 @@ export interface BulkRowResult {
   detected_language?:   string | null
   translation_method?:  string | null
   translated_text?:     string | null
+  translation?:         string | null
+  translation_failed?:  boolean
 }
 
 export interface BulkJobResult {
@@ -125,8 +135,12 @@ export interface LanguageResponse {
   language_code:        string
   detection_confidence: number
   translated_text?:     string | null
+  translation?:         string | null
   translation_needed:   boolean
+  label?:               SentimentLabel | null
   sentiment:            SentimentLabel
+  raw_label?:           string
+  is_uncertain?:        boolean
   confidence:           number
   polarity:             number
   subjectivity:         number
@@ -135,6 +149,7 @@ export interface LanguageResponse {
   lime_features?:       LIMEFeature[] | null
   absa?:                ABSAItem[]   | null
   sarcasm?:             SarcasmResult | null
+  translation_failed?:  boolean
 }
 
 // ── /metrics ────────────────────────────────────────

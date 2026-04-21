@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent } from 'react'
 import { SentimentBadge } from '@/components/ui/Badge'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { NeuralButton } from '@/components/ui/NeuralButton'
@@ -281,6 +281,25 @@ export function LivePredictionPage() {
   const { data: predictData, loading, error: _error, run, reset: _predictReset } = usePredict()
   const { showToast: _showToast, state: appState } = useApp()
   const { confidenceThreshold } = appState
+  const [draftText, setDraftText] = useState(text)
+
+  useEffect(() => {
+    setDraftText(text)
+  }, [text])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (draftText !== text) setText(draftText)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [draftText, setText, text])
+
+  const handleTextChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setDraftText(e.target.value)
+    },
+    [],
+  )
 
   // Sync usePredict result into the store (persists across navigation)
   useEffect(() => {
@@ -288,14 +307,16 @@ export function LivePredictionPage() {
   }, [predictData, setData])
 
   const handleSubmit = async () => {
-    if (!text.trim()) return
+    const submissionText = draftText.trim()
+    if (!submissionText) return
+    setText(draftText)
     // C2: Reset feedback + serverError on new submission
     setFeedbackSent(false)
     setSelectedCorrection(null)
     setServerError(null)
     try {
       await run({
-        text, model, domain,
+        text: submissionText, model, domain,
         star_rating: starRating,
         include_lime: includeLime,
         include_absa: includeAbsa,
@@ -316,8 +337,8 @@ export function LivePredictionPage() {
   }, [data?.polarity])
 
   const keywords = useMemo(() => {
-    if (!data || !text) return []
-    const words = text.split(/\s+/).filter(w =>
+    if (!data || !draftText) return []
+    const words = draftText.split(/\s+/).filter(w =>
       w.length > 2 && !STOPWORDS.has(w.toLowerCase().replace(/[^a-z]/g, '')))
     const unique = [...new Set(words.map(w => w.toLowerCase().replace(/[^a-z]/g, '')))]
       .filter(w => w.length > 2)
@@ -326,7 +347,7 @@ export function LivePredictionPage() {
       score: (0.3 + Math.random() * 0.6).toFixed(2),
     }))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, text])
+  }, [data, draftText])
 
   const sentimentClass = data?.sentiment === 'positive' ? 'positive' : data?.sentiment === 'negative' ? 'negative' : 'neutral'
 
@@ -586,8 +607,8 @@ ${data.sarcasm ? `
                 className="form-textarea"
                 style={{ minHeight: '160px' }}
                 placeholder="Enter a product, food, or movie review..."
-                value={text}
-                onChange={e => setText(e.target.value)}
+                value={draftText}
+                onChange={handleTextChange}
                 maxLength={10000}
               />
             </NeuralInputWrap>
@@ -637,11 +658,11 @@ ${data.sarcasm ? `
                   padding: 0,
                   position: 'relative',
                   top: 0,
-                  color: text.length > 9500 ? 'var(--color-negative)'
-                    : text.length > 8000 ? 'var(--color-warning)'
+                  color: draftText.length > 9500 ? 'var(--color-negative)'
+                    : draftText.length > 8000 ? 'var(--color-warning)'
                     : 'var(--color-text-muted)',
                 }}>
-                  {text.length.toLocaleString()} / 10,000
+                  {draftText.length.toLocaleString()} / 10,000
                 </span>
               </div>
             </div>
@@ -688,7 +709,7 @@ ${data.sarcasm ? `
           {/* #1: Submit — full width, centered text */}
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-5)' }}>
             <NeuralButton size="lg" style={{ width: 'calc(100% - 8px)', justifyContent: 'center' }}
-                    onClick={handleSubmit} disabled={!text.trim() || loading}>
+                    onClick={handleSubmit} disabled={!draftText.trim() || loading}>
               {loading ? 'Analyzing...' : 'Analyze Review'}
             </NeuralButton>
           </div>
@@ -1097,7 +1118,7 @@ ${data.sarcasm ? `
 
           {/* Clear button */}
           <div className="form-actions" style={{ justifyContent: 'center' }}>
-            <NeuralButton variant="ghost" onClick={() => { resetStore(); setText(''); }}>
+            <NeuralButton variant="ghost" onClick={() => { resetStore(); setText(''); setDraftText(''); }}>
               ← Clear & Start Over
             </NeuralButton>
           </div>

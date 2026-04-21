@@ -23,12 +23,9 @@ def translate_batch_for_lang(
 
     If translation fails for any text, returns original text.
     """
-    from src.models.translation import translate_to_english
+    from src.models.translation import translate_batch
 
-    results = []
-    for text in texts:
-        translated, method = translate_to_english(text, source_lang)
-        results.append(translated)
+    results = translate_batch(texts, source_lang)
 
     logger.info(
         "[NLLB-BATCH] Translated %d texts from %s",

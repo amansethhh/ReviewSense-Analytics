@@ -43,12 +43,11 @@ MULTILINGUAL_MODEL_ID = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
 # Cardiff RoBERTa label mapping: 0=negative, 1=neutral, 2=positive
 ROBERTA_LABEL_MAP = {0: "Negative", 1: "Neutral", 2: "Positive"}
 
-# Languages that route to the XLM multilingual model.
-# These are non-Latin-script languages where the English RoBERTa
-# tokenizer produces near-uniform [UNK] representations.
+# Backward-compatible name for callers that import it. Routing is stricter
+# than this set: English uses RoBERTa; every non-English language uses XLM-R.
 XLM_LANGUAGES = frozenset({
-    "ja", "ko", "zh", "hi", "ar", "ru", "uk", "bg", "el",
-    "th", "vi", "bn", "ur", "fa", "ka", "he", "tr",
+    "ar", "bn", "de", "es", "fr", "hi", "it", "ja", "ko",
+    "pt", "ru", "zh", "zh-cn", "zh-tw",
 })
 
 # ═══════════════════════════════════════════════════════════════
@@ -99,15 +98,49 @@ def load_all_models():
     return {"english": en_pair, "multilingual": xl_pair}
 
 
+def _normalize_lang_code(lang_code: str) -> str:
+    """Normalize language codes for hard routing."""
+    code = str(lang_code or "en").lower().strip()
+    if not code:
+        return "en"
+    if code in ("english", "eng", "eng_latn"):
+        return "en"
+    if code.startswith("zh"):
+        return "zh"
+    return code.split("-")[0][:2]
+
+
+def _detect_model_for_lang(lang_code: str) -> str:
+    """Return the enforced model route for a language code."""
+    return "roberta" if _normalize_lang_code(lang_code) == "en" else "xlm-r"
+
+
+def _model_id_for_language(lang_code: str) -> str:
+    """Return the Hugging Face model id for a language code."""
+    return (
+        ENGLISH_MODEL_ID
+        if _detect_model_for_lang(lang_code) == "roberta"
+        else MULTILINGUAL_MODEL_ID
+    )
+
+
+def _assert_hard_route(lang_code: str, model_used: str) -> None:
+    """Enforce: English -> RoBERTa, non-English -> XLM-R."""
+    lang = _normalize_lang_code(lang_code)
+    assert (
+        (lang == "en" and model_used == "roberta")
+        or (lang != "en" and model_used == "xlm-r")
+    ), f"Invalid model routing: lang={lang_code!r}, model_used={model_used!r}"
+
+
 def get_model_for_language(lang_code: str) -> tuple:
     """Route to the correct model based on detected language.
 
     Returns (tokenizer, model).
     """
-    lc = (lang_code or "en").lower().strip()[:2]
-    if lc in XLM_LANGUAGES:
-        return _load_model(MULTILINGUAL_MODEL_ID)
-    return _load_model(ENGLISH_MODEL_ID)
+    model_used = _detect_model_for_lang(lang_code)
+    _assert_hard_route(lang_code, model_used)
+    return _load_model(_model_id_for_language(lang_code))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -124,13 +157,18 @@ def predict(text: str, lang_code: str = "en") -> dict:
     """
     text = str(text or "").strip()
     if not text:
+        model_used = _detect_model_for_lang(lang_code)
+        _assert_hard_route(lang_code, model_used)
         return {
             "label": 1,
             "label_name": "Neutral",
             "confidence": 0.0,
             "scores": [0.0, 1.0, 0.0],
+            "model_used": model_used,
         }
 
+    model_used = _detect_model_for_lang(lang_code)
+    _assert_hard_route(lang_code, model_used)
     tokenizer, model = get_model_for_language(lang_code)
     device = next(model.parameters()).device
 
@@ -154,6 +192,7 @@ def predict(text: str, lang_code: str = "en") -> dict:
         "label_name": ROBERTA_LABEL_MAP[pred_label],
         "confidence": confidence,
         "scores": [float(p) for p in probs],
+        "model_used": model_used,
     }
 
 
@@ -164,7 +203,7 @@ def predict(text: str, lang_code: str = "en") -> dict:
 def predict_batch(
     texts: list[str],
     lang_codes: list[str] | None = None,
-    batch_size: int = 32,
+    batch_size: int = 8,
 ) -> list[dict]:
     """Batch sentiment prediction with language-aware model routing.
 
@@ -189,14 +228,16 @@ def predict_batch(
     clean_texts = [str(t or "").strip() or "empty" for t in texts]
     results = [None] * n
 
-    # Group indices by model
+    # Group indices by the hard route: en -> RoBERTa, else XLM-R.
     en_indices = []
     xl_indices = []
     for i, lc in enumerate(lang_codes):
-        if (lc or "en").lower().strip()[:2] in XLM_LANGUAGES:
-            xl_indices.append(i)
-        else:
+        model_used = _detect_model_for_lang(lc)
+        _assert_hard_route(lc, model_used)
+        if model_used == "roberta":
             en_indices.append(i)
+        else:
+            xl_indices.append(i)
 
     def _run_model_group(indices: list, model_id: str):
         if not indices:
@@ -233,6 +274,11 @@ def predict_batch(
                     "label_name": ROBERTA_LABEL_MAP[pred_label],
                     "confidence": float(probs[pred_label]),
                     "scores": [float(p) for p in probs],
+                    "model_used": (
+                        "roberta"
+                        if model_id == ENGLISH_MODEL_ID
+                        else "xlm-r"
+                    ),
                 }
 
     # Run English group
@@ -248,6 +294,7 @@ def predict_batch(
                 "label_name": "Neutral",
                 "confidence": 0.0,
                 "scores": [0.0, 1.0, 0.0],
+                "model_used": _detect_model_for_lang(lang_codes[i]),
             }
 
     return results
