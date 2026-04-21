@@ -272,9 +272,13 @@ export function SentimentDonutChart({ hasSentimentData, posPct, neuPct, negPct, 
     <CyberCard className="analysis-card" style={{ gridColumn: 3, gridRow: 1 }}>
       <PanelBadge icon={<Icon3DSentimentPie />} label="Sentiment"
         bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
-      <div className="analysis-card-body" style={{ alignItems: 'center' }}>
+      <div className="analysis-card-body" style={{ alignItems: 'center', justifyContent: 'center' }}>
         {hasSentimentData ? (
-          <>
+          <div style={{
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            gap: '8px', width: '100%',
+          }}>
             <div
               className="analysis-donut"
               style={{
@@ -283,30 +287,29 @@ export function SentimentDonutChart({ hasSentimentData, posPct, neuPct, negPct, 
                   #f59e0b ${posPct}% ${posPct + neuPct}%,
                   #f43f5e ${posPct + neuPct}% 100%
                 )`,
+                marginBottom: 0,
               }}
             >
               <div className="analysis-donut__center">{sentTotal}</div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
               {[
                 { label: 'Positive', pct: posPct, color: '#22c55e' },
-                { label: 'Neutral', pct: neuPct, color: '#f59e0b' },
+                { label: 'Neutral',  pct: neuPct, color: '#f59e0b' },
                 { label: 'Negative', pct: negPct, color: '#f43f5e' },
               ].map(s => (
                 <div key={s.label}>
-                  <div className="analysis-sent-row">
+                  <div className="analysis-sent-row" style={{ marginTop: 6 }}>
                     <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
                     <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>{s.pct}%</span>
                   </div>
                   <div className="analysis-sent-bar">
-                    <div className="analysis-sent-fill" style={{
-                      background: s.color, width: `${s.pct}%`,
-                    }} />
+                    <div className="analysis-sent-fill" style={{ background: s.color, width: `${s.pct}%` }} />
                   </div>
                 </div>
               ))}
             </div>
-          </>
+          </div>
         ) : (
           <div className="analysis-chart-container">
             <div className="analysis-awaiting">
