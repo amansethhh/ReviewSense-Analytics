@@ -177,7 +177,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
+  font-size: 9px;
   margin-bottom: 1px;
   margin-top: 0;
 }
@@ -191,7 +191,7 @@
 }
 
 .analysis-sent-bar {
-  height: 3px;
+  height: 2px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.06);
 }
