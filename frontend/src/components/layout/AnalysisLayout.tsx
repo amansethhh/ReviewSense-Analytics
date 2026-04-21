@@ -372,8 +372,8 @@ export function PipelineStatsCard({ hasSentimentData, rows }: {
 export function CircularLoader() {
   return (
     <div className="analysis-loader-wrap">
-      {/* scale(0.65): 300px frame × 0.65 ≈ 195px → fits 200px wrap */}
-      <CyberLoader scale={0.65} />
+      {/* scale(0.8): 300px frame × 0.8 ≈ 240px → fits 240px wrap */}
+      <CyberLoader scale={0.8} />
     </div>
   )
 }
