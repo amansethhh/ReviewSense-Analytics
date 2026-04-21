@@ -42,7 +42,12 @@ def detect_and_translate(text):
         # Skip translation for Hinglish — use direct inference
         pass
     elif lang_code not in ("en", "unknown"):
-        translated_text = translate_to_english(original_text, src_lang=lang_code)
+        translated_result = translate_to_english(original_text, src_lang=lang_code)
+        # V3: translate_to_english now returns (text, method) tuple
+        if isinstance(translated_result, tuple):
+            translated_text, _trans_method = translated_result
+        else:
+            translated_text = translated_result  # backward compat
         was_translated = translated_text.strip().lower() != original_text.strip().lower()
 
     return {

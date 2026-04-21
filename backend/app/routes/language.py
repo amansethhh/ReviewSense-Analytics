@@ -541,10 +541,9 @@ def detect_translate_and_predict_sync(
             # Non-Latin: classify on original text with XLM model
             pred = predict_sentiment(
                 original_text, lc_short)
-        elif multilingual and was_translated:
-            pred = predict_sentiment(
-                english_text, model_choice)
         else:
+            # RULE 2: Always classify on ORIGINAL text
+            # Translation is for DISPLAY ONLY
             pred = predict_sentiment(
                 original_text, model_choice)
     except Exception as e:
@@ -581,42 +580,59 @@ def detect_translate_and_predict_sync(
             "Null prediction detected (0.0 confidence)")
         sentiment_raw = "unknown"
 
-    polarity_val = float(pred.get("polarity", 0.0))
+    # RULE 2: Polarity on ORIGINAL TEXT ONLY
+    # Translation NEVER affects polarity/sentiment
+    try:
+        from src.predict import compute_dual_polarity
+        polarity_val, _vader, subjectivity_val = (
+            compute_dual_polarity(
+                original_text,
+                language_code,
+            )
+        )
+    except Exception:
+        polarity_val = float(pred.get("polarity", 0.0))
+        subjectivity_val = float(pred.get("subjectivity", 0.0))
 
-    # ── FIX-4: Mixed sentiment post-processing ───────────
+    # ── FIX-4: Mixed sentiment post-processing ───────────────
+    # RULE 2: Corrections on ORIGINAL text only
     sentiment_raw, confidence_pct, polarity_val = (
         _apply_sentiment_corrections(
-            english_text if was_translated
-            else original_text,
+            original_text,
             sentiment_raw,
             confidence_pct,
             polarity_val,
         )
     )
 
-    # S1/ADD-ON 1: Uncertain enforcement (LAST step)
-    from app.utils.output_contract import (
-        enforce_uncertainty, CONFIDENCE_THRESHOLD,
-    )
-    final_label, raw_label, is_uncertain = (
-        enforce_uncertainty(
-            sentiment_raw, confidence_pct,
-        )
+    # V3: Only 3 valid labels — no uncertain override
+    if sentiment_raw not in ("positive", "negative", "neutral"):
+        sentiment_raw = "neutral"
+
+    # RULE 3: analysis_input_source is ALWAYS "original"
+    analysis_input_source = "original"
+
+    # V3 RULE 9: Structured logging
+    logger.info(
+        "Language predict: model_used=%s language_detected=%s "
+        "translation_status=%s correction_applied=%s final_label=%s",
+        pred.get("model_used", model_choice),
+        language_code,
+        "translated" if was_translated else "none",
+        "yes" if sentiment_raw != label_name.lower() else "no",
+        sentiment_raw,
     )
 
-    # Determine analysis_input_source
-    analysis_input_source = "original"
-    if was_translated:
-        analysis_input_source = "translated"
-    elif translation_error:
-        analysis_input_source = "original_fallback"
+    # Determine translation_failed
+    translation_failed = translation_error or (
+        translation_method in ("failed", "failed_raw_predict")
+    )
 
     result = {
-        "sentiment": final_label,
+        "sentiment": sentiment_raw,
         "confidence": confidence_pct,
         "polarity": polarity_val,
-        "subjectivity": float(
-            pred.get("subjectivity", 0.0)),
+        "subjectivity": float(subjectivity_val),
         "detected_language": detected_language,
         "language_code": language_code,
         "english_text": english_text,
@@ -628,18 +644,16 @@ def detect_translate_and_predict_sync(
         "translation_error": translation_error,
         "model_used": pred.get(
             "model_used", model_choice),
-        # Output contract fields (S1/S6)
-        "raw_label": raw_label,
-        "is_uncertain": is_uncertain,
-        "confidence_threshold": CONFIDENCE_THRESHOLD,
+        # V3 output contract fields
         "analysis_input_source": analysis_input_source,
+        "translation_failed": translation_failed,
+        "neutral_corrected": False,
         "sarcasm_applied": False,
-        "uncertain_prediction": is_uncertain,
     }
 
     # ── Cache store ───────────────────────────────────────
     cache_entry = {
-        "sentiment": final_label,
+        "sentiment": sentiment_raw,
         "confidence": confidence_pct,
         "polarity": polarity_val,
         "subjectivity": float(
@@ -697,7 +711,16 @@ def _run_language_pipeline(
 
         raw_conf = float(pred.get("confidence", 0.0))
         confidence_pct = normalize_confidence(raw_conf)
-        polarity_val = float(pred.get("polarity", 0.0))
+
+        # V3 FIX: Compute real polarity
+        try:
+            from src.predict import compute_dual_polarity
+            polarity_val, _vader, subjectivity_val = (
+                compute_dual_polarity(text, "en")
+            )
+        except Exception:
+            polarity_val = float(pred.get("polarity", 0.0))
+            subjectivity_val = float(pred.get("subjectivity", 0.0))
 
         # FIX-3: Null prediction guard
         if confidence_pct == 0.0 and raw_conf == 0.0:
@@ -709,15 +732,9 @@ def _run_language_pipeline(
                 text, sentiment_raw,
                 confidence_pct, polarity_val))
 
-        # S1/ADD-ON 1: Uncertain enforcement (LAST step)
-        from app.utils.output_contract import (
-            enforce_uncertainty, CONFIDENCE_THRESHOLD,
-        )
-        final_label, raw_label, is_uncertain = (
-            enforce_uncertainty(
-                sentiment_raw, confidence_pct,
-            )
-        )
+        # V3: Only 3 valid labels
+        if sentiment_raw not in ("positive", "negative", "neutral"):
+            sentiment_raw = "neutral"
 
         return {
             "detected_language":    "English",
@@ -726,20 +743,17 @@ def _run_language_pipeline(
             "translated_text":      text,
             "translation_needed":   False,
             "skipped_translation":  True,
-            "sentiment":            final_label,
+            "sentiment":            sentiment_raw,
             "confidence":           confidence_pct,
             "polarity":             polarity_val,
-            "subjectivity":         float(pred.get(
-                                    "subjectivity", 0.0)),
+            "subjectivity":         float(subjectivity_val),
             "model_used":           pred.get("model_used",
                                     model_choice),
-            # Output contract fields (S1/S6)
-            "raw_label":            raw_label,
-            "is_uncertain":         is_uncertain,
-            "confidence_threshold": CONFIDENCE_THRESHOLD,
+            # V3 output contract fields
             "analysis_input_source": "original",
+            "translation_failed":   False,
+            "neutral_corrected":    False,
             "sarcasm_applied":      False,
-            "uncertain_prediction": is_uncertain,
         }
 
     # ── Non-English: translate with two-tier fallback ─────
@@ -768,17 +782,11 @@ def _run_language_pipeline(
         lang_code, trans.get(
             "language_name", lang_code.title()))
 
-    # Determine analysis text — use translated if available,
-    # otherwise fall back to original (Tier 3 raw predict).
-    analysis_text = (
-        translated_text
-        if was_translated and translated_text and translated_text.strip()
-        else text
-    )
-
+    # RULE 2: Classify on ORIGINAL text, not translated
+    # XLM-R handles non-Latin scripts natively
     try:
         pred = predict_sentiment(
-            analysis_text, model_choice)
+            text, model_choice)
     except Exception as e:
         raise RuntimeError(
             f"Prediction failed on translated text: {e}"
@@ -792,32 +800,44 @@ def _run_language_pipeline(
 
     raw_conf = float(pred.get("confidence", 0.0))
     confidence_pct = normalize_confidence(raw_conf)
-    polarity_val = float(pred.get("polarity", 0.0))
+
+    # V3 FIX: Compute real polarity with translated_text
+    try:
+        from src.predict import compute_dual_polarity
+        polarity_val, _vader, subjectivity_val = (
+            compute_dual_polarity(
+                text, lang_code,
+            )
+        )
+    except Exception:
+        polarity_val = float(pred.get("polarity", 0.0))
+        subjectivity_val = float(pred.get("subjectivity", 0.0))
 
     # FIX-3: Null prediction guard
     if confidence_pct == 0.0 and raw_conf == 0.0:
         sentiment_raw = "unknown"
 
-    # FIX-4: Mixed sentiment correction
+    # FIX-4: Mixed sentiment correction (RULE 2: on ORIGINAL text)
     sentiment_raw, confidence_pct, polarity_val = (
         _apply_sentiment_corrections(
-            analysis_text, sentiment_raw,
+            text, sentiment_raw,
             confidence_pct, polarity_val))
 
-    # S1/ADD-ON 1: Uncertain enforcement (LAST step)
-    from app.utils.output_contract import (
-        enforce_uncertainty, CONFIDENCE_THRESHOLD,
-    )
-    final_label, raw_label, is_uncertain = (
-        enforce_uncertainty(
-            sentiment_raw, confidence_pct,
-        )
-    )
+    # V3: Only 3 valid labels
+    if sentiment_raw not in ("positive", "negative", "neutral"):
+        sentiment_raw = "neutral"
 
-    # Determine analysis_input_source
-    analysis_input_source = (
-        "translated" if was_translated
-        else "original"
+    # RULE 3: analysis_input_source always "original"
+    analysis_input_source = "original"
+
+    # V3 RULE 9: Structured logging
+    logger.info(
+        "Language pipeline: model_used=%s language_detected=%s "
+        "translation_status=%s final_label=%s",
+        pred.get("model_used", model_choice),
+        lang_code,
+        translation_method or "none",
+        sentiment_raw,
     )
 
     return {
@@ -827,20 +847,17 @@ def _run_language_pipeline(
         "translated_text":      translated_text,
         "translation_needed":   was_translated,
         "skipped_translation":  False,
-        "sentiment":            final_label,
+        "sentiment":            sentiment_raw,
         "confidence":           confidence_pct,
         "polarity":             polarity_val,
-        "subjectivity":         float(pred.get(
-                                "subjectivity", 0.0)),
+        "subjectivity":         float(subjectivity_val),
         "model_used":           pred.get("model_used",
                                 model_choice),
-        # Output contract fields (S1/S6)
-        "raw_label":            raw_label,
-        "is_uncertain":         is_uncertain,
-        "confidence_threshold": CONFIDENCE_THRESHOLD,
+        # V3 output contract fields
         "analysis_input_source": analysis_input_source,
+        "translation_failed":   translation_method in ("failed", "failed_raw_predict"),
+        "neutral_corrected":    False,
         "sarcasm_applied":      False,
-        "uncertain_prediction": is_uncertain,
     }
 
 

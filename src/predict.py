@@ -31,10 +31,11 @@ except ImportError:
     _VADER_AVAILABLE = False
     logger.warning("vaderSentiment not installed — VADER corrections disabled")
 
-# Languages where TextBlob/VADER polarity is meaningful
+# Languages where TextBlob/VADER on ORIGINAL text is meaningless.
+# For these, we run on the English translation instead.
 _NON_LATIN_LANGS = frozenset({
-    "ja", "ko", "zh", "hi", "ar", "ru", "uk", "bg", "el",
-    "th", "vi", "bn", "ur", "fa", "ka", "he", "tr",
+    "ja", "ko", "zh", "zh-cn", "zh-tw", "hi", "ar",
+    "ru", "uk", "bg", "el", "th", "he", "ka", "ur", "fa", "bn",
 })
 
 # ═══════════════════════════════════════════════════════════════
@@ -77,10 +78,11 @@ CALIBRATION_TEMPERATURE = 1.8
 # 1.8 derived from observed overconfidence pattern across 200 English bulk reviews.
 
 # ═══════════════════════════════════════════════════════════════
-# CONSTANTS — Uncertainty threshold (Feature 1)
+# V3: UNCERTAIN label removed — confidence IS the uncertainty signal
+# Threshold kept for backward API compatibility only.
 # ═══════════════════════════════════════════════════════════════
 
-CONFIDENCE_UNCERTAIN_THRESHOLD = 0.60
+CONFIDENCE_UNCERTAIN_THRESHOLD = 0.60  # Kept for API compat — never overrides label
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -112,8 +114,7 @@ def _input_safety_guard(text):
             "sarcasm_confidence": 0.0,
             "sarcasm_applied": False,
             "sarcasm_reason": "",
-            "uncertain_prediction": True,
-            "confidence_threshold": CONFIDENCE_UNCERTAIN_THRESHOLD,
+            "translation_failed": False,
             "error": "Empty or invalid input",
         }
     return None
@@ -215,22 +216,50 @@ def apply_neutral_correction(pred_class: int,
 # STEP 6b — Dual polarity (VADER + TextBlob)
 # ═══════════════════════════════════════════════════════════════
 
-def compute_dual_polarity(text: str, lang_code: str = "en") -> tuple:
-    """Compute both VADER and TextBlob polarity.
+def compute_dual_polarity(
+    text: str,
+    lang_code: str = "en",
+) -> tuple:
+    """Compute TextBlob polarity, VADER compound, and subjectivity.
 
-    Returns (textblob_polarity, vader_compound, subjectivity).
-    For non-Latin scripts, returns (0.0, 0.0, 0.5) — polarity is meaningless.
+    RULE 2 ENFORCEMENT: This function operates on ORIGINAL TEXT ONLY.
+    Translation NEVER affects polarity computation.
+
+    For Latin-script languages (en, de, fr, es, it, pt, etc.):
+        Runs TextBlob + VADER directly on original text.
+
+    For non-Latin-script languages (ja, ko, zh, hi, ar, ru, etc.):
+        Returns (0.0, 0.0, 0.5) — TextBlob/VADER cannot parse non-Latin.
+        The XLM-R model handles classification natively for these.
+
+    Args:
+        text: Original review text (any language)
+        lang_code: ISO 639-1 code
+
+    Returns:
+        (textblob_polarity, vader_compound, subjectivity)
     """
-    lc = (lang_code or "en").lower().strip()[:2]
-    if lc in _NON_LATIN_LANGS:
+    if not text or not str(text).strip():
         return 0.0, 0.0, 0.5
+
+    # Normalize lang_code — handle None, empty, uppercase
+    lang = (lang_code or "en").lower().strip()[:5]
+    lc_short = lang[:2]
+
+    # Non-Latin languages → return neutral defaults
+    # TextBlob/VADER cannot parse non-Latin scripts
+    is_non_latin = lc_short in _NON_LATIN_LANGS or lang in _NON_LATIN_LANGS
+    if is_non_latin:
+        return 0.0, 0.0, 0.5
+
+    analysis_text = str(text)
 
     # TextBlob polarity
     try:
         from textblob import TextBlob
-        blob = TextBlob(str(text))
-        tb_polarity = blob.sentiment.polarity
-        subjectivity = blob.sentiment.subjectivity
+        blob = TextBlob(analysis_text)
+        tb_polarity = float(blob.sentiment.polarity)
+        subjectivity = float(blob.sentiment.subjectivity)
     except Exception:
         tb_polarity = 0.0
         subjectivity = 0.5
@@ -239,7 +268,7 @@ def compute_dual_polarity(text: str, lang_code: str = "en") -> tuple:
     vader_compound = 0.0
     if _VADER_AVAILABLE and _vader is not None:
         try:
-            vader_compound = _vader.polarity_scores(str(text))["compound"]
+            vader_compound = float(_vader.polarity_scores(analysis_text)["compound"])
         except Exception:
             vader_compound = 0.0
 
@@ -619,10 +648,15 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
         except Exception as e:
             logger.warning("Sarcasm detection failed: %s", e)
 
-    # Step 11: Uncertainty flag
-    uncertain_prediction = pre_uncertain or confidence < CONFIDENCE_UNCERTAIN_THRESHOLD
+    # Step 11: V3 structured logging (uncertainty is metadata only)
+    low_confidence = pre_uncertain or confidence < CONFIDENCE_UNCERTAIN_THRESHOLD
+    if low_confidence:
+        logger.debug(
+            "Low confidence prediction: label=%s conf=%.4f threshold=%.2f",
+            label_name, confidence, CONFIDENCE_UNCERTAIN_THRESHOLD,
+        )
 
-    # Step 12: Return complete result dict (20 fields)
+    # Step 12: Return complete result dict
     return {
         "label": pred_class,
         "label_name": label_name,
@@ -636,14 +670,13 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
         "temperature_scaled": temperature_scaled,
         "translation_status": "OK",
         "translation_flagged": False,
+        "translation_failed": False,
         "hinglish_detected": False,
         "analysis_input_source": "original",
         "sarcasm_detected": sarcasm_detected,
         "sarcasm_confidence": float(sarcasm_confidence_val),
         "sarcasm_applied": sarcasm_applied,
         "sarcasm_reason": sarcasm_reason,
-        "uncertain_prediction": uncertain_prediction,
-        "confidence_threshold": CONFIDENCE_UNCERTAIN_THRESHOLD,
     }
 
 

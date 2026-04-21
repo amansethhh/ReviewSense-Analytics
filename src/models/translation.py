@@ -58,10 +58,13 @@ _translate_executor = ThreadPoolExecutor(
 _DEGENERATE_PATTERNS = [
     re.compile(r"^\s*$"),                                                    # empty
     re.compile(r"^\[.+\]$"),                                                  # just a lang tag
-    re.compile(r"\[(Chinese|Japanese|Korean|Arabic|Hindi|Russian|German|French|Spanish|Polish|Portuguese|Italian)\]", re.IGNORECASE),  # leaked lang tag
+    re.compile(r"\[(Chinese|Japanese|Korean|Arabic|Hindi|Russian|German|French|Spanish|Polish|Portuguese|Italian|English|EN|ZH|JA|KO|AR|HI|RU|DE|FR|ES|IT|PT|PL|Dutch|Turkish|Ukrainian|Greek|Thai|Hebrew|Georgian|Urdu|Persian|Bengali|Vietnamese|Indonesian|Malay|Swedish|Danish|Finnish|Norwegian|Romanian|Hungarian|Bulgarian|Croatian|Slovak|Slovenian|Serbian|Czech)\]", re.IGNORECASE),  # leaked lang tag
     re.compile(r"^(Bad experience|Good experience|It does not work properly)\.$", re.IGNORECASE),
     re.compile(r"^(This product is (bad|good|okay))\.$", re.IGNORECASE),
-    re.compile(r"^(The quality is (decent|mediocre|acceptable))\.$", re.IGNORECASE),
+    re.compile(r"^(The quality is (decent|mediocre|acceptable|great|good|bad|poor|excellent|terrible|average|moderate))\.$", re.IGNORECASE),
+    # V3: Template fallback patterns from forensic report
+    re.compile(r'^The product is (great|good|bad|poor|excellent|terrible|decent|unsatisfactory|fantastic|outstanding|mediocre|horrible)\.$', re.IGNORECASE),
+    re.compile(r'^(Very disappointing|Very good experience|This does not work|Very fast and reliable|Excellent product|Works perfectly|Exceptional quality|Wonderful product)\.$', re.IGNORECASE),
 ]
 
 # Minimum translation length ratio vs source text (words)
@@ -163,32 +166,38 @@ def _google_translate_sync(text: str, source_code: str) -> Optional[str]:
 def translate_to_english(
     text: str,
     src_lang: str = "auto",
-) -> str:
+) -> tuple:
     """
     Translate `text` from `src_lang` to English.
+
+    V3 CONTRACT:
+      On success: (English translation, "deep_translator" or "cache")
+      On English passthrough: (original_text, "passthrough")
+      On failure: (original_text, "passthrough_failed")
+      NEVER returns a template string like "The product is X. [Language]"
 
     Uses deep-translator GoogleTranslator with:
     - Degenerate output detection
     - In-process translation cache (500 entries)
-    - 5-second per-call timeout
+    - 4-second per-call timeout
 
     Returns:
-        Translated English text, or original text if translation fails.
+        Tuple of (translated_text, method)
     """
     text = str(text or "").strip()
     if not text:
-        return ""
+        return "", "passthrough"
 
     # English passthrough
     src_norm = _normalize_lang_code(src_lang)
     if src_lang.lower() in ("en", "english") or src_norm == "en":
-        return text
+        return text, "passthrough"
 
     # Cache lookup
     cache_key = hashlib.md5(f"{src_lang}:{text}".encode()).hexdigest()
     with _cache_lock:
         if cache_key in _translation_cache:
-            return _translation_cache[cache_key]
+            return _translation_cache[cache_key], "cache"
 
     # Translate
     result = _google_translate_sync(text, src_norm if src_norm != "en" else "auto")
@@ -203,22 +212,24 @@ def translate_to_english(
             '', cleaned, flags=re.IGNORECASE
         ).strip()
 
-        with _cache_lock:
-            if len(_translation_cache) >= _MAX_CACHE_SIZE:
-                # Evict oldest 100 entries
-                keys = list(_translation_cache.keys())[:100]
-                for k in keys:
-                    del _translation_cache[k]
-            _translation_cache[cache_key] = cleaned
+        # V3: Final degenerate check on cleaned text
+        if cleaned and not _is_degenerate(text, cleaned):
+            with _cache_lock:
+                if len(_translation_cache) >= _MAX_CACHE_SIZE:
+                    # Evict oldest 100 entries
+                    keys = list(_translation_cache.keys())[:100]
+                    for k in keys:
+                        del _translation_cache[k]
+                _translation_cache[cache_key] = cleaned
 
-        logger.debug("Translated [%s→en]: '%s...' → '%s...'",
-                     src_lang, text[:40], cleaned[:40])
-        return cleaned
+            logger.debug("Translated [%s→en]: '%s...' → '%s...'",
+                         src_lang, text[:40], cleaned[:40])
+            return cleaned, "deep_translator"
 
-    # Translation failed or degenerate — return original
+    # Translation failed or degenerate — return original with failure flag
     logger.warning("Translation failed/degenerate for lang=%s: '%s' → '%s'",
                    src_lang, text[:50], str(result)[:50] if result else "None")
-    return text
+    return text, "passthrough_failed"
 
 
 # ═══════════════════════════════════════════════════════════════

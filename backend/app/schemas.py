@@ -9,7 +9,8 @@ class SentimentLabel(str, Enum):
     positive  = "positive"
     negative  = "negative"
     neutral   = "neutral"
-    uncertain = "uncertain"
+    # V3: "uncertain" REMOVED — only 3 labels allowed
+    # "unknown" and "error" kept for edge cases (timeouts, failures)
     unknown   = "unknown"
     error     = "error"
 
@@ -90,13 +91,14 @@ class PredictResponse(BaseModel):
     model_used:    str
     processing_ms: int
     cache_hit:     bool = False
-    # Output contract fields (S1/S6)
-    raw_label:     Optional[str] = None
-    is_uncertain:  bool = False
-    confidence_threshold: Optional[float] = None
-    analysis_input_source: Optional[str] = None
-    sarcasm_applied: bool = False
-    uncertain_prediction: bool = False
+    # V3 output contract fields
+    language:              Optional[str] = "en"
+    language_code:         Optional[str] = "en"
+    analysis_input_source: str = "original"
+    translation:           Optional[str] = None
+    translation_failed:    bool = False
+    neutral_corrected:     bool = False
+    sarcasm_applied:       bool = False
 
 
 # ── /bulk ──────────────────────────────────────────────────
@@ -128,10 +130,10 @@ class BulkRowResult(BaseModel):
     detected_language: Optional[str] = None
     translation_method: Optional[str] = None
     translated_text: Optional[str] = None
-    # Output contract fields (S1/S6)
-    raw_label:     Optional[str] = None
-    is_uncertain:  bool = False
-    analysis_input_source: Optional[str] = None
+    # V3 output contract fields
+    analysis_input_source: str = "original"
+    translation_failed:    bool = False
+    neutral_corrected:     bool = False
 
 
 class BulkJobResult(BaseModel):
@@ -192,13 +194,11 @@ class LanguageResponse(BaseModel):
     lime_features:          Optional[list[LIMEFeature]] = None
     absa:                   Optional[list[ABSAItem]] = None
     sarcasm:                Optional[SarcasmResult] = None
-    # Output contract fields (S1/S6)
-    raw_label:     Optional[str] = None
-    is_uncertain:  bool = False
-    confidence_threshold: Optional[float] = None
-    analysis_input_source: Optional[str] = None
-    sarcasm_applied: bool = False
-    uncertain_prediction: bool = False
+    # V3 output contract fields
+    analysis_input_source:  str = "original"
+    translation_failed:     bool = False
+    neutral_corrected:      bool = False
+    sarcasm_applied:        bool = False
 
 
 # ── /metrics ───────────────────────────────────────────────

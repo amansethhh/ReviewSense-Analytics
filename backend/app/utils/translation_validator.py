@@ -82,7 +82,7 @@ def validate_translation(
         return {
             "is_valid": False,
             "translated_text": original,
-            "analysis_input_source": "original_fallback",
+            "analysis_input_source": "original",
             "validation_warnings": ["Empty translation output"],
         }
 
@@ -106,7 +106,7 @@ def validate_translation(
                 return {
                     "is_valid": False,
                     "translated_text": original,
-                    "analysis_input_source": "original_fallback",
+                    "analysis_input_source": "original",
                     "validation_warnings": warnings,
                 }
 
@@ -134,7 +134,7 @@ def validate_translation(
                 return {
                     "is_valid": False,
                     "translated_text": original,
-                    "analysis_input_source": "original_fallback",
+                    "analysis_input_source": "original",
                     "validation_warnings": warnings,
                 }
 
@@ -167,7 +167,7 @@ def validate_translation(
             return {
                 "is_valid": False,
                 "translated_text": original,
-                "analysis_input_source": "original_fallback",
+                "analysis_input_source": "original",
                 "validation_warnings": warnings,
             }
 
@@ -181,6 +181,6 @@ def validate_translation(
     return {
         "is_valid": True,
         "translated_text": translated,
-        "analysis_input_source": "translated",
+        "analysis_input_source": "original",
         "validation_warnings": warnings,
     }

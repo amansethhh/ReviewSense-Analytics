@@ -22,11 +22,11 @@ from src.models.sentiment import predict as sentiment_predict
 from src.models.sentiment import predict_batch as sentiment_predict_batch
 from src.predict import (
     apply_short_text_guard,
-    apply_neutral_correction,
+    apply_neutral_correction_v2,
+    compute_dual_polarity,
     calibrated_confidence,
     apply_temperature_scaling,
     _apply_sarcasm_override,
-    CONFIDENCE_UNCERTAIN_THRESHOLD,
 )
 from src.sarcasm_detector import detect_sarcasm_bulk
 from src.config import LABEL_MAP
@@ -83,13 +83,15 @@ def validate_translation(original_text: str, translated_text: str) -> dict:
 def safe_translate(text: str, lang_code: str) -> dict:
     """Safe translation with degenerate output detection and retry logic."""
     try:
-        translated = translate_to_english(text, src_lang=lang_code)
+        _tr_result = translate_to_english(text, src_lang=lang_code)
+        translated = _tr_result[0] if isinstance(_tr_result, tuple) else _tr_result
 
         # Check 1: degenerate output
         if _is_degenerate(translated):
             logger.warning("Degenerate translation for lang=%s: '%s'", lang_code, translated)
             padded = f"Review: {text}. Overall opinion expressed."
-            translated = translate_to_english(padded, src_lang=lang_code)
+            _tr_result2 = translate_to_english(padded, src_lang=lang_code)
+            translated = _tr_result2[0] if isinstance(_tr_result2, tuple) else _tr_result2
             if _is_degenerate(translated) or not _translation_plausible(text, translated):
                 return {"translated_text": text, "translation_status": "FALLBACK_PASSTHROUGH"}
             return {"translated_text": translated, "translation_status": "RETRIED_OK"}
@@ -98,7 +100,8 @@ def safe_translate(text: str, lang_code: str) -> dict:
         if not _translation_plausible(text, translated):
             logger.warning("Implausible translation ratio for lang=%s", lang_code)
             padded = f"Review: {text}. Overall opinion expressed."
-            translated = translate_to_english(padded, src_lang=lang_code)
+            _tr_result3 = translate_to_english(padded, src_lang=lang_code)
+            translated = _tr_result3[0] if isinstance(_tr_result3, tuple) else _tr_result3
             if not _translation_plausible(text, translated):
                 return {"translated_text": text, "translation_status": "FALLBACK_PASSTHROUGH"}
             return {"translated_text": translated, "translation_status": "RETRIED_OK"}
@@ -123,30 +126,22 @@ def clean_text(text: str) -> str | None:
     return t
 
 
-def _apply_post_processing(text: str, sentiment: dict) -> dict:
+def _apply_post_processing(text: str, sentiment: dict, lang_code: str = "en") -> dict:
     """Apply the full post-processing pipeline to a single prediction.
 
-    Wiring order (ADD-ON 10 contract):
-      Step 3: raw_confidence
-      Step 4: TextBlob polarity + subjectivity
+    V3 Pipeline order:
+      Step 4: Dual polarity (VADER + TextBlob) on ORIGINAL text
       Step 5: short-text guard
-      Step 6: neutral correction
+      Step 6: neutral correction v2 (VADER-primary, TextBlob fallback)
       Step 7: confidence calibration
       Step 8: temperature scaling
     """
-    scores = sentiment["scores"]  # [neg, neu, pos]
+    scores = sentiment["scores"]
     pred_class = sentiment["label"]
     raw_confidence = sentiment["confidence"]
 
-    # Step 4: TextBlob polarity + subjectivity
-    try:
-        from textblob import TextBlob
-        blob = TextBlob(text)
-        polarity = blob.sentiment.polarity
-        subjectivity = blob.sentiment.subjectivity
-    except Exception:
-        polarity = scores[2] - scores[0]
-        subjectivity = 1.0 - scores[1]
+    # Step 4: Dual polarity on ORIGINAL text (RULE 2)
+    polarity, vader_compound, subjectivity = compute_dual_polarity(text, lang_code)
 
     # Step 5: Short-text guard
     guard_result = apply_short_text_guard(text, pred_class, raw_confidence)
@@ -154,8 +149,8 @@ def _apply_post_processing(text: str, sentiment: dict) -> dict:
     confidence = guard_result["confidence"] if guard_result["guard_applied"] else raw_confidence
     guard_applied = guard_result["guard_applied"]
 
-    # Step 6: Neutral correction
-    nc = apply_neutral_correction(pred_class, confidence, polarity)
+    # Step 6: Neutral correction v2 (VADER-primary, TextBlob fallback) — RULE 4
+    nc = apply_neutral_correction_v2(pred_class, confidence, polarity, vader_compound, lang_code)
     pred_class = nc["pred_class"]
     neutral_corrected = nc["neutral_corrected"]
     correction_reason = nc["correction_reason"]
@@ -169,7 +164,7 @@ def _apply_post_processing(text: str, sentiment: dict) -> dict:
         temp_probs = apply_temperature_scaling(scores)
         temp_confidence = temp_probs[pred_class]
         confidence = min(confidence, temp_confidence)
-        confidence = max(confidence, 0.30)  # C2 FIX: aligned with predict.py
+        confidence = max(confidence, 0.30)
         confidence = round(confidence, 4)
         temperature_scaled = True
 
@@ -263,19 +258,16 @@ def run_pipeline(
                     lang_code,
                 )
 
-    # ── SINGLE CANONICAL TEXT: analysis_input ──
-    # All downstream steps (sentiment, ABSA, LIME) MUST use this variable
-    if translation_flagged or not was_translated:
-        analysis_input = original
-    else:
-        analysis_input = translated
+    # V3 RULE 2: Classification ALWAYS uses ORIGINAL text
+    # Translation is for DISPLAY ONLY
+    analysis_input = original
 
-    # Step 3: Run sentiment
-    logger.info("Running sentiment prediction")
-    sentiment = sentiment_predict(analysis_input)
+    # Step 3: Run sentiment on ORIGINAL text
+    logger.info("Running sentiment prediction on original text")
+    sentiment = sentiment_predict(analysis_input, lang_code=lang_code)
 
-    # Apply full post-processing pipeline
-    pp = _apply_post_processing(analysis_input, sentiment)
+    # Apply full post-processing pipeline on ORIGINAL text
+    pp = _apply_post_processing(analysis_input, sentiment, lang_code=lang_code)
 
     # Reduce confidence if translation flagged
     confidence = pp["confidence"]
@@ -319,10 +311,14 @@ def run_pipeline(
         except Exception as e:
             logger.warning("Aspect analysis error: %s", e)
 
-    # Uncertainty flag
-    uncertain_prediction = confidence < CONFIDENCE_UNCERTAIN_THRESHOLD
-
-    logger.info("Pipeline complete — sentiment: %s (%.1f%%)", pp["sentiment"], confidence * 100)
+    # V3 RULE 9: Structured logging
+    logger.info(
+        "Pipeline complete: model_used=auto language_detected=%s "
+        "translation_status=%s correction_applied=%s final_label=%s conf=%.1f%%",
+        lang_code, translation_status,
+        "yes" if pp["neutral_corrected"] else "no",
+        pp["sentiment"], confidence * 100,
+    )
 
     return {
         "original": original,
@@ -345,16 +341,15 @@ def run_pipeline(
         "temperature_scaled": pp["temperature_scaled"],
         "translation_status": translation_status,
         "translation_flagged": translation_flagged,
+        "translation_failed": translation_status == "FALLBACK_PASSTHROUGH",
         "hinglish_detected": hinglish_detected,
-        "analysis_input_source": "original" if translation_flagged or not was_translated else "translated",
+        "analysis_input_source": "original",
         "sarcasm": sarcasm_result,
         "sarcasm_status": "ENABLED" if enable_sarcasm else "DISABLED",
         "sarcasm_detected": sarcasm_detected,
         "sarcasm_confidence": float(sarcasm_confidence_val),
         "sarcasm_applied": sarcasm_applied,
         "sarcasm_reason": sarcasm_reason,
-        "uncertain_prediction": uncertain_prediction,
-        "confidence_threshold": CONFIDENCE_UNCERTAIN_THRESHOLD,
         "aspects": aspects,
     }
 
@@ -500,8 +495,6 @@ def run_pipeline_batch(
                 pp["sentiment"] = LABEL_MAP[sarc_override["pred_class"]]
                 confidence = sarc_override["confidence"]
 
-            # Uncertainty flag
-            uncertain = confidence < CONFIDENCE_UNCERTAIN_THRESHOLD
 
             results.append({
                 "original": clean_texts[i],
@@ -524,16 +517,15 @@ def run_pipeline_batch(
                 "temperature_scaled": pp["temperature_scaled"],
                 "translation_status": translation_statuses[i],
                 "translation_flagged": translation_flags[i],
+                "translation_failed": translation_statuses[i] == "FALLBACK_PASSTHROUGH",
                 "hinglish_detected": hinglish_flags[i],
-                "analysis_input_source": "original" if translation_flags[i] or not li.get("was_translated", False) else "translated",
+                "analysis_input_source": "original",
                 "sarcasm": final_sarcasm,
                 "sarcasm_status": "ENABLED" if enable_sarcasm else "DISABLED",
                 "sarcasm_detected": is_sarc,
                 "sarcasm_confidence": float(sarc_conf),
                 "sarcasm_applied": sarc_override["sarcasm_applied"],
                 "sarcasm_reason": sarc_reason,
-                "uncertain_prediction": uncertain,
-                "confidence_threshold": CONFIDENCE_UNCERTAIN_THRESHOLD,
                 "aspects": aspect_lists[i],
             })
         except Exception as e:
@@ -552,8 +544,7 @@ def run_pipeline_batch(
                 "sarcasm": None, "sarcasm_status": "DISABLED",
                 "sarcasm_detected": False, "sarcasm_confidence": 0.0,
                 "sarcasm_applied": False, "sarcasm_reason": "",
-                "uncertain_prediction": True,
-                "confidence_threshold": CONFIDENCE_UNCERTAIN_THRESHOLD,
+                "translation_failed": False,
                 "aspects": [], "error": str(e),
             })
 
@@ -581,8 +572,7 @@ def _empty_result() -> dict:
         "sarcasm": None, "sarcasm_status": "DISABLED",
         "sarcasm_detected": False, "sarcasm_confidence": 0.0,
         "sarcasm_applied": False, "sarcasm_reason": "",
-        "uncertain_prediction": True,
-        "confidence_threshold": CONFIDENCE_UNCERTAIN_THRESHOLD,
+        "translation_failed": False,
         "aspects": [],
     }
 

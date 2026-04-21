@@ -18,7 +18,8 @@ from typing import Any, Optional
 logger = logging.getLogger("reviewsense.contract")
 
 # ── Confidence threshold (on 0-100 scale) ─────────────────
-# Any prediction below this is marked UNCERTAIN.
+# V3: This is metadata ONLY — it NEVER overrides the label.
+# Only 3 labels allowed: positive, negative, neutral.
 CONFIDENCE_THRESHOLD: float = 65.0
 
 
@@ -76,7 +77,15 @@ def enforce_uncertainty(
     raw_label: Optional[str] = None,
 ) -> tuple[str, str, bool]:
     """
-    FINAL enforcement layer — applied LAST before output.
+    V3: UNCERTAIN label REMOVED per user requirement.
+
+    Only three valid output labels: positive, negative, neutral.
+    The confidence value IS the uncertainty signal — it is displayed
+    in the UI. A low-confidence neutral review is shown as "neutral"
+    with low confidence, NOT as "uncertain".
+
+    is_uncertain is kept as a metadata flag for API compatibility
+    but NEVER overrides the label.
 
     Args:
         sentiment: The corrected sentiment label.
@@ -91,15 +100,16 @@ def enforce_uncertainty(
 
     is_uncertain = confidence < CONFIDENCE_THRESHOLD
 
+    # V3: Label passes through unchanged — NEVER set to "uncertain"
+    final_label = sentiment
+
     if is_uncertain:
-        final_label = "uncertain"
         logger.debug(
-            "Uncertain prediction: raw=%s conf=%.1f%% "
-            "(threshold=%.1f%%)",
-            raw_label, confidence, CONFIDENCE_THRESHOLD,
+            "Low confidence prediction (kept as %s): "
+            "raw=%s conf=%.1f%% (threshold=%.1f%%)",
+            final_label, raw_label, confidence,
+            CONFIDENCE_THRESHOLD,
         )
-    else:
-        final_label = sentiment
 
     return final_label, raw_label, is_uncertain
 
@@ -149,16 +159,12 @@ def format_prediction_output(
     )
 
     output = {
-        # Core contract fields (ADD-ON 2)
+        # Core contract fields (V3)
         "label": final_label,
-        "raw_label": raw_label,
         "confidence": confidence,
-        "is_uncertain": is_uncertain,
-        "confidence_threshold": CONFIDENCE_THRESHOLD,
         "analysis_input_source": analysis_input_source,
         "sarcasm_detected": sarcasm_detected,
         "sarcasm_applied": sarcasm_applied,
-        "uncertain_prediction": is_uncertain,
         # Standard fields
         "polarity": polarity,
         "subjectivity": subjectivity,
@@ -191,9 +197,7 @@ def format_bulk_row_output(
 
     output = {
         "sentiment": final_label,
-        "raw_label": raw_label,
         "confidence": confidence,
-        "is_uncertain": is_uncertain,
         "analysis_input_source": analysis_input_source,
         "sarcasm_detected": sarcasm_detected,
         "polarity": polarity,

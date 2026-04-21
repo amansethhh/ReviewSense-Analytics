@@ -5,7 +5,7 @@ import type { SentimentLabel } from '@/types/api.types';
 
 interface BadgeProps {
   label:    string;
-  variant?: 'positive' | 'negative' | 'neutral' | 'uncertain' | 'unknown'
+  variant?: 'positive' | 'negative' | 'neutral' | 'unknown'
           | 'primary' | 'default';
 }
 
@@ -43,8 +43,6 @@ function getSentimentColor(s: string): { bg: string; text: string; border: strin
       return { bg: 'rgba(244,63,94,0.12)', text: 'var(--color-negative,#f43f5e)', border: 'rgba(244,63,94,0.30)' };
     case 'neutral':
       return { bg: 'rgba(245,158,11,0.12)', text: 'var(--color-neutral-sent,#f59e0b)', border: 'rgba(245,158,11,0.30)' };
-    case 'uncertain':
-      return { bg: 'rgba(251,146,60,0.12)', text: '#fb923c', border: 'rgba(251,146,60,0.30)' };
     case 'unknown':
       return { bg: 'rgba(122,121,116,0.12)', text: 'var(--color-text-muted,#7a7974)', border: 'rgba(122,121,116,0.30)' };
     case 'error':
@@ -59,7 +57,6 @@ function sentimentDisplayLabel(s: string): string {
     case 'positive':  return 'Positive';
     case 'negative':  return 'Negative';
     case 'neutral':   return 'Neutral';
-    case 'uncertain': return '\u26a0 Uncertain';
     case 'unknown':   return '\u26a0 Timeout';
     case 'error':     return '\u2715 Error';
     default:          return s;

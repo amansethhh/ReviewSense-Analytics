@@ -353,13 +353,9 @@ async def predict(
         )
     )
 
-    # ── S1/ADD-ON 1: Uncertain enforcement (LAST step) ────
-    from app.utils.output_contract import (
-        enforce_uncertainty, CONFIDENCE_THRESHOLD,
-    )
-    final_label, raw_label, is_uncertain = enforce_uncertainty(
-        sentiment_raw, confidence_pct,
-    )
+    # V3: Only 3 valid labels — no uncertain override
+    if sentiment_raw not in ("positive", "negative", "neutral"):
+        sentiment_raw = "neutral"
 
     # Determine sarcasm_applied flag
     sarcasm_applied = False
@@ -381,17 +377,21 @@ async def predict(
         (time.perf_counter() - start_ms) * 1000
     )
 
-    # ── S8: Enhanced logging ──────────────────────────────
+    # V3 RULE 9: Structured logging
     logger.info(
-        "Predict complete: label=%s raw=%s "
-        "conf=%.1f%% uncertain=%s [%dms]%s",
-        final_label, raw_label, confidence_pct,
-        is_uncertain, elapsed_ms,
-        " [corrected]" if _was_corrected else "",
+        "Predict complete: "
+        "model_used=%s language_detected=en "
+        "translation_status=N/A "
+        "correction_applied=%s final_label=%s "
+        "conf=%.1f%% [%dms]",
+        result.get("model_used", request.model.value),
+        "yes" if _was_corrected else "no",
+        sentiment_raw,
+        confidence_pct, elapsed_ms,
     )
 
     response = PredictResponse(
-        sentiment=SentimentLabel(final_label),
+        sentiment=SentimentLabel(sentiment_raw),
         confidence=confidence_pct,
         polarity=float(result.get("polarity", 0.0)),
         subjectivity=float(result.get("subjectivity", 0.0)),
@@ -404,19 +404,17 @@ async def predict(
                               request.model.value),
         processing_ms=elapsed_ms,
         cache_hit=False,
-        # Output contract fields (S1/S6)
-        raw_label=raw_label,
-        is_uncertain=is_uncertain,
-        confidence_threshold=CONFIDENCE_THRESHOLD,
+        # V3 output contract fields
+        language="English",
+        language_code="en",
         analysis_input_source="original",
+        translation=None,
+        translation_failed=False,
+        neutral_corrected=_was_corrected,
         sarcasm_applied=sarcasm_applied,
-        uncertain_prediction=is_uncertain,
     )
 
-    # ── Phase 2, Part 1: Cache store ──────────────────────
-    # Store successful prediction in cache (strip LIME,
-    # processing_ms, and cache_hit — transient fields).
-    # C9 enforced: use_cache=False when include_lime=True.
+    # Phase 2, Part 1: Cache store
     if use_cache and cache_key:
         cache_data = response.model_dump()
         cache_data.pop("lime_features", None)

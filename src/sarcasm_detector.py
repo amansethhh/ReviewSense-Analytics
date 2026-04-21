@@ -52,13 +52,37 @@ HEDGE_PHRASES = [
 # EXCLUSION GUARDS (ADD-ON 7)
 # ═══════════════════════════════════════════════════════════════
 
+# V3: Superlative words that are NOT sarcastic when used in
 def _contains_hedge(text: str) -> bool:
     """Reusable hedge phrase detector."""
     text_lower = text.lower()
     return any(phrase in text_lower for phrase in HEDGE_PHRASES)
 
 
-def _sarcasm_exclusion_check(text: str, confidence: float) -> dict | None:
+# V3: Superlative words that are NOT sarcastic when used in
+# genuinely positive high-confidence reviews.
+_SUPERLATIVE_MARKERS = re.compile(
+    r'\b(incredibly|amazingly|absolutely|extremely|truly|genuinely|'
+    r'remarkably|exceptionally|outstandingly|wonderfully|fantastically|'
+    r'brilliantly|superbly|magnificently|phenomenally|unbelievably|'
+    r'ridiculously|insanely)\b',
+    re.IGNORECASE,
+)
+
+# V3: Negative words that override the superlative exclusion
+_NEGATIVE_OVERRIDE = re.compile(
+    r'\b(but|however|unfortunately|terrible|awful|worst|broken|'
+    r'waste|useless|defective|horrible|dreadful|pathetic|garbage|'
+    r'rubbish|scam|fraud|joke|disappointing|disappointed)\b',
+    re.IGNORECASE,
+)
+
+
+def _sarcasm_exclusion_check(
+    text: str,
+    confidence: float,
+    pred_class: int | None = None,
+) -> dict | None:
     """Returns early-exit dict if text should NOT be evaluated for sarcasm.
 
     Returns None to proceed with full sarcasm detection.
@@ -66,6 +90,7 @@ def _sarcasm_exclusion_check(text: str, confidence: float) -> dict | None:
       - Very short texts (< 5 words)
       - Low confidence predictions (< 0.55)
       - Genuine hedge/neutral phrases
+      - V3: Superlatives in high-confidence positive reviews
     """
     if len(text.split()) < 5:
         return {"is_sarcastic": False, "confidence": 0.0,
@@ -76,6 +101,14 @@ def _sarcasm_exclusion_check(text: str, confidence: float) -> dict | None:
     if _contains_hedge(text):
         return {"is_sarcastic": False, "confidence": 0.0,
                 "reason": "hedge_phrase_excluded", "severity": "none"}
+
+    # V3: Superlative exclusion — "incredibly fast", "absolutely fantastic"
+    # in high-confidence positive reviews are NOT sarcasm
+    if (pred_class == 2 or pred_class is None) and confidence > 0.75:
+        if _SUPERLATIVE_MARKERS.search(text) and not _NEGATIVE_OVERRIDE.search(text):
+            return {"is_sarcastic": False, "confidence": 0.0,
+                    "reason": "superlative_positive_excluded", "severity": "none"}
+
     return None  # proceed with full detection
 
 

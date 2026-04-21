@@ -482,14 +482,15 @@ def _process_bulk_job(
             confidence_pct = normalize_confidence(
                 raw_conf
             )
-            # FIX-2: VADER + TextBlob dual polarity
+            # RULE 2: Polarity on ORIGINAL TEXT ONLY
+            # Translation NEVER affects polarity/sentiment
             try:
                 from src.predict import (
                     compute_dual_polarity,
                 )
                 polarity_val, vader_compound, subjectivity_val = (
                     compute_dual_polarity(
-                        predict_text, lang_code
+                        original_text, lang_code,
                     )
                 )
             except Exception:
@@ -524,25 +525,18 @@ def _process_bulk_job(
                     predict_text
                 )
 
-            # S1/ADD-ON 1: Uncertain enforcement (LAST step)
-            from app.utils.output_contract import (
-                enforce_uncertainty,
-            )
-            final_label, raw_label, is_uncertain = (
-                enforce_uncertainty(
-                    sentiment_raw, confidence_pct,
-                )
-            )
+            # V3: Only 3 valid labels — no uncertain override
+            if sentiment_raw not in ("positive", "negative", "neutral"):
+                sentiment_raw = "neutral"
 
-            # Determine analysis_input_source
+            # RULE 3: analysis_input_source always "original"
+            # Translation is DISPLAY ONLY — never affects classification
             analysis_input_source = "original"
-            if was_translated[row_idx]:
-                analysis_input_source = "translated"
 
             row_result_dict = {
                 "text": original_text[:500],
                 "sentiment": SentimentLabel(
-                    final_label
+                    sentiment_raw
                 ),
                 "confidence": confidence_pct,
                 "polarity": polarity_val,
@@ -559,11 +553,15 @@ def _process_bulk_job(
                     if was_translated[row_idx]
                     else None
                 ),
-                # Output contract fields (S1/S6)
-                "raw_label": raw_label,
-                "is_uncertain": is_uncertain,
+                # V3 output contract fields
                 "analysis_input_source": (
                     analysis_input_source
+                ),
+                "translation_failed": (
+                    det_method in ("failed", "timeout")
+                ),
+                "neutral_corrected": (
+                    sentiment_raw != label_name.lower()
                 ),
             }
 

@@ -500,3 +500,100 @@
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   V3: GPU-ACCELERATED RENDERING
+   Forces compositor layers on all animated/transitioning elements
+   to prevent CPU-heavy repaints and main-thread blocking.
+   ═══════════════════════════════════════════════════════════ */
+
+/* All cards with transitions → compositor layer */
+.analysis-card {
+  transform: translateZ(0);
+  will-change: opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Sentiment fill bars — width transitions */
+.analysis-sent-fill {
+  transform: translateZ(0);
+  will-change: width;
+  backface-visibility: hidden;
+}
+
+/* Progress bars */
+.analysis-progress-fill {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Step dots with transition */
+.analysis-step__dot {
+  will-change: transform, background-color;
+  backface-visibility: hidden;
+}
+
+/* Stat values with transition */
+.analysis-stat-value {
+  transform: translateZ(0);
+  will-change: color, opacity;
+  backface-visibility: hidden;
+}
+
+/* Awaiting ring with pulse animation */
+.analysis-awaiting__ring {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+/* Status pill — prevent reflow during polling */
+.analysis-status-pill {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* Phase box — prevent flicker during progress updates */
+.analysis-phase-box {
+  transform: translateZ(0);
+  will-change: opacity;
+  backface-visibility: hidden;
+}
+
+/* Donut chart — prevent repaint on data updates */
+.analysis-donut {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Terminal lines — prevent layout thrash on scroll */
+.analysis-terminal__body {
+  transform: translateZ(0);
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Cancel button hover states */
+.analysis-cancel-btn {
+  transform: translateZ(0);
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+/* ── Bulk results table virtual scroll container ── */
+.bulk-results-virtual {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  contain: layout style paint;
+}
+
+/* ── Contain layout for grid panels to prevent cascade reflows ── */
+.analysis-grid__panel {
+  contain: layout style;
+}
+
+.analysis-grid__center {
+  contain: layout style;
+}
