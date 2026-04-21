@@ -373,7 +373,8 @@ export function PipelineStatsCard({ hasSentimentData, rows }: {
 export function CircularLoader() {
   return (
     <div className="analysis-loader-wrap">
-      <CyberLoader scale={0.85} />
+      {/* scale(0.47): 300px frame * 0.47 ≈ 141px — matches 140px spec */}
+      <CyberLoader scale={0.47} />
     </div>
   )
 }
@@ -524,29 +525,35 @@ export function AnalysisLayout(props: AnalysisLayoutProps) {
     <div className="card animate-in" style={{ padding: '16px' }}>
       <div className="analysis-grid">
 
-        {/* ── TOP-LEFT: Live Stats ── */}
-        <LiveStatsCard
-          processed={processed} total={total} speed={speed}
-          avgConf={avgConf} errorCount={errorCount} progressPct={progressPct}
-        />
+        {/* ── LEFT COLUMN: Live Stats (top) + Config (bottom) ── */}
+        <div style={{
+          gridColumn: 1, gridRow: '1 / 3',
+          display: 'flex', flexDirection: 'column', gap: '16px',
+        }}>
+          <LiveStatsCard
+            processed={processed} total={total} speed={speed}
+            avgConf={avgConf} errorCount={errorCount} progressPct={progressPct}
+          />
+          <ConfigCard rows={configRows} />
+        </div>
 
-        {/* ── TOP-RIGHT: Sentiment ── */}
-        <SentimentDonutChart
-          hasSentimentData={hasSentimentData}
-          posPct={posPct} neuPct={neuPct} negPct={negPct}
-          sentTotal={sentTotal}
-        />
+        {/* ── RIGHT COLUMN: Sentiment (top) + Pipeline (bottom) ── */}
+        <div style={{
+          gridColumn: 3, gridRow: '1 / 3',
+          display: 'flex', flexDirection: 'column', gap: '16px',
+        }}>
+          <SentimentDonutChart
+            hasSentimentData={hasSentimentData}
+            posPct={posPct} neuPct={neuPct} negPct={negPct}
+            sentTotal={sentTotal}
+          />
+          <PipelineStatsCard
+            hasSentimentData={hasSentimentData}
+            rows={pipelineRows}
+          />
+        </div>
 
-        {/* ── BOTTOM-LEFT: Config ── */}
-        <ConfigCard rows={configRows} />
-
-        {/* ── BOTTOM-RIGHT: Pipeline ── */}
-        <PipelineStatsCard
-          hasSentimentData={hasSentimentData}
-          rows={pipelineRows}
-        />
-
-        {/* ── CENTER: Loader + Progress + Status + Terminal ── */}
+        {/* ── CENTER: Loader → Initializing → Analyzing Reviews → Terminal → Cancel ── */}
         <div className="analysis-grid__center">
           <CircularLoader />
           <ProgressStepper phase={phase} progressPct={progressPct} />
@@ -570,7 +577,6 @@ export function AnalysisLayout(props: AnalysisLayoutProps) {
                 color: 'var(--color-primary-bright)',
                 fontSize: '13px', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: '6px',
-                marginTop: '12px'
               }}
             >
               <span>✕</span> Cancel
