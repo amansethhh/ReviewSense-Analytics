@@ -1,41 +1,50 @@
-/* ===============================
-   MASTER GRID — LOCKED STRUCTURE
-================================ */
+/* ═══════════════════════════════════════════════════════════
+   AnalysisLayout — SINGLE SOURCE OF TRUTH
+   This is the CANONICAL layout for ALL analysis pages:
+   Bulk, Live, Language, and any future analysis page.
+   DO NOT duplicate. DO NOT create variations.
 
-.analysis-wrapper {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-}
+   MEASUREMENTS (from reference image — DO NOT CHANGE):
+   ─────────────────────────────────────────────────────
+   Grid columns:       200px | 1fr | 200px
+   Grid gap:           20px
+   Sub-card height:    200px (all 4 identical)
+   Column card gap:    16px
+   Panel badge:        32px height, margin-bottom 6px
+   Card inner padding: 14px
+   Donut:              90px × 90px, center hole 58px
+   Loader wrap:        130px × 130px
+   CyberLoader scale:  0.43
+   Phase box:          420px wide, padding 14px 20px
+   Status pill:        auto, padding 5px 14px
+   Terminal:           420px × 110px
+   Center gap:         10px
+   ═══════════════════════════════════════════════════════════ */
 
-.analysis-grid-fixed {
+/* ── Main 3-column grid ── */
+.analysis-grid {
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
+  grid-template-columns: 200px 1fr 200px;
+  grid-template-rows: auto auto;
   gap: 20px;
-  width: 100%;
-  max-width: 1200px;
-  align-items: stretch;
+  max-width: 1100px;
+  margin: 0 auto;
+  align-items: start;
 }
 
-/* ===============================
-   LEFT / RIGHT COLUMNS
-================================ */
-
-.analysis-col-left,
-.analysis-col-right {
+/* ── Side panels (left col / right col) ── */
+.analysis-grid__panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  justify-content: center;
+  gap: 16px;
 }
 
-/* ===============================
-   CARDS — PERFECT CONSISTENCY
-================================ */
-
+/* ── Sub-card (all 4 identical: 200px) ── */
 .analysis-card {
-  height: 210px;
-  min-height: 210px;
-  max-height: 210px;
+  height: 200px;
+  min-height: 200px;
+  max-height: 200px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -43,6 +52,7 @@
   position: relative;
 }
 
+/* ── Card body (fills remaining space after badge) ── */
 .analysis-card-body {
   flex: 1;
   display: flex;
@@ -50,10 +60,10 @@
   justify-content: center;
   max-height: 100%;
   overflow: hidden;
-  gap: 6px;
-  padding: 4px 0;
+  gap: 2px;
 }
 
+/* ── Chart container (for awaiting state) ── */
 .analysis-chart-container {
   display: flex;
   align-items: center;
@@ -61,64 +71,53 @@
   height: 100%;
 }
 
-/* ── Panel badge header ── */
-.analysis-panel-badge {
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  align-self: center;
-  border-radius: 10px;
-  padding: 0 14px;
-  margin-bottom: 8px;
-}
+/* ── Legacy grid placement classes (unused but kept for safety) ── */
+.analysis-grid__panel--tl { grid-column: 1; grid-row: 1; }
+.analysis-grid__panel--bl { grid-column: 1; grid-row: 2; opacity: 0.85; }
+.analysis-grid__panel--tr { grid-column: 3; grid-row: 1; }
+.analysis-grid__panel--br { grid-column: 3; grid-row: 2; opacity: 0.85; }
 
-.analysis-card .cyber-card__content {
-  padding: 16px !important;
-}
-
-/* ===============================
-   CENTER COLUMN — FIXED ALIGNMENT
-================================ */
-
-.analysis-center {
+/* ── Center core (spans both rows) ── */
+.analysis-grid__center {
+  grid-column: 2;
+  grid-row: 1 / 3;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 10px;
   width: 100%;
 }
 
-.analysis-center > * {
+.analysis-grid__center > * {
   margin: 0 !important;
-}
-
-/* ===============================
-   LOADER — FIXED SIZE
-================================ */
-
-.analysis-loader-wrap {
-  width: 140px;
-  height: 140px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
-  overflow: visible;
-  transform: translateZ(0);
-  will-change: transform, opacity;
 }
 
-/* ===============================
-   STATS ROWS — ALIGN FIX
-================================ */
+/* ── Panel badge header (32px height) ── */
+.analysis-panel-badge {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  border-radius: 10px;
+  padding: 0 12px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
 
+/* ── Card inner padding (14px) ── */
+.analysis-card .cyber-card__content {
+  padding: 14px !important;
+}
+
+/* ── Panel stat rows (Live Stats) ── */
 .analysis-stat-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
+  padding: 3px 0;
   width: 100%;
 }
 
@@ -133,8 +132,6 @@
   align-items: center;
   margin: 0;
   padding: 0;
-  position: relative;
-  top: 0;
 }
 
 .analysis-stat-value {
@@ -148,14 +145,9 @@
   align-items: center;
   margin: 0;
   padding: 0;
-  position: relative;
-  top: 0;
 }
 
-/* ===============================
-   DONUT CENTER FIX
-================================ */
-
+/* ── Donut chart (90×90, center 58×58) ── */
 .analysis-donut {
   width: 90px;
   height: 90px;
@@ -168,14 +160,14 @@
 }
 
 .analysis-donut__center {
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
   background: var(--color-bg-card, #0f1923);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--color-text);
   font-family: var(--font-mono);
@@ -187,7 +179,7 @@
   justify-content: space-between;
   align-items: center;
   font-size: 10px;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   margin-top: 0;
 }
 
@@ -197,8 +189,6 @@
   align-items: center;
   margin: 0;
   padding: 0;
-  position: relative;
-  top: 0;
 }
 
 .analysis-sent-bar {
@@ -243,10 +233,21 @@
   letter-spacing: 0.02em;
 }
 
-/* ===============================
-   PHASE BOX — PERFECT WIDTH
-================================ */
+/* ── Loader container (130×130, centered) ── */
+.analysis-loader-wrap {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 130px;
+  height: 130px;
+  flex-shrink: 0;
+  overflow: visible;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
 
+/* ── Phase progress box (Initializing card) ── */
 .analysis-phase-box {
   width: 420px;
   background: rgba(13, 17, 23, 0.75);
@@ -255,11 +256,12 @@
   box-shadow: 0 0 18px rgba(0, 217, 255, 0.08),
               inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(10px);
-  padding: 18px 22px;
+  padding: 14px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .analysis-phase-header {
@@ -296,7 +298,7 @@
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
-  margin: 2px 0;
+  margin: 0;
 }
 
 .analysis-progress-fill {
@@ -311,7 +313,7 @@
   display: flex;
   justify-content: space-between;
   width: 100%;
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .analysis-step {
@@ -335,20 +337,17 @@
   letter-spacing: 0.03em;
 }
 
-/* ===============================
-   STATUS BAR
-================================ */
-
+/* ── Status pill (Analyzing Reviews) ── */
 .analysis-status-pill {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
   background: rgba(0, 217, 255, 0.06);
   border: 1px solid rgba(0, 217, 255, 0.15);
   border-radius: 12px;
-  padding: 6px 14px;
+  padding: 5px 14px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .analysis-status-pill__label {
@@ -363,10 +362,7 @@
   font-family: var(--font-mono);
 }
 
-/* ===============================
-   TERMINAL — FIXED DIMENSION
-================================ */
-
+/* ── Terminal (420×110, fixed) ── */
 .analysis-terminal {
   width: 420px;
   height: 110px;
@@ -385,10 +381,11 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(0, 0, 0, 0.3);
   position: relative;
+  flex-shrink: 0;
 }
 
 .analysis-terminal__dot {
@@ -418,10 +415,10 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   font-family: var(--font-mono);
   font-size: 9px;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .analysis-terminal__line {
@@ -432,22 +429,6 @@
   color: #28ca41;
   margin-right: 4px;
   font-weight: 700;
-}
-
-/* ===============================
-   CANCEL BUTTON — CENTERED
-================================ */
-
-.analysis-cancel-btn {
-  background: transparent;
-  border: none;
-  color: var(--color-primary-bright);
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
 }
 
 /* ── Pipeline stats (right-bottom) ── */
@@ -466,8 +447,6 @@
   align-items: center;
   margin: 0;
   padding: 0;
-  position: relative;
-  top: 0;
 }
 
 /* ── Config rows (left-bottom) ── */
@@ -486,8 +465,21 @@
   align-items: center;
   margin: 0;
   padding: 0;
-  position: relative;
-  top: 0;
+}
+
+/* ── Cancel button ── */
+.analysis-cancel-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-primary-bright);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
+  flex-shrink: 0;
 }
 
 /* ── Scrollbar styling for terminal ── */
@@ -502,14 +494,6 @@
 .analysis-terminal__body::-webkit-scrollbar-thumb {
   background: rgba(0, 217, 255, 0.2);
   border-radius: 2px;
-}
-
-/* ===============================
-   AVOID OVERFLOW BUGS
-================================ */
-
-.analysis-card * {
-  box-sizing: border-box;
 }
 
 /* ── Animation keyframes ── */

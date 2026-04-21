@@ -222,7 +222,7 @@ export function LiveStatsCard({ processed, total, speed, avgConf, errorCount, pr
     { label: 'Progress', value: `${progressPct}%`, color: '#fde047' },
   ]
   return (
-    <CyberCard className="analysis-card">
+    <CyberCard className="analysis-card" style={{ gridColumn: 1, gridRow: 1 }}>
       <PanelBadge icon={<Icon3DPulse />} label="Live Stats"
         bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
       <div className="analysis-card-body">
@@ -243,7 +243,7 @@ export function LiveStatsCard({ processed, total, speed, avgConf, errorCount, pr
 
 export function ConfigCard({ rows }: { rows: Array<[string, string]> }) {
   return (
-    <CyberCard className="analysis-card">
+    <CyberCard className="analysis-card" style={{ gridColumn: 1, gridRow: 2, opacity: 0.85 }}>
       <PanelBadge icon={<Icon3DGearPanel />} label="Config"
         bg="rgba(167,139,250,0.06)" border="rgba(167,139,250,0.18)" color="#a78bfa" />
       <div className="analysis-card-body" style={{ fontSize: '11px' }}>
@@ -269,7 +269,7 @@ export function SentimentDonutChart({ hasSentimentData, posPct, neuPct, negPct, 
   hasSentimentData: boolean; posPct: number; neuPct: number; negPct: number; sentTotal: number | string;
 }) {
   return (
-    <CyberCard className="analysis-card">
+    <CyberCard className="analysis-card" style={{ gridColumn: 3, gridRow: 1 }}>
       <PanelBadge icon={<Icon3DSentimentPie />} label="Sentiment"
         bg="rgba(34,197,94,0.06)" border="rgba(34,197,94,0.18)" color="#22c55e" />
       <div className="analysis-card-body" style={{ alignItems: 'center', justifyContent: 'center' }}>
@@ -277,7 +277,7 @@ export function SentimentDonutChart({ hasSentimentData, posPct, neuPct, negPct, 
           <div style={{
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
-            gap: '8px', width: '100%',
+            gap: '4px', width: '100%',
           }}>
             <div
               className="analysis-donut"
@@ -287,19 +287,18 @@ export function SentimentDonutChart({ hasSentimentData, posPct, neuPct, negPct, 
                   #f59e0b ${posPct}% ${posPct + neuPct}%,
                   #f43f5e ${posPct + neuPct}% 100%
                 )`,
-                marginBottom: 0,
               }}
             >
               <div className="analysis-donut__center">{sentTotal}</div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0px', width: '100%' }}>
               {[
                 { label: 'Positive', pct: posPct, color: '#22c55e' },
                 { label: 'Neutral',  pct: neuPct, color: '#f59e0b' },
                 { label: 'Negative', pct: negPct, color: '#f43f5e' },
               ].map(s => (
                 <div key={s.label}>
-                  <div className="analysis-sent-row" style={{ marginTop: 6 }}>
+                  <div className="analysis-sent-row" style={{ marginTop: 4 }}>
                     <span style={{ color: s.color, fontWeight: 600 }}>{s.label}</span>
                     <span style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>{s.pct}%</span>
                   </div>
@@ -337,7 +336,7 @@ export function PipelineStatsCard({ hasSentimentData, rows }: {
   rows: Array<{ label: string; value: number | string; color: string }>;
 }) {
   return (
-    <CyberCard className="analysis-card">
+    <CyberCard className="analysis-card" style={{ gridColumn: 3, gridRow: 2, opacity: 0.85 }}>
       <PanelBadge icon={<Icon3DPulse />} label="Pipeline"
         bg="rgba(0,217,255,0.06)" border="rgba(0,217,255,0.18)" color="#00d9ff" />
       <div className="analysis-card-body" style={{ fontSize: '11px' }}>
@@ -373,8 +372,8 @@ export function PipelineStatsCard({ hasSentimentData, rows }: {
 export function CircularLoader() {
   return (
     <div className="analysis-loader-wrap">
-      {/* scale(0.47): 300px frame * 0.47 ≈ 141px — matches 140px spec */}
-      <CyberLoader scale={0.47} />
+      {/* scale(0.43): 300px frame × 0.43 ≈ 129px → fits 130px wrap */}
+      <CyberLoader scale={0.43} />
     </div>
   )
 }
@@ -522,11 +521,14 @@ export function AnalysisLayout(props: AnalysisLayoutProps) {
   } = props
 
   return (
-    <div className="analysis-wrapper">
-      <div className="analysis-grid-fixed">
+    <div className="card animate-in" style={{ padding: '16px' }}>
+      <div className="analysis-grid">
 
-        {/* ── LEFT ── */}
-        <div className="analysis-col-left">
+        {/* ── LEFT COLUMN: Live Stats (top) + Config (bottom) ── */}
+        <div style={{
+          gridColumn: 1, gridRow: '1 / 3',
+          display: 'flex', flexDirection: 'column', gap: '16px',
+        }}>
           <LiveStatsCard
             processed={processed} total={total} speed={speed}
             avgConf={avgConf} errorCount={errorCount} progressPct={progressPct}
@@ -534,8 +536,24 @@ export function AnalysisLayout(props: AnalysisLayoutProps) {
           <ConfigCard rows={configRows} />
         </div>
 
-        {/* ── CENTER ── */}
-        <div className="analysis-center">
+        {/* ── RIGHT COLUMN: Sentiment (top) + Pipeline (bottom) ── */}
+        <div style={{
+          gridColumn: 3, gridRow: '1 / 3',
+          display: 'flex', flexDirection: 'column', gap: '16px',
+        }}>
+          <SentimentDonutChart
+            hasSentimentData={hasSentimentData}
+            posPct={posPct} neuPct={neuPct} negPct={negPct}
+            sentTotal={sentTotal}
+          />
+          <PipelineStatsCard
+            hasSentimentData={hasSentimentData}
+            rows={pipelineRows}
+          />
+        </div>
+
+        {/* ── CENTER: Loader → Initializing → Analyzing Reviews → Terminal → Cancel ── */}
+        <div className="analysis-grid__center">
           <CircularLoader />
           <ProgressStepper phase={phase} progressPct={progressPct} />
           <AnalysisStatusBar
@@ -555,19 +573,6 @@ export function AnalysisLayout(props: AnalysisLayoutProps) {
               <span>✕</span> Cancel
             </button>
           )}
-        </div>
-
-        {/* ── RIGHT ── */}
-        <div className="analysis-col-right">
-          <SentimentDonutChart
-            hasSentimentData={hasSentimentData}
-            posPct={posPct} neuPct={neuPct} negPct={negPct}
-            sentTotal={sentTotal}
-          />
-          <PipelineStatsCard
-            hasSentimentData={hasSentimentData}
-            rows={pipelineRows}
-          />
         </div>
 
       </div>
