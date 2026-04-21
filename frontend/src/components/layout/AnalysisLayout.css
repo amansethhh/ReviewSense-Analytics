@@ -1,28 +1,36 @@
-/* ═══════════════════════════════════════════════════════════
-   AnalysisLayout — SINGLE SOURCE OF TRUTH
-   This is the CANONICAL layout for ALL analysis pages:
-   Bulk, Live, Language, and any future analysis page.
-   DO NOT duplicate. DO NOT create variations.
-   ═══════════════════════════════════════════════════════════ */
+/* ===============================
+   MASTER GRID — LOCKED STRUCTURE
+================================ */
 
-/* ── Main 3-column grid ── */
-.analysis-grid {
+.analysis-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.analysis-grid-fixed {
   display: grid;
   grid-template-columns: 280px 1fr 280px;
-  grid-template-rows: auto auto;
-  gap: 24px;
+  gap: 20px;
+  width: 100%;
   max-width: 1200px;
-  margin: 0 auto;
-  align-items: start;
+  align-items: stretch;
 }
 
-/* ── Side panels (left col / right col) ── */
-.analysis-grid__panel {
+/* ===============================
+   LEFT / RIGHT COLUMNS
+================================ */
+
+.analysis-col-left,
+.analysis-col-right {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 20px;
 }
+
+/* ===============================
+   CARDS — PERFECT CONSISTENCY
+================================ */
 
 .analysis-card {
   height: 210px;
@@ -42,7 +50,8 @@
   justify-content: center;
   max-height: 100%;
   overflow: hidden;
-  gap: 4px;
+  gap: 6px;
+  padding: 4px 0;
 }
 
 .analysis-chart-container {
@@ -50,27 +59,6 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-}
-
-.analysis-grid__panel--tl { grid-column: 1; grid-row: 1; }
-.analysis-grid__panel--bl { grid-column: 1; grid-row: 2; opacity: 0.85; }
-.analysis-grid__panel--tr { grid-column: 3; grid-row: 1; }
-.analysis-grid__panel--br { grid-column: 3; grid-row: 2; opacity: 0.85; }
-
-/* ── Center core (spans both rows) ── */
-.analysis-grid__center {
-  grid-column: 2;
-  grid-row: 1 / 3;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  width: 100%;
-}
-
-.analysis-grid__center > * {
-  margin: 0 !important;
 }
 
 /* ── Panel badge header ── */
@@ -89,7 +77,43 @@
   padding: 16px !important;
 }
 
-/* ── Panel stat rows ── */
+/* ===============================
+   CENTER COLUMN — FIXED ALIGNMENT
+================================ */
+
+.analysis-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+}
+
+.analysis-center > * {
+  margin: 0 !important;
+}
+
+/* ===============================
+   LOADER — FIXED SIZE
+================================ */
+
+.analysis-loader-wrap {
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: visible;
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* ===============================
+   STATS ROWS — ALIGN FIX
+================================ */
+
 .analysis-stat-row {
   display: flex;
   justify-content: space-between;
@@ -128,7 +152,10 @@
   top: 0;
 }
 
-/* ── Donut chart ── */
+/* ===============================
+   DONUT CENTER FIX
+================================ */
+
 .analysis-donut {
   width: 90px;
   height: 90px;
@@ -216,21 +243,10 @@
   letter-spacing: 0.02em;
 }
 
-/* ── Loader container ── */
-.analysis-loader-wrap {
-  margin: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 140px;
-  height: 140px;
-  flex-shrink: 0;
-  overflow: visible;
-  transform: translateZ(0);
-  will-change: transform, opacity;
-}
+/* ===============================
+   PHASE BOX — PERFECT WIDTH
+================================ */
 
-/* ── Phase progress 3D sub-box ── */
 .analysis-phase-box {
   width: 420px;
   background: rgba(13, 17, 23, 0.75);
@@ -239,7 +255,7 @@
   box-shadow: 0 0 18px rgba(0, 217, 255, 0.08),
               inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(10px);
-  padding: 20px 24px;
+  padding: 18px 22px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -319,15 +335,19 @@
   letter-spacing: 0.03em;
 }
 
-/* ── Status pill ── */
+/* ===============================
+   STATUS BAR
+================================ */
+
 .analysis-status-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: rgba(0, 217, 255, 0.06);
   border: 1px solid rgba(0, 217, 255, 0.15);
   border-radius: 12px;
-  padding: 5px 14px;
+  padding: 6px 14px;
   white-space: nowrap;
 }
 
@@ -343,7 +363,10 @@
   font-family: var(--font-mono);
 }
 
-/* ── Terminal ── */
+/* ===============================
+   TERMINAL — FIXED DIMENSION
+================================ */
+
 .analysis-terminal {
   width: 420px;
   height: 110px;
@@ -411,6 +434,22 @@
   font-weight: 700;
 }
 
+/* ===============================
+   CANCEL BUTTON — CENTERED
+================================ */
+
+.analysis-cancel-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-primary-bright);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 /* ── Pipeline stats (right-bottom) ── */
 .analysis-pipeline-row {
   display: flex;
@@ -463,6 +502,14 @@
 .analysis-terminal__body::-webkit-scrollbar-thumb {
   background: rgba(0, 217, 255, 0.2);
   border-radius: 2px;
+}
+
+/* ===============================
+   AVOID OVERFLOW BUGS
+================================ */
+
+.analysis-card * {
+  box-sizing: border-box;
 }
 
 /* ── Animation keyframes ── */
