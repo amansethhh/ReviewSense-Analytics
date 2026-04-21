@@ -1,0 +1,205 @@
+"""
+Centralized output contract enforcement for ReviewSense Analytics.
+
+ADD-ON 1: Uncertain prediction enforcement — LAST step before output.
+ADD-ON 2: Global output formatter — consistent fields everywhere.
+ADD-ON 3: Translation fallback metrics tracking.
+
+This module is the SINGLE SOURCE OF TRUTH for:
+  - Confidence threshold
+  - Uncertain label assignment
+  - Output field standardization
+"""
+
+import logging
+import threading
+from typing import Any, Optional
+
+logger = logging.getLogger("reviewsense.contract")
+
+# ── Confidence threshold (on 0-100 scale) ─────────────────
+# Any prediction below this is marked UNCERTAIN.
+CONFIDENCE_THRESHOLD: float = 65.0
+
+
+# ── ADD-ON 3: Translation fallback counter ─────────────────
+_fallback_lock = threading.Lock()
+_translation_stats = {
+    "total_translations": 0,
+    "fallback_count": 0,
+    "validation_failures": 0,
+}
+
+
+def record_translation_fallback() -> None:
+    """Thread-safe increment of translation fallback counter."""
+    with _fallback_lock:
+        _translation_stats["fallback_count"] += 1
+
+
+def record_translation_attempt() -> None:
+    """Thread-safe increment of total translation counter."""
+    with _fallback_lock:
+        _translation_stats["total_translations"] += 1
+
+
+def record_translation_validation_failure() -> None:
+    """Thread-safe increment of validation failure counter."""
+    with _fallback_lock:
+        _translation_stats["validation_failures"] += 1
+
+
+def get_translation_stats() -> dict:
+    """Return snapshot of translation metrics."""
+    with _fallback_lock:
+        total = _translation_stats["total_translations"]
+        fallbacks = _translation_stats["fallback_count"]
+        failures = _translation_stats["validation_failures"]
+    return {
+        "total_translations": total,
+        "fallback_count": fallbacks,
+        "validation_failures": failures,
+        "fallback_rate": (
+            round(fallbacks / total, 4) if total > 0 else 0.0
+        ),
+        "validation_failure_rate": (
+            round(failures / total, 4) if total > 0 else 0.0
+        ),
+    }
+
+
+# ── ADD-ON 1: Centralized uncertain enforcement ───────────
+
+def enforce_uncertainty(
+    sentiment: str,
+    confidence: float,
+    raw_label: Optional[str] = None,
+) -> tuple[str, str, bool]:
+    """
+    FINAL enforcement layer — applied LAST before output.
+
+    Args:
+        sentiment: The corrected sentiment label.
+        confidence: Confidence percentage (0-100).
+        raw_label: Original model label before any overrides.
+
+    Returns:
+        (final_label, raw_label, is_uncertain)
+    """
+    if raw_label is None:
+        raw_label = sentiment
+
+    is_uncertain = confidence < CONFIDENCE_THRESHOLD
+
+    if is_uncertain:
+        final_label = "uncertain"
+        logger.debug(
+            "Uncertain prediction: raw=%s conf=%.1f%% "
+            "(threshold=%.1f%%)",
+            raw_label, confidence, CONFIDENCE_THRESHOLD,
+        )
+    else:
+        final_label = sentiment
+
+    return final_label, raw_label, is_uncertain
+
+
+# ── ADD-ON 2: Global output formatter ─────────────────────
+
+def format_prediction_output(
+    *,
+    sentiment: str,
+    confidence: float,
+    polarity: float = 0.0,
+    subjectivity: float = 0.0,
+    analysis_input_source: str = "original",
+    sarcasm_detected: bool = False,
+    sarcasm_applied: bool = False,
+    **extra: Any,
+) -> dict:
+    """
+    Standardize prediction output with uncertain enforcement.
+
+    This is the MANDATORY final step before returning any
+    prediction result. Ensures ALL routes return identical
+    field structures.
+
+    Pipeline order enforced:
+      Input → Detection → Translation → Validation
+      → Inference → Sarcasm → Uncertain → THIS FORMATTER
+
+    Args:
+        sentiment: Post-correction sentiment label.
+        confidence: Confidence percentage (0-100).
+        polarity: Polarity score (-1.0 to 1.0).
+        subjectivity: Subjectivity score (0.0 to 1.0).
+        analysis_input_source: "original" | "translated" |
+                               "original_fallback"
+        sarcasm_detected: Whether sarcasm was detected.
+        sarcasm_applied: Whether sarcasm flipped the label.
+        **extra: Additional fields passed through unchanged.
+
+    Returns:
+        Standardized output dict with all contract fields.
+    """
+    # Enforce uncertainty as the LAST step
+    final_label, raw_label, is_uncertain = enforce_uncertainty(
+        sentiment, confidence,
+        raw_label=extra.pop("raw_label", None),
+    )
+
+    output = {
+        # Core contract fields (ADD-ON 2)
+        "label": final_label,
+        "raw_label": raw_label,
+        "confidence": confidence,
+        "is_uncertain": is_uncertain,
+        "confidence_threshold": CONFIDENCE_THRESHOLD,
+        "analysis_input_source": analysis_input_source,
+        "sarcasm_detected": sarcasm_detected,
+        "sarcasm_applied": sarcasm_applied,
+        "uncertain_prediction": is_uncertain,
+        # Standard fields
+        "polarity": polarity,
+        "subjectivity": subjectivity,
+    }
+
+    # Pass through any extra fields (model_used, etc.)
+    output.update(extra)
+
+    return output
+
+
+def format_bulk_row_output(
+    *,
+    sentiment: str,
+    confidence: float,
+    polarity: float = 0.0,
+    subjectivity: float = 0.0,
+    analysis_input_source: str = "original",
+    sarcasm_detected: Optional[bool] = None,
+    **extra: Any,
+) -> dict:
+    """
+    Standardize bulk row output with uncertain enforcement.
+    Lighter version for bulk pipeline (no sarcasm_applied tracking).
+    """
+    final_label, raw_label, is_uncertain = enforce_uncertainty(
+        sentiment, confidence,
+        raw_label=extra.pop("raw_label", None),
+    )
+
+    output = {
+        "sentiment": final_label,
+        "raw_label": raw_label,
+        "confidence": confidence,
+        "is_uncertain": is_uncertain,
+        "analysis_input_source": analysis_input_source,
+        "sarcasm_detected": sarcasm_detected,
+        "polarity": polarity,
+        "subjectivity": subjectivity,
+    }
+
+    output.update(extra)
+
+    return output

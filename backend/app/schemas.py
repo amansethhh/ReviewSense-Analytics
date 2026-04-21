@@ -6,11 +6,12 @@ from enum import Enum
 
 
 class SentimentLabel(str, Enum):
-    positive = "positive"
-    negative = "negative"
-    neutral  = "neutral"
-    unknown  = "unknown"
-    error    = "error"
+    positive  = "positive"
+    negative  = "negative"
+    neutral   = "neutral"
+    uncertain = "uncertain"
+    unknown   = "unknown"
+    error     = "error"
 
 
 class ModelChoice(str, Enum):
@@ -89,6 +90,13 @@ class PredictResponse(BaseModel):
     model_used:    str
     processing_ms: int
     cache_hit:     bool = False
+    # Output contract fields (S1/S6)
+    raw_label:     Optional[str] = None
+    is_uncertain:  bool = False
+    confidence_threshold: Optional[float] = None
+    analysis_input_source: Optional[str] = None
+    sarcasm_applied: bool = False
+    uncertain_prediction: bool = False
 
 
 # ── /bulk ──────────────────────────────────────────────────
@@ -120,6 +128,10 @@ class BulkRowResult(BaseModel):
     detected_language: Optional[str] = None
     translation_method: Optional[str] = None
     translated_text: Optional[str] = None
+    # Output contract fields (S1/S6)
+    raw_label:     Optional[str] = None
+    is_uncertain:  bool = False
+    analysis_input_source: Optional[str] = None
 
 
 class BulkJobResult(BaseModel):
@@ -180,6 +192,13 @@ class LanguageResponse(BaseModel):
     lime_features:          Optional[list[LIMEFeature]] = None
     absa:                   Optional[list[ABSAItem]] = None
     sarcasm:                Optional[SarcasmResult] = None
+    # Output contract fields (S1/S6)
+    raw_label:     Optional[str] = None
+    is_uncertain:  bool = False
+    confidence_threshold: Optional[float] = None
+    analysis_input_source: Optional[str] = None
+    sarcasm_applied: bool = False
+    uncertain_prediction: bool = False
 
 
 # ── /metrics ───────────────────────────────────────────────

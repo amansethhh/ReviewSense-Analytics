@@ -594,8 +594,25 @@ def detect_translate_and_predict_sync(
         )
     )
 
+    # S1/ADD-ON 1: Uncertain enforcement (LAST step)
+    from app.utils.output_contract import (
+        enforce_uncertainty, CONFIDENCE_THRESHOLD,
+    )
+    final_label, raw_label, is_uncertain = (
+        enforce_uncertainty(
+            sentiment_raw, confidence_pct,
+        )
+    )
+
+    # Determine analysis_input_source
+    analysis_input_source = "original"
+    if was_translated:
+        analysis_input_source = "translated"
+    elif translation_error:
+        analysis_input_source = "original_fallback"
+
     result = {
-        "sentiment": sentiment_raw,
+        "sentiment": final_label,
         "confidence": confidence_pct,
         "polarity": polarity_val,
         "subjectivity": float(
@@ -611,11 +628,18 @@ def detect_translate_and_predict_sync(
         "translation_error": translation_error,
         "model_used": pred.get(
             "model_used", model_choice),
+        # Output contract fields (S1/S6)
+        "raw_label": raw_label,
+        "is_uncertain": is_uncertain,
+        "confidence_threshold": CONFIDENCE_THRESHOLD,
+        "analysis_input_source": analysis_input_source,
+        "sarcasm_applied": False,
+        "uncertain_prediction": is_uncertain,
     }
 
     # ── Cache store ───────────────────────────────────────
     cache_entry = {
-        "sentiment": sentiment_raw,
+        "sentiment": final_label,
         "confidence": confidence_pct,
         "polarity": polarity_val,
         "subjectivity": float(
@@ -685,6 +709,16 @@ def _run_language_pipeline(
                 text, sentiment_raw,
                 confidence_pct, polarity_val))
 
+        # S1/ADD-ON 1: Uncertain enforcement (LAST step)
+        from app.utils.output_contract import (
+            enforce_uncertainty, CONFIDENCE_THRESHOLD,
+        )
+        final_label, raw_label, is_uncertain = (
+            enforce_uncertainty(
+                sentiment_raw, confidence_pct,
+            )
+        )
+
         return {
             "detected_language":    "English",
             "language_code":        "en",
@@ -692,13 +726,20 @@ def _run_language_pipeline(
             "translated_text":      text,
             "translation_needed":   False,
             "skipped_translation":  True,
-            "sentiment":            sentiment_raw,
+            "sentiment":            final_label,
             "confidence":           confidence_pct,
             "polarity":             polarity_val,
             "subjectivity":         float(pred.get(
                                     "subjectivity", 0.0)),
             "model_used":           pred.get("model_used",
                                     model_choice),
+            # Output contract fields (S1/S6)
+            "raw_label":            raw_label,
+            "is_uncertain":         is_uncertain,
+            "confidence_threshold": CONFIDENCE_THRESHOLD,
+            "analysis_input_source": "original",
+            "sarcasm_applied":      False,
+            "uncertain_prediction": is_uncertain,
         }
 
     # ── Non-English: translate with two-tier fallback ─────
@@ -763,6 +804,22 @@ def _run_language_pipeline(
             analysis_text, sentiment_raw,
             confidence_pct, polarity_val))
 
+    # S1/ADD-ON 1: Uncertain enforcement (LAST step)
+    from app.utils.output_contract import (
+        enforce_uncertainty, CONFIDENCE_THRESHOLD,
+    )
+    final_label, raw_label, is_uncertain = (
+        enforce_uncertainty(
+            sentiment_raw, confidence_pct,
+        )
+    )
+
+    # Determine analysis_input_source
+    analysis_input_source = (
+        "translated" if was_translated
+        else "original"
+    )
+
     return {
         "detected_language":    display_name,
         "language_code":        lang_code,
@@ -770,13 +827,20 @@ def _run_language_pipeline(
         "translated_text":      translated_text,
         "translation_needed":   was_translated,
         "skipped_translation":  False,
-        "sentiment":            sentiment_raw,
+        "sentiment":            final_label,
         "confidence":           confidence_pct,
         "polarity":             polarity_val,
         "subjectivity":         float(pred.get(
                                 "subjectivity", 0.0)),
         "model_used":           pred.get("model_used",
                                 model_choice),
+        # Output contract fields (S1/S6)
+        "raw_label":            raw_label,
+        "is_uncertain":         is_uncertain,
+        "confidence_threshold": CONFIDENCE_THRESHOLD,
+        "analysis_input_source": analysis_input_source,
+        "sarcasm_applied":      False,
+        "uncertain_prediction": is_uncertain,
     }
 
 

@@ -524,10 +524,25 @@ def _process_bulk_job(
                     predict_text
                 )
 
+            # S1/ADD-ON 1: Uncertain enforcement (LAST step)
+            from app.utils.output_contract import (
+                enforce_uncertainty,
+            )
+            final_label, raw_label, is_uncertain = (
+                enforce_uncertainty(
+                    sentiment_raw, confidence_pct,
+                )
+            )
+
+            # Determine analysis_input_source
+            analysis_input_source = "original"
+            if was_translated[row_idx]:
+                analysis_input_source = "translated"
+
             row_result_dict = {
                 "text": original_text[:500],
                 "sentiment": SentimentLabel(
-                    sentiment_raw
+                    final_label
                 ),
                 "confidence": confidence_pct,
                 "polarity": polarity_val,
@@ -543,6 +558,12 @@ def _process_bulk_job(
                     eng_text
                     if was_translated[row_idx]
                     else None
+                ),
+                # Output contract fields (S1/S6)
+                "raw_label": raw_label,
+                "is_uncertain": is_uncertain,
+                "analysis_input_source": (
+                    analysis_input_source
                 ),
             }
 

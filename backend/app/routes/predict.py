@@ -353,6 +353,19 @@ async def predict(
         )
     )
 
+    # ── S1/ADD-ON 1: Uncertain enforcement (LAST step) ────
+    from app.utils.output_contract import (
+        enforce_uncertainty, CONFIDENCE_THRESHOLD,
+    )
+    final_label, raw_label, is_uncertain = enforce_uncertainty(
+        sentiment_raw, confidence_pct,
+    )
+
+    # Determine sarcasm_applied flag
+    sarcasm_applied = False
+    if sarcasm_result and sarcasm_result.detected:
+        sarcasm_applied = True
+
     # Build probabilities from scores if available
     scores = result.get("scores", None)
     if scores and len(scores) == 3:
@@ -367,15 +380,18 @@ async def predict(
     elapsed_ms = int(
         (time.perf_counter() - start_ms) * 1000
     )
+
+    # ── S8: Enhanced logging ──────────────────────────────
     logger.info(
-        f"Predict complete: {sentiment_raw} "
-        f"conf={confidence_pct:.1f}% "
-        f"[{elapsed_ms}ms]"
-        f"{' [corrected]' if _was_corrected else ''}"
+        "Predict complete: label=%s raw=%s "
+        "conf=%.1f%% uncertain=%s [%dms]%s",
+        final_label, raw_label, confidence_pct,
+        is_uncertain, elapsed_ms,
+        " [corrected]" if _was_corrected else "",
     )
 
     response = PredictResponse(
-        sentiment=SentimentLabel(sentiment_raw),
+        sentiment=SentimentLabel(final_label),
         confidence=confidence_pct,
         polarity=float(result.get("polarity", 0.0)),
         subjectivity=float(result.get("subjectivity", 0.0)),
@@ -388,6 +404,13 @@ async def predict(
                               request.model.value),
         processing_ms=elapsed_ms,
         cache_hit=False,
+        # Output contract fields (S1/S6)
+        raw_label=raw_label,
+        is_uncertain=is_uncertain,
+        confidence_threshold=CONFIDENCE_THRESHOLD,
+        analysis_input_source="original",
+        sarcasm_applied=sarcasm_applied,
+        uncertain_prediction=is_uncertain,
     )
 
     # ── Phase 2, Part 1: Cache store ──────────────────────
@@ -405,3 +428,4 @@ async def predict(
     metrics_store.record_prediction(sentiment_raw, "English")
 
     return response
+

@@ -1,7 +1,7 @@
 // These mirror the Pydantic schemas in backend/app/schemas.py
 // exactly. Keep in sync if schemas.py changes.
 
-export type SentimentLabel = 'positive' | 'negative' | 'neutral' | 'unknown' | 'error'
+export type SentimentLabel = 'positive' | 'negative' | 'neutral' | 'uncertain' | 'unknown' | 'error'
 export type ModelChoice =
   | 'best' | 'LinearSVC' | 'LogisticRegression'
   | 'NaiveBayes' | 'RandomForest'
