@@ -44,10 +44,9 @@ class MetricsStore:
         )
         self._requests_by_route: dict[str, int] = {}
         self._errors_by_status: dict[int, int] = {}
-        # W4-1: Translation metrics
+        # W4-1: Translation metrics (V4: NLLB only)
         self._translation_counts: dict[str, int] = {
-            "helsinki_success": 0,
-            "google_success": 0,
+            "nllb_success": 0,
             "failed": 0,
             "skipped_english": 0,
         }
@@ -247,17 +246,19 @@ class MetricsStore:
     ) -> None:
         """
         W4-1: Record a translation event.
-        method: "helsinki" | "google" | "failed" | "skipped"
+        method: "nllb" | "failed" | "skipped"
 
-        Phase 8 / GAP 1: Persists to disk after every increment.
+        V4: Single engine (NLLB). Persists to disk after every increment.
         """
         with self._lock:
             if method == "failed":
                 key = "failed"
             elif method == "skipped":
                 key = "skipped_english"
+            elif method in ("nllb", "cache"):
+                key = "nllb_success"
             else:
-                key = f"{method}_success"
+                key = "nllb_success"  # V4: all success is NLLB
             self._translation_counts[key] = (
                 self._translation_counts.get(key, 0) + 1
             )
@@ -298,8 +299,7 @@ class MetricsStore:
         """GAP 1: Reset all translation counters and clear disk file."""
         with self._lock:
             self._translation_counts = {
-                "helsinki_success": 0,
-                "google_success": 0,
+                "nllb_success": 0,
                 "failed": 0,
                 "skipped_english": 0,
             }

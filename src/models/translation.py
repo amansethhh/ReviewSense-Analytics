@@ -1,12 +1,12 @@
-"""Translation module — deep-translator (Google) with degenerate output detection.
+"""Translation module — NLLB (Meta) single engine.
 
-Replaces the previous googletrans + Helsinki-NLP implementation.
+V4 ARCHITECTURE:
+  - ONLY engine: facebook/nllb-200-distilled-600M
+  - Translation is for DISPLAY ONLY — never affects sentiment
+  - On failure: return original text with translation_failed=True
+  - No fallback engines, no templates, no Helsinki, no Google
 
-Architecture:
-  Tier 1: deep-translator GoogleTranslator (reliable, maintained)
-  Tier 2: Passthrough with failure flag
-
-Translation cache: in-process dict (survives Streamlit reruns, up to 500 entries).
+Translation cache: in-process dict (up to 500 entries).
 Degenerate output detection: pattern matching + length ratio guard.
 """
 
@@ -16,67 +16,136 @@ import hashlib
 import logging
 import re
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Optional, Tuple
 
 logger = logging.getLogger("reviewsense.translation")
 
 # ═══════════════════════════════════════════════════════════════
-# Circuit breaker — fast-fail when deep_translator is missing
+# NLLB Model — lazy-loaded singleton
 # ═══════════════════════════════════════════════════════════════
 
-_DEEP_TRANSLATOR_AVAILABLE: bool
-try:
-    import deep_translator as _dt_check  # noqa: F401
-    _DEEP_TRANSLATOR_AVAILABLE = True
-    logger.info("[INIT] deep_translator: AVAILABLE")
-except ImportError:
-    _DEEP_TRANSLATOR_AVAILABLE = False
-    logger.error(
-        "[INIT] deep_translator NOT INSTALLED — translation disabled. "
-        "Run: pip install deep-translator==1.11.4"
-    )
+_nllb_lock = threading.Lock()
+_nllb_model = None
+_nllb_tokenizer = None
+_nllb_available: bool | None = None  # None = untested
+
+
+def _load_nllb():
+    """Lazy-load NLLB model + tokenizer. Thread-safe singleton."""
+    global _nllb_model, _nllb_tokenizer, _nllb_available
+    with _nllb_lock:
+        if _nllb_available is not None:
+            return _nllb_available
+        try:
+            from transformers import (
+                AutoTokenizer,
+                AutoModelForSeq2SeqLM,
+            )
+            model_name = "facebook/nllb-200-distilled-600M"
+            logger.info("[NLLB] Loading model: %s", model_name)
+            _nllb_tokenizer = AutoTokenizer.from_pretrained(model_name)
+            _nllb_model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+            _nllb_available = True
+            logger.info("[NLLB] Model loaded successfully")
+        except Exception as e:
+            _nllb_available = False
+            logger.error(
+                "[NLLB] Failed to load model: %s. "
+                "Translation will return original text.",
+                e,
+            )
+        return _nllb_available
+
 
 # ═══════════════════════════════════════════════════════════════
-# Translation memory cache
+# NLLB language code mapping
+# ISO 639-1 → NLLB flores200 codes
+# ═══════════════════════════════════════════════════════════════
+
+_NLLB_LANG_MAP = {
+    "en": "eng_Latn",
+    "es": "spa_Latn",
+    "fr": "fra_Latn",
+    "de": "deu_Latn",
+    "it": "ita_Latn",
+    "pt": "por_Latn",
+    "nl": "nld_Latn",
+    "pl": "pol_Latn",
+    "sv": "swe_Latn",
+    "da": "dan_Latn",
+    "no": "nob_Latn",
+    "fi": "fin_Latn",
+    "ro": "ron_Latn",
+    "hu": "hun_Latn",
+    "cs": "ces_Latn",
+    "sk": "slk_Latn",
+    "hr": "hrv_Latn",
+    "bg": "bul_Cyrl",
+    "sr": "srp_Cyrl",
+    "sl": "slv_Latn",
+    "tr": "tur_Latn",
+    "ru": "rus_Cyrl",
+    "uk": "ukr_Cyrl",
+    "el": "ell_Grek",
+    "ar": "arb_Arab",
+    "he": "heb_Hebr",
+    "hi": "hin_Deva",
+    "bn": "ben_Beng",
+    "ta": "tam_Taml",
+    "ur": "urd_Arab",
+    "fa": "pes_Arab",
+    "zh": "zho_Hans",
+    "zh-cn": "zho_Hans",
+    "zh-tw": "zho_Hant",
+    "ja": "jpn_Jpan",
+    "ko": "kor_Hang",
+    "th": "tha_Thai",
+    "vi": "vie_Latn",
+    "id": "ind_Latn",
+    "ms": "zsm_Latn",
+    "tl": "tgl_Latn",
+    "sw": "swh_Latn",
+    "ka": "kat_Geor",
+    "ca": "cat_Latn",
+    "lv": "lvs_Latn",
+    "lt": "lit_Latn",
+    "et": "est_Latn",
+}
+
+
+def _get_nllb_code(iso_code: str) -> str:
+    """Convert ISO 639-1 code to NLLB flores200 code."""
+    code = str(iso_code or "").strip().lower()
+    return _NLLB_LANG_MAP.get(code, "eng_Latn")
+
+
+# ═══════════════════════════════════════════════════════════════
+# Translation cache
 # ═══════════════════════════════════════════════════════════════
 
 _translation_cache: dict = {}
 _cache_lock = threading.Lock()
 _MAX_CACHE_SIZE = 500
 
-# Dedicated executor for Google translate calls (avoids blocking event loop)
-_translate_executor = ThreadPoolExecutor(
-    max_workers=3, thread_name_prefix="src_translate"
-)
 
 # ═══════════════════════════════════════════════════════════════
 # Degenerate output detection
 # ═══════════════════════════════════════════════════════════════
 
-# Patterns that indicate a broken/template translation
 _DEGENERATE_PATTERNS = [
-    re.compile(r"^\s*$"),                                                    # empty
-    re.compile(r"^\[.+\]$"),                                                  # just a lang tag
-    re.compile(r"\[(Chinese|Japanese|Korean|Arabic|Hindi|Russian|German|French|Spanish|Polish|Portuguese|Italian|English|EN|ZH|JA|KO|AR|HI|RU|DE|FR|ES|IT|PT|PL|Dutch|Turkish|Ukrainian|Greek|Thai|Hebrew|Georgian|Urdu|Persian|Bengali|Vietnamese|Indonesian|Malay|Swedish|Danish|Finnish|Norwegian|Romanian|Hungarian|Bulgarian|Croatian|Slovak|Slovenian|Serbian|Czech)\]", re.IGNORECASE),  # leaked lang tag
-    re.compile(r"^(Bad experience|Good experience|It does not work properly)\.$", re.IGNORECASE),
-    re.compile(r"^(This product is (bad|good|okay))\.$", re.IGNORECASE),
-    re.compile(r"^(The quality is (decent|mediocre|acceptable|great|good|bad|poor|excellent|terrible|average|moderate))\.$", re.IGNORECASE),
-    # V3: Template fallback patterns from forensic report
-    re.compile(r'^The product is (great|good|bad|poor|excellent|terrible|decent|unsatisfactory|fantastic|outstanding|mediocre|horrible)\.$', re.IGNORECASE),
-    re.compile(r'^(Very disappointing|Very good experience|This does not work|Very fast and reliable|Excellent product|Works perfectly|Exceptional quality|Wonderful product)\.$', re.IGNORECASE),
+    re.compile(r"^\s*$"),
+    re.compile(r"^\[.+\]$"),
+    re.compile(r"^\.{1,3}$"),
 ]
 
-# Minimum translation length ratio vs source text (words)
-_MIN_LENGTH_RATIO = 0.35
-
-# Known passthrough strings (Helsinki garbage outputs)
 _DEGENERATE_STRINGS = frozenset({
     "...", "…", ".", "..", "—", "--",
     "the", "a", "i", "it", "is", "yes", "no", "ok", "okay",
-    "null", "none", "undefined", "bad experience", "error",
+    "null", "none", "undefined", "error",
     "translation error",
 })
+
+_MIN_LENGTH_RATIO = 0.25
 
 
 def _is_degenerate(original: str, translated: str) -> bool:
@@ -87,16 +156,14 @@ def _is_degenerate(original: str, translated: str) -> bool:
     t = translated.strip()
     t_lower = t.lower()
 
-    # Known bad strings
     if t_lower in _DEGENERATE_STRINGS:
         return True
 
-    # Pattern matches
     for pat in _DEGENERATE_PATTERNS:
         if pat.search(t):
             return True
 
-    # Length ratio — translation should be proportional to source
+    # Length ratio check
     src_words = len(original.split())
     tr_words = len(t.split())
     if src_words >= 6 and tr_words < src_words * _MIN_LENGTH_RATIO:
@@ -111,75 +178,74 @@ def _is_degenerate(original: str, translated: str) -> bool:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Language code normalization
+# Core NLLB translation function
 # ═══════════════════════════════════════════════════════════════
 
-# deep-translator expects specific codes for some languages
-_LANG_CODE_MAP = {
-    "zh-cn": "zh-CN",
-    "zh-tw": "zh-TW",
-    "zh":    "zh-CN",
-    "pt":    "pt",
-    "he":    "iw",      # Google uses 'iw' for Hebrew
-}
+def _translate_nllb(
+    text: str,
+    src_lang_code: str,
+    tgt_lang: str = "eng_Latn",
+) -> Optional[str]:
+    """Translate text using NLLB model.
 
-
-def _normalize_lang_code(code: str) -> str:
-    """Normalize ISO code to deep-translator/Google format."""
-    code = str(code or "").strip().lower()
-    return _LANG_CODE_MAP.get(code, code)
-
-
-# ═══════════════════════════════════════════════════════════════
-# Core translation function
-# ═══════════════════════════════════════════════════════════════
-
-_GOOGLE_TIMEOUT_S = 4.0   # reduced from 5.0 — fail faster
-
-
-def _google_translate_sync(text: str, source_code: str) -> Optional[str]:
-    """Run GoogleTranslator in an executor thread with timeout.
-
-    CIRCUIT BREAKER: Returns None immediately if deep_translator is
-    not installed — prevents 5s hang per review.
+    Returns translated text or None on failure.
     """
-    # Fast-fail if package unavailable (circuit breaker)
-    if not _DEEP_TRANSLATOR_AVAILABLE:
+    if not _load_nllb():
         return None
 
     try:
-        from deep_translator import GoogleTranslator
+        # Set source language for tokenizer
+        src_nllb = _get_nllb_code(src_lang_code)
+        _nllb_tokenizer.src_lang = src_nllb
 
-        future = _translate_executor.submit(
-            lambda: GoogleTranslator(source=source_code, target="en").translate(text)
+        inputs = _nllb_tokenizer(
+            text,
+            return_tensors="pt",
+            max_length=512,
+            truncation=True,
         )
-        result = future.result(timeout=_GOOGLE_TIMEOUT_S)
+
+        # Get target language token ID
+        tgt_token_id = _nllb_tokenizer.convert_tokens_to_ids(tgt_lang)
+
+        tokens = _nllb_model.generate(
+            **inputs,
+            forced_bos_token_id=tgt_token_id,
+            max_length=512,
+        )
+
+        result = _nllb_tokenizer.decode(
+            tokens[0], skip_special_tokens=True
+        )
         return result
-    except FuturesTimeoutError:
-        logger.warning("Google translate timeout (%.1fs) for lang=%s", _GOOGLE_TIMEOUT_S, source_code)
-        return None
+
     except Exception as e:
-        logger.warning("Google translate error for lang=%s: %s", source_code, e)
+        logger.warning(
+            "[NLLB] Translation failed for lang=%s: %s",
+            src_lang_code, e,
+        )
         return None
 
+
+# ═══════════════════════════════════════════════════════════════
+# Public API — translate_to_english
+# ═══════════════════════════════════════════════════════════════
 
 def translate_to_english(
     text: str,
     src_lang: str = "auto",
 ) -> tuple:
     """
-    Translate `text` from `src_lang` to English.
+    Translate `text` from `src_lang` to English using NLLB.
 
-    V3 CONTRACT:
-      On success: (English translation, "deep_translator" or "cache")
+    V4 CONTRACT:
+      On success: (English translation, "nllb")
       On English passthrough: (original_text, "passthrough")
+      On cache hit: (cached_translation, "cache")
       On failure: (original_text, "passthrough_failed")
-      NEVER returns a template string like "The product is X. [Language]"
 
-    Uses deep-translator GoogleTranslator with:
-    - Degenerate output detection
-    - In-process translation cache (500 entries)
-    - 4-second per-call timeout
+    NLLB is the ONLY translation engine. No fallbacks.
+    Translation is for DISPLAY ONLY — never affects sentiment.
 
     Returns:
         Tuple of (translated_text, method)
@@ -189,53 +255,108 @@ def translate_to_english(
         return "", "passthrough"
 
     # English passthrough
-    src_norm = _normalize_lang_code(src_lang)
-    if src_lang.lower() in ("en", "english") or src_norm == "en":
+    src_norm = str(src_lang or "").strip().lower()
+    if src_norm in ("en", "english", "eng_latn"):
         return text, "passthrough"
 
     # Cache lookup
-    cache_key = hashlib.md5(f"{src_lang}:{text}".encode()).hexdigest()
+    cache_key = hashlib.md5(
+        f"{src_lang}:{text}".encode()
+    ).hexdigest()
     with _cache_lock:
         if cache_key in _translation_cache:
             return _translation_cache[cache_key], "cache"
 
-    # Translate
-    result = _google_translate_sync(text, src_norm if src_norm != "en" else "auto")
+    # Translate with NLLB
+    result = _translate_nllb(text, src_norm)
 
     if result and not _is_degenerate(text, result):
         cleaned = result.strip()
-        # Strip leaked language-name suffixes
-        cleaned = re.sub(
-            r'\s*[,.]?\s*(?:Hindi|Chinese|Korean|Arabic|Russian|German|French|'
-            r'Spanish|Italian|Portuguese|Japanese|Thai|Turkish|Swedish|Dutch|'
-            r'Polish|Bengali|Tamil)\s*[.]?\s*$',
-            '', cleaned, flags=re.IGNORECASE
-        ).strip()
 
-        # V3: Final degenerate check on cleaned text
         if cleaned and not _is_degenerate(text, cleaned):
+            # Cache the result
             with _cache_lock:
                 if len(_translation_cache) >= _MAX_CACHE_SIZE:
-                    # Evict oldest 100 entries
                     keys = list(_translation_cache.keys())[:100]
                     for k in keys:
                         del _translation_cache[k]
                 _translation_cache[cache_key] = cleaned
 
-            logger.debug("Translated [%s→en]: '%s...' → '%s...'",
-                         src_lang, text[:40], cleaned[:40])
-            return cleaned, "deep_translator"
+            logger.debug(
+                "[NLLB] Translated [%s→en]: '%s...' → '%s...'",
+                src_lang, text[:40], cleaned[:40],
+            )
+            return cleaned, "nllb"
 
-    # Translation failed or degenerate — return original with failure flag
-    logger.warning("Translation failed/degenerate for lang=%s: '%s' → '%s'",
-                   src_lang, text[:50], str(result)[:50] if result else "None")
+    # Translation failed — return original with failure flag
+    src_norm_display = src_norm if src_norm else "unknown"
+    logger.warning(
+        "Translation failed for lang=%s: output='%s'",
+        src_norm_display,
+        str(result)[:50] if result else "None",
+    )
     return text, "passthrough_failed"
 
 
 # ═══════════════════════════════════════════════════════════════
-# Backward compatibility shim for src/translator.py callers
+# Batch translation
 # ═══════════════════════════════════════════════════════════════
 
-def _load_helsinki_model():
-    """Stub — Helsinki model removed. Returns (None, None) for compat."""
-    return None, None
+def translate_batch(
+    texts: list[str],
+    src_lang: str,
+) -> list[str]:
+    """Translate a batch of texts from src_lang to English.
+
+    V4: Uses NLLB batch inference with batch_decode for high throughput.
+    """
+    if not _load_nllb():
+        return texts  # Fallback to original
+
+    src_nllb = _get_nllb_code(src_lang)
+    _nllb_tokenizer.src_lang = src_nllb
+
+    # Filter out empty texts
+    valid_texts = [t for t in texts if str(t or "").strip()]
+    if not valid_texts:
+        return texts
+
+    try:
+        inputs = _nllb_tokenizer(
+            valid_texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=512,
+        )
+
+        tgt_token_id = _nllb_tokenizer.convert_tokens_to_ids("eng_Latn")
+
+        outputs = _nllb_model.generate(
+            **inputs,
+            forced_bos_token_id=tgt_token_id,
+            max_length=512,
+        )
+
+        translated = _nllb_tokenizer.batch_decode(
+            outputs, skip_special_tokens=True
+        )
+
+        # Merge back with original preserving empty strings
+        result_map = {t: tr.strip() for t, tr in zip(valid_texts, translated)}
+        results = []
+        for text in texts:
+            t = str(text or "")
+            if t.strip():
+                tr = result_map[t]
+                if _is_degenerate(t, tr):
+                    results.append(t)
+                else:
+                    results.append(tr)
+            else:
+                results.append(t)
+        return results
+
+    except Exception as e:
+        logger.warning("[NLLB] Batch translation failed for %s: %s", src_lang, e)
+        return texts

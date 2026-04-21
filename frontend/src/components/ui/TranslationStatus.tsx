@@ -1,8 +1,8 @@
 /**
  * TranslationStatus — Badge component for translation quality indicators.
  *
- * BUG-6 SECTION-3: Shows translation verification status in multilingual
- * analysis results. Color-coded for instant visual feedback.
+ * V4: NLLB is the ONLY translation engine. All references to
+ * Helsinki-NLP, Google Translate, and tiered fallbacks removed.
  */
 
 interface TranslationStatusProps {
@@ -13,14 +13,12 @@ interface TranslationStatusProps {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; text: string; icon: string }> = {
-  success:           { color: '#00c851', text: 'Verified',     icon: '✓' },
-  helsinki:           { color: '#00c851', text: 'Helsinki-NLP', icon: '✓' },
-  google:            { color: '#4CAF50', text: 'Google',       icon: '✓' },
-  google_batch:      { color: '#4CAF50', text: 'Batch',        icon: '✓' },
-  generic_detected:  { color: '#FFC107', text: 'Generic',      icon: '⚠' },
-  polarity_inverted: { color: '#FF9800', text: 'Inverted',     icon: '↺' },
-  retry_exhausted:   { color: '#ff4b4b', text: 'Failed',       icon: '✗' },
+  success:           { color: '#00c851', text: 'NLLB ✓',       icon: '✓' },
+  nllb:              { color: '#00c851', text: 'NLLB',         icon: '✓' },
+  cache:             { color: '#4CAF50', text: 'Cached',       icon: '✓' },
+  passthrough:       { color: '#888',    text: 'English',      icon: '—' },
   failed:            { color: '#ff4b4b', text: 'Failed',       icon: '✗' },
+  passthrough_failed:{ color: '#ff4b4b', text: 'Fallback',     icon: '✗' },
   failed_raw_predict:{ color: '#ff4b4b', text: 'Raw Predict',  icon: '✗' },
   timeout:           { color: '#ff4b4b', text: 'Timeout',      icon: '✗' },
   none:              { color: '#888',    text: 'English',      icon: '—' },
@@ -56,7 +54,7 @@ export function TranslationStatus({
       title={
         polarityInverted
           ? 'Polarity inverted — used original text'
-          : `Translation method: ${key}`
+          : `Translation: ${config.text} (${key})`
       }
     >
       <span style={{ fontSize: '0.65rem' }}>{config.icon}</span>

@@ -860,13 +860,12 @@ export function ModelDashboardPage() {
   )
 }
 
-/* ── W4-3: Translation Pipeline Health ── */
+/* ── V4: Translation Pipeline Health (NLLB Only) ── */
 interface TranslationStats {
   total_translations: number
   method_breakdown: Record<string, number>
   failure_rate_pct: number
   per_language: Record<string, { count: number; failed: number }>
-  google_reachable?: boolean
 }
 
 function TranslationDashboard() {
@@ -882,7 +881,7 @@ function TranslationDashboard() {
 
   if (loadingT) return null
 
-  // C3: Empty state when no translations
+  // Empty state when no translations
   if (!stats || stats.total_translations === 0) {
     return (
       <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
@@ -899,11 +898,13 @@ function TranslationDashboard() {
   const langEntries = Object.entries(stats.per_language)
     .sort(([, a], [, b]) => b.count - a.count)
 
+  const nllbSuccess = stats.method_breakdown.nllb_success ?? 0
+
   return (
     <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
       <SectionHeader icon={<Icon3DBolt size={22} />} title="Translation Pipeline Health" subtitle="Real-time translation metrics" />
       <div style={{ padding: 'var(--space-4)' }}>
-        {/* Tier explanation strip — clarifies google_success=0 is healthy */}
+        {/* V4 NLLB info strip */}
         <div style={{
           display: 'flex',
           alignItems: 'flex-start',
@@ -923,15 +924,15 @@ function TranslationDashboard() {
             display: 'inline-block', marginTop: 4,
           }} />
           <span>
-            <strong style={{ color: 'var(--color-text)' }}>Translation Pipeline:</strong>
-            {' '}Tier 1 (Helsinki-NLP) handles all translations locally.
-            Tier 2 (Google Translate) is a fallback — a zero count here is healthy.
-            Tier 3 (raw prediction) activates only if both fail.
+            <strong style={{ color: 'var(--color-text)' }}>Translation Engine: NLLB (Meta)</strong>
+            {' '}— Display only. All translations use facebook/nllb-200-distilled-600M locally.
+            Sentiment classification always uses original text.
+            On failure, original text is shown with a failure indicator.
           </span>
         </div>
 
-        {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
+        {/* KPI row — 3 cards (NLLB only) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)' }}>
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
             padding: 'var(--space-3)', background: 'rgba(0,217,255,0.06)',
@@ -960,54 +961,32 @@ function TranslationDashboard() {
             border: '1px solid rgba(167,139,250,0.15)', borderRadius: '10px',
           }}>
             <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: '#a78bfa', fontFamily: 'var(--font-mono)' }}>
-              {stats.method_breakdown.helsinki_success ?? 0}
+              {nllbSuccess}
             </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Helsinki-NLP</div>
-          </div>
-          {/* Renamed: google_success → Tier 2 Fallback Used (0 is HEALTHY) */}
-          <div
-            title="A count of 0 here is healthy — Helsinki-NLP (Tier 1) is translating all reviews. Google Translate (Tier 2) activates only when Tier 1 fails."
-            style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
-              padding: 'var(--space-3)', background: 'rgba(245,158,11,0.06)',
-              border: '1px solid rgba(245,158,11,0.15)', borderRadius: '10px',
-              cursor: 'help',
-            }}>
-            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--color-neutral-sent)', fontFamily: 'var(--font-mono)' }}>
-              {stats.method_breakdown.google_success ?? 0}
-            </div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>
-              Tier 2 Fallback Used
-            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>NLLB Translations</div>
           </div>
         </div>
 
-        {/* Google Translate availability badge */}
+        {/* Engine status badge */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-3)' }}>
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: 'var(--space-2)',
             padding: '4px 14px',
-            background: stats.google_reachable
-              ? 'rgba(34,197,94,0.08)'
-              : 'rgba(122,121,116,0.08)',
-            border: `1px solid ${stats.google_reachable
-              ? 'rgba(34,197,94,0.25)'
-              : 'rgba(122,121,116,0.25)'}`,
+            background: 'rgba(34,197,94,0.08)',
+            border: '1px solid rgba(34,197,94,0.25)',
             borderRadius: '9999px',
             fontSize: 'var(--text-xs)',
-            color: stats.google_reachable
-              ? 'var(--color-positive)'
-              : 'var(--color-text-muted)',
+            color: 'var(--color-positive)',
           }}>
             <span style={{
               width: 6, height: 6,
               borderRadius: '50%',
-              background: stats.google_reachable ? 'var(--color-positive)' : '#7a7974',
+              background: 'var(--color-positive)',
               display: 'inline-block',
             }} />
-            Google Translate: {stats.google_reachable ? 'Reachable' : 'Unavailable (Helsinki-NLP active)'}
+            NLLB Engine: Active (Local)
           </div>
         </div>
 
@@ -1042,3 +1021,4 @@ function TranslationDashboard() {
     </div>
   )
 }
+

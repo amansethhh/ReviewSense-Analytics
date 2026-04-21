@@ -223,146 +223,59 @@ def _translate_with_fallback(
     source_lang: str,
 ) -> dict:
     """
-    Two-tier translation with automatic fallback and
-    quality validation.
+    V4: Single-engine translation via NLLB (display only).
 
-    Tier 1: Helsinki-NLP via src.translator (fast, ~100ms)
-    Tier 2: googletrans (slower, ~300ms, more reliable)
+    Sentiment classification ALWAYS uses original text.
+    If NLLB fails, returns original text with was_translated=False.
 
     Returns:
         { translated_text, method, confidence, warnings }
     """
-    warnings: list[str] = []
+    from src.models.translation import translate_to_english
 
-    # BUG-1 FIX: Arabic is force-routed to Google Translate
-    # because Helsinki ar→en produces consistently degenerate output.
-    LANGUAGES_FORCE_GOOGLE = {"ar"}
+    translated, method = translate_to_english(text, source_lang)
 
-    # === TIER 1: Helsinki-NLP (via existing pipeline) ===
-    if source_lang not in LANGUAGES_FORCE_GOOGLE:
-        try:
-            from src.translator import detect_and_translate
-
-            lang_result = detect_and_translate(text)
-            if isinstance(lang_result, dict):
-                helsinki_text = lang_result.get(
-                    "translated_text", "")
-                was_translated = lang_result.get(
-                    "was_translated", False)
-
-                if helsinki_text and was_translated:
-                    helsinki_text = _strip_language_suffix(helsinki_text)
-
-                    # BUG-1 FIX: Check for degenerate output FIRST
-                    if _is_degenerate(helsinki_text, text):
-                        warnings.append(
-                            "Helsinki produced degenerate output, "
-                            "falling back to Google"
-                        )
-                        logger.warning(
-                            "Degenerate Helsinki output for "
-                            "%s: '%s' → '%s'",
-                            source_lang, text[:50],
-                            helsinki_text[:50],
-                        )
-                    else:
-                        quality = _validate_translation_quality(
-                            text, helsinki_text, source_lang)
-                        if quality >= 0.70:
-                            return {
-                                "translated_text": helsinki_text,
-                                "method": "helsinki",
-                                "confidence": quality,
-                                "detected_language": lang_result.get(
-                                    "detected_language", source_lang),
-                                "language_name": lang_result.get(
-                                    "language_name", "Unknown"),
-                                "was_translated": True,
-                                "warnings": [],
-                            }
-                        else:
-                            warnings.append(
-                                f"Helsinki quality low "
-                                f"({quality:.0%}), using fallback"
-                            )
-                elif helsinki_text:
-                    # Not flagged as translated — might be
-                    # English already
-                    return {
-                        "translated_text": helsinki_text,
-                        "method": "helsinki",
-                        "confidence": 0.8,
-                        "detected_language": lang_result.get(
-                            "detected_language", source_lang),
-                        "language_name": lang_result.get(
-                            "language_name", "Unknown"),
-                        "was_translated": False,
-                        "warnings": [],
-                    }
-        except Exception as e:
-            logger.warning(
-                f"Helsinki-NLP failed for {source_lang}: {e}")
-            warnings.append(
-                f"Helsinki error: {str(e)[:50]}")
+    if method in ("nllb", "cache"):
+        logger.debug(
+            "[NLLB] Translated [%s→en] via %s", source_lang, method)
+        return {
+            "translated_text": translated,
+            "method": method,
+            "confidence": 0.95,
+            "detected_language": source_lang,
+            "language_name": LANGUAGE_CODE_MAP.get(
+                source_lang, source_lang),
+            "was_translated": True,
+            "warnings": [],
+        }
+    elif method == "passthrough":
+        return {
+            "translated_text": text,
+            "method": "passthrough",
+            "confidence": 1.0,
+            "detected_language": source_lang,
+            "language_name": LANGUAGE_CODE_MAP.get(
+                source_lang, source_lang),
+            "was_translated": False,
+            "warnings": [],
+        }
     else:
-        warnings.append(
-            f"Skipping Helsinki for {source_lang} "
-            f"(force-Google language)")
-
-    # === TIER 2: deep-translator (Google) with retry ===
-    try:
-        from app.utils.translation_client import (
-            translate_with_retry,
+        # passthrough_failed — NLLB could not translate
+        logger.warning(
+            "[NLLB] Translation failed for lang=%s — "
+            "using original text",
+            source_lang,
         )
-        src_lang = (
-            "auto" if source_lang in ("auto", "unknown")
-            else source_lang
-        )
-        translated, status = translate_with_retry(
-            text, src_lang, "en"
-        )
-        if status == "success" and translated.strip():
-            cleaned = _strip_language_suffix(translated.strip())
-            return {
-                "translated_text": cleaned,
-                "method": "google",
-                "confidence": 0.9,
-                "detected_language": source_lang,
-                "language_name": LANGUAGE_CODE_MAP.get(
-                    source_lang, source_lang),
-                "was_translated": True,
-                "warnings": warnings,
-            }
-        else:
-            warnings.append("Google retry exhausted")
-    except Exception as e:
-        logger.error(
-            f"Both translators failed for "
-            f"{source_lang}: {e}"
-        )
-        warnings.append(
-            f"Google fallback failed: {str(e)[:50]}")
-
-    # === TIER 3: raw predict on original text ===
-    # Both Helsinki AND Google have failed.  We still return the
-    # original text so the caller can run predict_sentiment on it
-    # directly.  Setting was_translated=False ensures the pipeline
-    # analyses the original (untranslated) text.
-    logger.warning(
-        "All translation tiers failed for lang=%s — "
-        "falling through to raw prediction on original text",
-        source_lang,
-    )
-    return {
-        "translated_text": None,
-        "method": "failed_raw_predict",
-        "confidence": 0.0,
-        "detected_language": source_lang,
-        "language_name": LANGUAGE_CODE_MAP.get(
-            source_lang, source_lang),
-        "was_translated": False,
-        "warnings": warnings,
-    }
+        return {
+            "translated_text": text,
+            "method": "failed",
+            "confidence": 0.0,
+            "detected_language": source_lang,
+            "language_name": LANGUAGE_CODE_MAP.get(
+                source_lang, source_lang),
+            "was_translated": False,
+            "warnings": ["NLLB translation failed — using original text"],
+        }
 
 
 # ══════════════════════════════════════════════════════════

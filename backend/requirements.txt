@@ -30,9 +30,9 @@ lime
 spacy
 fpdf2
 sumy
-# ── Translation & Language Detection ──────────────────
+# ── Translation (NLLB) & Language Detection ───────────
 langdetect==1.0.9
-deep-translator==1.11.4
+# V4: deep-translator removed — NLLB (via transformers) is the only engine
 
 # ── Utilities ─────────────────────────────────────────
 regex==2026.2.28

@@ -222,15 +222,13 @@ def compute_dual_polarity(
 ) -> tuple:
     """Compute TextBlob polarity, VADER compound, and subjectivity.
 
-    RULE 2 ENFORCEMENT: This function operates on ORIGINAL TEXT ONLY.
-    Translation NEVER affects polarity computation.
+    V5 RULESET 3 — STRICT ENGLISH-ONLY POLARITY:
+      TextBlob/VADER run ONLY when lang_code == 'en'.
+      For ALL other languages (even Latin-script ones), returns (0.0, 0.0, 0.5).
+      This eliminates polarity-based neutral bias on multilingual content.
+      XLM-R model handles classification natively for non-English.
 
-    For Latin-script languages (en, de, fr, es, it, pt, etc.):
-        Runs TextBlob + VADER directly on original text.
-
-    For non-Latin-script languages (ja, ko, zh, hi, ar, ru, etc.):
-        Returns (0.0, 0.0, 0.5) — TextBlob/VADER cannot parse non-Latin.
-        The XLM-R model handles classification natively for these.
+    RULE 2 ENFORCEMENT: Original text only — translation never affects polarity.
 
     Args:
         text: Original review text (any language)
@@ -242,27 +240,29 @@ def compute_dual_polarity(
     if not text or not str(text).strip():
         return 0.0, 0.0, 0.5
 
-    # Normalize lang_code — handle None, empty, uppercase
     lang = (lang_code or "en").lower().strip()[:5]
     lc_short = lang[:2]
 
-    # Non-Latin languages → return neutral defaults
-    # TextBlob/VADER cannot parse non-Latin scripts
-    is_non_latin = lc_short in _NON_LATIN_LANGS or lang in _NON_LATIN_LANGS
-    if is_non_latin:
+    # V5 RULESET 3: Only run TextBlob/VADER for English.
+    # All other languages get neutral polarity defaults.
+    if lc_short != "en":
+        logger.debug(
+            "[POLARITY SKIP] lang=%s — polarity skipped (English-only rule)", lang
+        )
         return 0.0, 0.0, 0.5
 
     analysis_text = str(text)
 
     # TextBlob polarity
+    tb_polarity = 0.0
+    subjectivity = 0.5
     try:
         from textblob import TextBlob
         blob = TextBlob(analysis_text)
         tb_polarity = float(blob.sentiment.polarity)
         subjectivity = float(blob.sentiment.subjectivity)
     except Exception:
-        tb_polarity = 0.0
-        subjectivity = 0.5
+        pass
 
     # VADER compound
     vader_compound = 0.0
@@ -270,13 +270,13 @@ def compute_dual_polarity(
         try:
             vader_compound = float(_vader.polarity_scores(analysis_text)["compound"])
         except Exception:
-            vader_compound = 0.0
+            pass
 
     return tb_polarity, vader_compound, subjectivity
 
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 6c — Neutral correction v2 (VADER-primary)
+# STEP 6c — Neutral correction v2 (V4: MODEL-FIRST)
 # ═══════════════════════════════════════════════════════════════
 
 def apply_neutral_correction_v2(
@@ -286,105 +286,86 @@ def apply_neutral_correction_v2(
     vader_compound: float,
     lang_code: str = "en",
 ) -> dict:
-    """Two-stage correction using VADER as primary signal.
+    """V5 model-first correction — Ruleset 4 calibration.
 
-    Stage 1 (VADER-primary): Correct label/VADER disagreements.
-      - Neutral + vader ≤ −0.35 → Negative
-      - Positive + vader ≤ −0.20 (low conf) → Neutral
-      - Negative + vader ≥ +0.40 (low conf) → Neutral
+    RULE (Ruleset 4):
+      confidence >= 0.70 → model prediction is FINAL (no polarity override)
+      confidence <  0.70 → polarity-based fallback:
+          polarity >  0.25 → Positive
+          polarity < -0.25 → Negative
+          else             → Neutral
 
-    Stage 2 (TextBlob fallback): Existing polarity-zone correction.
-
-    Data-verified thresholds that fix all 6 known English errors
-    (rows 28, 67, 90, 151, 171, 198) without introducing new ones.
+    RULE (Ruleset 3):
+      Polarity only used when lang_code == 'en'.
+      All non-English inputs use model label directly.
 
     Returns dict with corrected pred_class, neutral_corrected flag, reason.
     """
     neutral_corrected = False
     correction_reason = ""
     lc = (lang_code or "en").lower().strip()[:2]
-    use_polarity = lc not in _NON_LATIN_LANGS
 
-    # --- Stage 1: VADER-primary corrections ---
-    if use_polarity and _VADER_AVAILABLE:
-        # Neutral → Negative when VADER detects strongly negative language
-        if pred_class == 1 and vader_compound <= -0.35:
-            logger.info(
-                "VADER correction: Neutral → Negative (vader=%.3f)",
-                vader_compound,
-            )
-            correction_reason = f"vader_negative ({vader_compound:.3f})"
-            return {
-                "pred_class": 0,
-                "neutral_corrected": True,
-                "correction_reason": correction_reason,
-            }
-
-        # Positive → Neutral when VADER detects negative language (low confidence)
-        if (pred_class == 2 and vader_compound <= -0.20
-                and confidence < CONFIDENCE_THRESHOLD):
-            logger.info(
-                "VADER correction: Positive → Neutral (vader=%.3f, conf=%.3f)",
-                vader_compound, confidence,
-            )
-            correction_reason = f"vader_positive_override ({vader_compound:.3f})"
-            return {
-                "pred_class": 1,
-                "neutral_corrected": True,
-                "correction_reason": correction_reason,
-            }
-
-        # Negative → Neutral when VADER detects positive language (low confidence)
-        if (pred_class == 0 and vader_compound >= 0.40
-                and confidence < CONFIDENCE_THRESHOLD):
-            logger.info(
-                "VADER correction: Negative → Neutral (vader=%.3f, conf=%.3f)",
-                vader_compound, confidence,
-            )
-            correction_reason = f"vader_negative_override ({vader_compound:.3f})"
-            return {
-                "pred_class": 1,
-                "neutral_corrected": True,
-                "correction_reason": correction_reason,
-            }
-
-    # --- Stage 2: TextBlob polarity-zone correction (fallback) ---
-    if (use_polarity
-            and pred_class == 1
-            and confidence < CONFIDENCE_THRESHOLD
-            and abs(tb_polarity) >= POLARITY_WEAK):
-        new_class = 2 if tb_polarity > 0 else 0
-        logger.info(
-            "TextBlob elevation: Neutral → %s (pol=%.3f, conf=%.3f)",
-            LABEL_MAP.get(new_class, "?"), tb_polarity, confidence,
+    # V5 RULESET 4: High confidence → model is FINAL
+    if confidence >= 0.70:
+        logger.debug(
+            "[CORRECTION] Model-first: conf=%.3f >= 0.70, keeping label=%d",
+            confidence, pred_class,
         )
-        correction_reason = f"tb_polarity_zone ({tb_polarity:.3f})"
         return {
-            "pred_class": new_class,
-            "neutral_corrected": True,
-            "correction_reason": correction_reason,
+            "pred_class": pred_class,
+            "neutral_corrected": False,
+            "correction_reason": "",
         }
 
-    # Collapse to Neutral when model is uncertain and polarity is weak
-    if (use_polarity
-            and pred_class != 1
-            and confidence < CONFIDENCE_THRESHOLD
-            and abs(tb_polarity) < POLARITY_WEAK
-            and (not _VADER_AVAILABLE or abs(vader_compound) < 0.30)):
-        logger.info(
-            "Collapse to Neutral: pred=%s, conf=%.3f, pol=%.3f, vader=%.3f",
-            LABEL_MAP.get(pred_class, "?"), confidence, tb_polarity, vader_compound,
+    # V5 RULESET 3: Polarity only valid for English
+    if lc != "en":
+        logger.warning(
+            "[CORRECTION] Low confidence (%.3f) for non-English lang=%s — "
+            "keeping model label (polarity skipped per Ruleset 3)",
+            confidence, lc,
         )
-        correction_reason = f"low_conf_neutral_polarity (tb={tb_polarity:.3f}, vader={vader_compound:.3f})"
+        logger.warning(
+            "Low confidence fallback triggered (lang=%s, conf=%.3f)",
+            lc, confidence,
+        )
         return {
-            "pred_class": 1,
-            "neutral_corrected": True,
-            "correction_reason": correction_reason,
+            "pred_class": pred_class,
+            "neutral_corrected": False,
+            "correction_reason": "",
         }
 
-    # No correction
+    # English + low confidence → polarity-based fallback
+    polarity = vader_compound if _VADER_AVAILABLE else tb_polarity
+
+    if polarity > 0.25:
+        new_class = 2  # Positive
+    elif polarity < -0.25:
+        new_class = 0  # Negative
+    else:
+        new_class = 1  # Neutral
+        if pred_class != 1:
+            logger.warning(
+                "Neutral assigned due to low signal "
+                "(conf=%.3f, polarity=%.3f)",
+                confidence, polarity,
+            )
+
+    if new_class != pred_class:
+        neutral_corrected = True
+        correction_reason = (
+            f"v5_low_conf_polarity_correction "
+            f"(conf={confidence:.3f}, polarity={polarity:.3f})"
+        )
+        logger.info(
+            "[CORRECTION] V5: %s → %s (conf=%.3f, polarity=%.3f)",
+            LABEL_MAP.get(pred_class, "?"),
+            LABEL_MAP.get(new_class, "?"),
+            confidence,
+            polarity,
+        )
+
     return {
-        "pred_class": pred_class,
+        "pred_class": new_class,
         "neutral_corrected": neutral_corrected,
         "correction_reason": correction_reason,
     }

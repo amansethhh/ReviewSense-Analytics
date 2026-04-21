@@ -126,30 +126,47 @@ def clean_text(text: str) -> str | None:
     return t
 
 
-def _apply_post_processing(text: str, sentiment: dict, lang_code: str = "en") -> dict:
+def _apply_post_processing(
+    text: str,
+    sentiment: dict,
+    lang_code: str = "en",
+    translated_text: str = "",
+) -> dict:
     """Apply the full post-processing pipeline to a single prediction.
 
-    V3 Pipeline order:
-      Step 4: Dual polarity (VADER + TextBlob) on ORIGINAL text
-      Step 5: short-text guard
-      Step 6: neutral correction v2 (VADER-primary, TextBlob fallback)
-      Step 7: confidence calibration
-      Step 8: temperature scaling
+    V5 Pipeline order:
+      Step 4: Dual polarity (VADER + TextBlob) — English only (Ruleset 3)
+      Step 5: Short-text guard — English text (original or translated)
+      Step 6: Neutral correction v2 (Ruleset 4) — model-first
+      Step 7: Confidence calibration
+      Step 8: Temperature scaling
     """
     scores = sentiment["scores"]
     pred_class = sentiment["label"]
     raw_confidence = sentiment["confidence"]
 
-    # Step 4: Dual polarity on ORIGINAL text (RULE 2)
+    # Step 4: Dual polarity — ENGLISH ONLY (V5 Ruleset 3)
+    # For non-English, returns (0.0, 0.0, 0.5) automatically
     polarity, vader_compound, subjectivity = compute_dual_polarity(text, lang_code)
 
     # Step 5: Short-text guard
-    guard_result = apply_short_text_guard(text, pred_class, raw_confidence)
+    # For non-English inputs, use translated English text (if available)
+    # so English explicit terms can be matched. Model still ran on original.
+    guard_text = text
+    lc = (lang_code or "en").lower().strip()[:2]
+    if lc != "en" and translated_text and translated_text.strip():
+        guard_text = translated_text
+        logger.debug(
+            "[GUARD] Using translated text for short-text guard: '%s'",
+            guard_text[:50],
+        )
+
+    guard_result = apply_short_text_guard(guard_text, pred_class, raw_confidence)
     pred_class = guard_result["pred_class"]
     confidence = guard_result["confidence"] if guard_result["guard_applied"] else raw_confidence
     guard_applied = guard_result["guard_applied"]
 
-    # Step 6: Neutral correction v2 (VADER-primary, TextBlob fallback) — RULE 4
+    # Step 6: Neutral correction v2 — model-first (V5 Ruleset 4)
     nc = apply_neutral_correction_v2(pred_class, confidence, polarity, vader_compound, lang_code)
     pred_class = nc["pred_class"]
     neutral_corrected = nc["neutral_corrected"]
@@ -198,7 +215,7 @@ def preload_models():
     return {
         "sentiment_loaded": s_model is not None,
         "sarcasm_loaded": i_model is not None,
-        "translation_loaded": True,   # deep-translator is lazy-loaded
+        "translation_loaded": True,   # V4: NLLB is lazy-loaded via transformers
     }
 
 
@@ -267,7 +284,12 @@ def run_pipeline(
     sentiment = sentiment_predict(analysis_input, lang_code=lang_code)
 
     # Apply full post-processing pipeline on ORIGINAL text
-    pp = _apply_post_processing(analysis_input, sentiment, lang_code=lang_code)
+    # Pass translated for guard use on non-English texts (display only, not sentiment)
+    pp = _apply_post_processing(
+        analysis_input, sentiment,
+        lang_code=lang_code,
+        translated_text=translated if was_translated else "",
+    )
 
     # Reduce confidence if translation flagged
     confidence = pp["confidence"]

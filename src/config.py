@@ -21,7 +21,7 @@ REPORTS_DIR = "reports/"
 
 HF_SENTIMENT_MODEL = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 HF_SARCASM_MODEL = "cardiffnlp/twitter-roberta-base-irony"
-HF_TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-mul-en"
+HF_TRANSLATION_MODEL = "facebook/nllb-200-distilled-600M"  # V4: NLLB only
 
 # =========================
 # Label Mapping

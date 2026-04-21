@@ -180,13 +180,13 @@ export interface ApiError {
 export interface TranslationMetrics {
   total_translations: number
   method_breakdown: {
-    helsinki_success: number
-    google_success:  number
+    nllb_success:    number   // V4: NLLB is the only engine
     failed:          number
     skipped_english: number
   }
   failure_rate_pct: number
   per_language: Record<string, { count: number; failed: number }>
+  nllb_available?: boolean   // V4: replaces google_reachable
 }
 
 // ── /feedback ───────────────────────────────────────

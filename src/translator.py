@@ -12,8 +12,8 @@ from src.models.language import LANGUAGE_NAMES, LANGUAGE_FLAGS
 def detect_and_translate(text):
     """Detect language and translate non-English text to English.
 
-    Uses deep-translator (GoogleTranslator) with degenerate output
-    detection and in-process translation cache.
+    V4: Uses NLLB (facebook/nllb-200-distilled-600M) for translation.
+    Translation is for DISPLAY ONLY — sentiment uses original text.
     Hinglish text bypasses translation and goes directly to inference.
     """
     from src.models.language import detect_language

@@ -74,6 +74,11 @@ async def lifespan(app: FastAPI):
         from src.models.sentiment import load_all_models
         load_all_models()
         logger.info("[WARMUP] ✅ Both sentiment models pre-loaded")
+        
+        # V4 TASK 1: Force NLLB Model Preload
+        from src.models.translation import _load_nllb
+        _load_nllb()
+        logger.info("NLLB LOADED")
     except Exception as e:
         logger.warning(f"[WARMUP] Model pre-warm failed (will load lazily): {e}")
 
