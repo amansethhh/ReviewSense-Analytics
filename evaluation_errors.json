@@ -1,242 +1,128 @@
 [
   {
-    "text": "Decent product for the price point",
+    "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.7112,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Produit correct, sans plus",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.093,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Produit correct, sans plus",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.093,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "عادي جدا لا يوجد شيء مميز",
-    "true": "neutral",
-    "pred": "negative",
-    "confidence": 0.5906,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Ganz normal, erfüllt seinen Zweck",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.2774,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Produit correct, sans plus",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.093,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Ganz normal, erfüllt seinen Zweck",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.2774,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
     "confidence": 0.5352,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Decent product for the price point",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.7112,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "عادي جدا لا يوجد شيء مميز",
-    "true": "neutral",
-    "pred": "negative",
-    "confidence": 0.5906,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Decent product for the price point",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.7112,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Produit correct, sans plus",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.093,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "عادي جدا لا يوجد شيء مميز",
-    "true": "neutral",
-    "pred": "negative",
-    "confidence": 0.5906,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Ganz normal, erfüllt seinen Zweck",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.2774,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Produit correct, sans plus",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.093,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Ganz normal, erfüllt seinen Zweck",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.2774,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Ganz normal, erfüllt seinen Zweck",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.2774,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Decent product for the price point",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.7112,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
     "confidence": 0.5352,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
     "confidence": 0.5352,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Produit correct, sans plus",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.093,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
     "confidence": 0.5352,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "عادي جدا لا يوجد شيء مميز",
-    "true": "neutral",
-    "pred": "negative",
-    "confidence": 0.5906,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Decent product for the price point",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.7112,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
     "confidence": 0.5352,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
     "confidence": 0.5352,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
-    "text": "Ganz normal, erfüllt seinen Zweck",
+    "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.2774,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
-    "text": "عادي جدا لا يوجد شيء مميز",
-    "true": "neutral",
-    "pred": "negative",
-    "confidence": 0.5906,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
-  },
-  {
-    "text": "Decent product for the price point",
+    "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.7112,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   },
   {
-    "text": "عادي جدا لا يوجد شيء مميز",
+    "text": "Arrived on time, standard packaging",
     "true": "neutral",
-    "pred": "negative",
-    "confidence": 0.5906,
-    "model_used": "unknown",
-    "confidence_status": "unknown"
+    "pred": "positive",
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
+  },
+  {
+    "text": "Arrived on time, standard packaging",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
+  },
+  {
+    "text": "Arrived on time, standard packaging",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
+  },
+  {
+    "text": "Arrived on time, standard packaging",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
+  },
+  {
+    "text": "Arrived on time, standard packaging",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.5352,
+    "margin": 0.6355,
+    "route": "ENGLISH",
+    "model_used": "roberta"
   }
 ]

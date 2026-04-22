@@ -22,15 +22,10 @@ from src.models.sentiment import predict as sentiment_predict
 from src.models.sentiment import predict_batch as sentiment_predict_batch
 from src.predict import (
     apply_short_text_guard,
-    apply_neutral_correction_v2,
-    compute_dual_polarity,
     compute_polarity_from_label,
-    calibrated_confidence,
-    apply_temperature_scaling,
     _apply_sarcasm_override,
-    apply_confidence_gate,
-    apply_label_lock,
-    HIGH_CONFIDENCE_LOCK,
+    compute_calibrated_confidence,
+    apply_decision_layer,
 )
 from src.sarcasm_detector import detect_sarcasm_bulk
 from src.config import LABEL_MAP
@@ -128,63 +123,42 @@ def _apply_post_processing(
     lang_code: str = "en",
     translated_text: str = "",
 ) -> dict:
-    """Apply the full post-processing pipeline to a single prediction.
+    """Apply the stabilized post-processing pipeline.
 
-    V6+Precision Pipeline order:
-      Step 3.1: Label lock (protect high-confidence labels)
-      Step 3.2: Confidence gate (filter ambiguous low-confidence)
-      Step 4:   Dual polarity (TextBlob/VADER) for English only
-      Step 5:   Short-text guard — SKIP if label locked
-      Step 6:   Neutral correction v2 — SKIP if label locked
-      Step 7:   Confidence calibration
+    V4+ Precision Pipeline (Sections 1-3+8):
+      Step 1: Margin-based decision layer (Section 2)
+      Step 2: Short-text keyword guard (safety net)
+      Step 3: Entropy-based calibrated confidence (Section 1)
+
+    REMOVED (Section 8):
+      ❌ TextBlob polarity
+      ❌ VADER compound
+      ❌ Neutral correction v2
+      ❌ Label lock / confidence gate (replaced by margin decision)
+      ❌ Polarity-based corrections
+
+    NEW RULE (Section 3): Confidence NEVER changes label.
+    Only margin decides ambiguity.
     """
     scores = sentiment["scores"]
     pred_class = sentiment["label"]
     raw_confidence = sentiment["confidence"]
 
-    # ── SECTION 4: PRECISION DECISION ORDER ─────────────────
-    # Step 3.1: Label lock — protect high-confidence predictions
-    pred_class, label_locked = apply_label_lock(pred_class, raw_confidence)
-    confidence_status = "accepted"
+    # ── Step 1: Margin-based decision (Section 2) ──────────
+    pred_class, margin, decision_type = apply_decision_layer(scores, LABEL_MAP)
 
-    # Step 3.2: Confidence gate — only if NOT locked
-    if not label_locked:
-        pred_class, raw_confidence, confidence_status = apply_confidence_gate(
-            pred_class, raw_confidence, scores
-        )
+    # ── Step 2: Short-text keyword guard (safety net) ──────
+    # Retained: keyword-based, NOT polarity-based
+    guard_result = apply_short_text_guard(text, pred_class, raw_confidence)
+    pred_class = guard_result["pred_class"]
+    guard_applied = guard_result["guard_applied"]
 
-    # Step 4: Dual polarity - English only.
-    polarity, vader_compound, subjectivity = compute_dual_polarity(text, lang_code)
-
-    # Step 5: Short-text guard — SKIP if label locked
-    if label_locked:
-        confidence = raw_confidence
-        guard_applied = None
-    else:
-        guard_result = apply_short_text_guard(text, pred_class, raw_confidence)
-        pred_class = guard_result["pred_class"]
-        confidence = guard_result["confidence"] if guard_result["guard_applied"] else raw_confidence
-        guard_applied = guard_result["guard_applied"]
-
-    # Step 6: Neutral correction v2 — SKIP if label locked
-    if label_locked:
-        neutral_corrected = False
-        correction_reason = ""
-    else:
-        nc = apply_neutral_correction_v2(pred_class, confidence, polarity, vader_compound, lang_code)
-        pred_class = nc["pred_class"]
-        neutral_corrected = nc["neutral_corrected"]
-        correction_reason = nc["correction_reason"]
-
-    # Step 7: V4 FIX 2 — No artificial confidence reduction
-    confidence = calibrated_confidence(confidence, polarity, pred_class)
-
-    # Step 8: Temperature scaling REMOVED from output confidence.
-    temperature_scaled = False
+    # ── Step 3: Entropy-based confidence (Section 1) ───────
+    confidence = compute_calibrated_confidence(scores)
 
     label_name = LABEL_MAP[pred_class]
 
-    # Derive display polarity from label + confidence.
+    # Derive display polarity from label + confidence
     display_polarity = compute_polarity_from_label(label_name, confidence)
 
     return {
@@ -194,14 +168,14 @@ def _apply_post_processing(
         "confidence": float(confidence),
         "raw_confidence": float(raw_confidence),
         "polarity": display_polarity,
-        "subjectivity": round(float(subjectivity), 4),
-        "neutral_corrected": neutral_corrected,
-        "correction_reason": correction_reason,
+        "subjectivity": 0.5,  # No TextBlob — neutral default
+        "neutral_corrected": False,
+        "correction_reason": "",
         "guard_applied": guard_applied,
-        "temperature_scaled": temperature_scaled,
+        "temperature_scaled": False,
         "scores": scores,
-        "label_locked": label_locked,
-        "confidence_status": confidence_status,
+        "margin": round(margin, 4),
+        "decision_type": decision_type,
     }
 
 
@@ -363,11 +337,27 @@ def run_pipeline(
         translated_text="",
     )
 
-    # Reduce confidence if translation flagged
+    # ── Section 4: Translation confidence isolation ────────
     confidence = pp["confidence"]
+    translation_used = model_used == "roberta" and route == "MULTILINGUAL"
+
+    if translation_used:
+        confidence = min(confidence, 0.85)
+
     if translation_flagged:
         confidence = round(confidence * 0.85, 4)
         confidence = max(confidence, 0.40)
+
+    # ── Section 7: Pipeline trace (mandatory debug) ──────
+    pipeline_trace = {
+        "route": route,
+        "model_used": model_used,
+        "translation_used": translation_used,
+        "translation_valid": translation_valid,
+        "confidence": confidence,
+        "margin": pp.get("margin", 0.0),
+        "decision": pp.get("decision_type", "unknown"),
+    }
 
     # Sarcasm (optional) + override
     sarcasm_result = None
@@ -384,7 +374,6 @@ def run_pipeline(
         sarcasm_confidence_val = sarcasm_result.get("confidence", 0.0)
         sarcasm_reason = sarcasm_result.get("reason", "")
 
-        # Apply sarcasm → sentiment override
         override = _apply_sarcasm_override(
             pp["label"], confidence, sarcasm_detected, sarcasm_confidence_val
         )
@@ -394,7 +383,6 @@ def run_pipeline(
             pp["sentiment"] = LABEL_MAP[override["pred_class"]]
             confidence = override["confidence"]
             sarcasm_applied = True
-            # Recalculate polarity after sarcasm label flip
             pp["polarity"] = compute_polarity_from_label(
                 LABEL_MAP[override["pred_class"]], confidence
             )
@@ -408,14 +396,6 @@ def run_pipeline(
             aspects = analyze_aspects(final_text)
         except Exception as e:
             logger.warning("Aspect analysis error: %s", e)
-
-    # ── Section 5: Pipeline trace ───────────────────────────
-    pipeline_trace = {
-        "route": route,
-        "model_used": model_used,
-        "translation_used": model_used == "roberta" and route == "MULTILINGUAL",
-        "translation_valid": translation_valid,
-    }
 
     # Structured logging
     logger.info(

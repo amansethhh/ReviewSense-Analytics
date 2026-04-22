@@ -85,56 +85,62 @@ CALIBRATION_TEMPERATURE = 1.8
 CONFIDENCE_UNCERTAIN_THRESHOLD = 0.60  # Kept for API compat — never overrides label
 
 # ═══════════════════════════════════════════════════════════════
-# SECTION 1 — Confidence Gate (precision decision layer)
+# SECTION 1 — Entropy-based confidence calibration
 # ═══════════════════════════════════════════════════════════════
 
-MIN_CONFIDENCE = 0.55
-LOW_CONFIDENCE_NEUTRAL_MARGIN = 0.10
+def compute_calibrated_confidence(probs: list) -> float:
+    """Section 1: Compute calibrated confidence using entropy.
+
+    Raw softmax confidence is unreliable — a model can output 0.45
+    for all 3 classes and still pick one via argmax.
+
+    Entropy measures true uncertainty:
+      - Low entropy = model is sure (one class dominates)
+      - High entropy = model is confused (uniform distribution)
+
+    Returns calibrated confidence in [0, 1].
+    """
+    entropy = -sum(p * math.log(p + 1e-9) for p in probs)
+    max_entropy = math.log(len(probs))
+    normalized_entropy = entropy / max_entropy
+    confidence = 1 - normalized_entropy
+    return round(confidence, 4)
 
 
-def apply_confidence_gate(label: int, confidence: float, probs: list) -> tuple:
-    """Section 1: Gate low-confidence ambiguous predictions to neutral.
+# ═══════════════════════════════════════════════════════════════
+# SECTION 2 — Margin-based decision layer
+# ═══════════════════════════════════════════════════════════════
+
+DECISION_MARGIN_THRESHOLD = 0.06
+
+
+def apply_decision_layer(probs: list, label_map: dict) -> tuple:
+    """Section 2: Margin-based decision for ambiguous predictions.
+
+    Instead of blindly trusting argmax, check the margin between
+    the top-2 predictions. If the margin is too small, the model
+    is genuinely ambiguous → route to neutral.
 
     Args:
-        label: predicted class (0=neg, 1=neu, 2=pos)
-        confidence: model confidence (0-1)
         probs: [neg, neu, pos] softmax probabilities
+        label_map: {0: 'Negative', 1: 'Neutral', 2: 'Positive'}
 
     Returns:
-        (label, confidence, status) where status is:
-        - "accepted": prediction passed the gate
-        - "low_confidence_ambiguous": gated to neutral
+        (pred_class: int, margin: float, decision_type: str)
     """
-    if confidence < MIN_CONFIDENCE:
-        sorted_probs = sorted(probs, reverse=True)
-        margin = sorted_probs[0] - sorted_probs[1]
+    sorted_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)
+    top1 = probs[sorted_indices[0]]
+    top2 = probs[sorted_indices[1]]
+    margin = top1 - top2
 
-        if margin < LOW_CONFIDENCE_NEUTRAL_MARGIN:
-            logger.info(
-                "[CONFIDENCE GATE] conf=%.3f margin=%.3f → neutral",
-                confidence, margin,
-            )
-            return 1, confidence, "low_confidence_ambiguous"
+    if margin < DECISION_MARGIN_THRESHOLD:
+        logger.info(
+            "[DECISION] margin=%.4f < %.2f → neutral (ambiguous)",
+            margin, DECISION_MARGIN_THRESHOLD,
+        )
+        return 1, margin, "ambiguous"
 
-    return label, confidence, "accepted"
-
-
-# ═══════════════════════════════════════════════════════════════
-# SECTION 2 — Label Lock (prevent wrong flips)
-# ═══════════════════════════════════════════════════════════════
-
-HIGH_CONFIDENCE_LOCK = 0.75
-
-
-def apply_label_lock(label: int, confidence: float) -> tuple:
-    """Section 2: Lock high-confidence labels to prevent downstream overrides.
-
-    Returns:
-        (label, locked) where locked=True means skip all overrides.
-    """
-    if confidence >= HIGH_CONFIDENCE_LOCK:
-        return label, True
-    return label, False
+    return sorted_indices[0], margin, "confident"
 
 # ═══════════════════════════════════════════════════════════════
 # SECTION 1 — Input routing (hybrid architecture)
