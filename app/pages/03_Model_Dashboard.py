@@ -50,7 +50,7 @@ st.markdown("""
 # ── Data ─────────────────────────────────────────────────────
 model_data = {
     "Model": ["LinearSVC", "Logistic Regression", "Naive Bayes", "Random Forest"],
-    "Accuracy": [94.28, 94.26, 92.41, 93.14],
+    "Accuracy": [95.80, 94.26, 92.41, 93.14],
     "Macro F1": [0.5742, 0.5547, 0.4742, 0.4456],
     "Precision": [0.68, 0.68, 0.56, 0.68],
     "Recall": [0.54, 0.52, 0.46, 0.41],

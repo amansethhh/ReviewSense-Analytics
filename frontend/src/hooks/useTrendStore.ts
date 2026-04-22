@@ -90,14 +90,13 @@ function writePoint(point: Omit<TrendPoint, 'month' | 'ts' | 'jobIndex'>): Trend
     ...point,
   }
 
-  // Deduplicate: don't push if last point has identical sentiment + total
+  // Only deduplicate if exact same job within 5 seconds (accidental double-push)
   const last = existing[existing.length - 1]
   if (last
     && last.positive === newPoint.positive
     && last.negative === newPoint.negative
     && last.neutral === newPoint.neutral
     && last.total === newPoint.total
-    // Within 5 seconds = same job, don't duplicate
     && (new Date(newPoint.ts).getTime() - new Date(last.ts).getTime()) < 5000
   ) {
     return existing

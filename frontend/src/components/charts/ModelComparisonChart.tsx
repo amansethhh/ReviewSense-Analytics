@@ -31,7 +31,7 @@ function RadiusTickLabels(props: Record<string, unknown>) {
   const cx = props.cx as number | undefined
   const cy = props.cy as number | undefined
   const outerRadius = props.outerRadius as number | undefined
-  if (!cx || !cy || !outerRadius) return null
+  if (!cx || !cy || !outerRadius || outerRadius < 10) return null
 
   return (
     <g>

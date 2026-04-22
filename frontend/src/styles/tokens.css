@@ -30,7 +30,7 @@
   --color-warning:         #f59e0b;
   --color-sarcasm:         #a78bfa;
   --color-sarcasm-dim:     rgba(167,139,250,0.12);
-  --glass-bg:              rgba(18,24,39,0.75);
+  --glass-bg:              #121827;
   --glass-border:          rgba(255,255,255,0.06);
   --glass-shadow:          0 1px 0 rgba(255,255,255,0.05) inset,
                            0 0 0 1px rgba(255,255,255,0.04),

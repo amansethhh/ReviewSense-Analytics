@@ -1,5 +1,10 @@
 """Unified inference pipeline for ReviewSense Analytics.
 
+V5 ARCHITECTURE:
+  Translation is USED for inference ONLY when validated.
+  If translation fails trust check → fallback to XLM-R on original text.
+  Translation is NOT display-only — it routes inference for non-Latin languages.
+
 Integrates all 7 Master Prompt fixes + 10 Add-On patches:
 - Neutral correction, confidence calibration, temperature scaling
 - Short-text guard, translation validation, Hinglish detection
@@ -122,13 +127,15 @@ def _apply_post_processing(
     sentiment: dict,
     lang_code: str = "en",
     translated_text: str = "",
+    route: str = "ENGLISH",
+    model_used: str = "roberta",
 ) -> dict:
     """Apply the stabilized post-processing pipeline.
 
-    V4+ Precision Pipeline (Sections 1-3+8):
-      Step 1: Margin-based decision layer (Section 2)
+    V5 Precision Pipeline:
+      Step 1: Dynamic margin-based decision layer (route-aware)
       Step 2: Short-text keyword guard (safety net)
-      Step 3: Entropy-based calibrated confidence (Section 1)
+      Step 3: Entropy-based calibrated confidence
 
     REMOVED (Section 8):
       ❌ TextBlob polarity
@@ -137,15 +144,17 @@ def _apply_post_processing(
       ❌ Label lock / confidence gate (replaced by margin decision)
       ❌ Polarity-based corrections
 
-    NEW RULE (Section 3): Confidence NEVER changes label.
-    Only margin decides ambiguity.
+    RULE: After this function, NO downstream logic may modify
+    label, confidence, or margin. This is FINAL.
     """
     scores = sentiment["scores"]
     pred_class = sentiment["label"]
     raw_confidence = sentiment["confidence"]
 
-    # ── Step 1: Margin-based decision (Section 2) ──────────
-    pred_class, margin, decision_type = apply_decision_layer(scores, LABEL_MAP)
+    # ── Step 1: Dynamic margin-based decision (V5) ──────────
+    pred_class, margin, decision_type = apply_decision_layer(
+        scores, LABEL_MAP, route=route, model_used=model_used,
+    )
 
     # ── Step 2: Short-text keyword guard (safety net) ──────
     # Retained: keyword-based, NOT polarity-based
@@ -153,7 +162,7 @@ def _apply_post_processing(
     pred_class = guard_result["pred_class"]
     guard_applied = guard_result["guard_applied"]
 
-    # ── Step 3: Entropy-based confidence (Section 1) ───────
+    # ── Step 3: Entropy-based confidence ─────────────────
     confidence = compute_calibrated_confidence(scores)
 
     label_name = LABEL_MAP[pred_class]
@@ -194,6 +203,31 @@ def preload_models():
         "translation_loaded": True,   # V4: NLLB is lazy-loaded via transformers
     }
 
+
+
+def validate_route(route: str, lang_code: str, model_used: str) -> bool:
+    """V5 FIX 6: Strict routing validation.
+
+    Checks that the pipeline route matches the model used.
+    Logs a warning on mismatch but does NOT crash — allows graceful fallback.
+
+    Returns True if route is valid, False on mismatch.
+    """
+    if route == "HINGLISH" and "roberta" not in model_used:
+        logger.warning(
+            "[ROUTE MISMATCH] Hinglish should use RoBERTa, got %s",
+            model_used,
+        )
+        return False
+
+    if route == "ENGLISH" and "roberta" not in model_used:
+        logger.warning(
+            "[ROUTE MISMATCH] English should use RoBERTa, got %s",
+            model_used,
+        )
+        return False
+
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -330,14 +364,16 @@ def run_pipeline(
     sentiment = sentiment_predict(final_text, lang_code=model_lang)
     model_used = sentiment.get("model_used", "unknown")
 
-    # ── Apply full post-processing pipeline ─────────────────
+    # ── Apply full post-processing pipeline (V5: route-aware) ─
     pp = _apply_post_processing(
         final_text, sentiment,
         lang_code=model_lang,
         translated_text="",
+        route=route,
+        model_used=model_used,
     )
 
-    # ── Section 4: Translation confidence isolation ────────
+    # ── Section 4: Translation confidence isolation ──────
     confidence = pp["confidence"]
     translation_used = model_used == "roberta" and route == "MULTILINGUAL"
 
@@ -348,7 +384,10 @@ def run_pipeline(
         confidence = round(confidence * 0.85, 4)
         confidence = max(confidence, 0.40)
 
-    # ── Section 7: Pipeline trace (mandatory debug) ──────
+    # ── V5 FIX 6: Validate route correctness ─────────────
+    route_valid = validate_route(route, lang_code, model_used)
+
+    # ── Section 7: Pipeline trace (mandatory debug) ─────
     pipeline_trace = {
         "route": route,
         "model_used": model_used,
@@ -357,6 +396,7 @@ def run_pipeline(
         "confidence": confidence,
         "margin": pp.get("margin", 0.0),
         "decision": pp.get("decision_type", "unknown"),
+        "route_valid": route_valid,
     }
 
     # Sarcasm (optional) + override

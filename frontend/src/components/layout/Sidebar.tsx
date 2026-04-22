@@ -111,9 +111,9 @@ export function Sidebar() {
       </div>
 
 
-      {/* Model Configuration */}
+      {/* Pipeline Configuration */}
       <div className="sidebar__config">
-        <span className="sidebar__section-label">Model Configuration</span>
+        <span className="sidebar__section-label">Pipeline Configuration</span>
 
         <div>
           <div className="sidebar__config-label">Active Model</div>
@@ -123,18 +123,26 @@ export function Sidebar() {
               value={activeModel}
               onChange={e => setActiveModel(e.target.value)}
             >
-              <option value="best">Best</option>
-              <option value="linearsvc">Linear SVC</option>
-              <option value="lr">Logistic Regression</option>
-              <option value="nb">Naive Bayes</option>
-              <option value="rf">Random Forest</option>
+              <option value="best">Auto (Hybrid Pipeline)</option>
+              <option value="linearsvc">Linear SVC (Benchmark)</option>
+              <option value="lr">Logistic Regression (Benchmark)</option>
+              <option value="nb">Naive Bayes (Benchmark)</option>
+              <option value="rf">Random Forest (Benchmark)</option>
             </select>
           </NeuralInputWrap>
+          {/* Display-only note */}
+          <div style={{
+            fontSize: '9px', color: 'var(--color-text-faint, #555)',
+            textAlign: 'center', marginTop: '4px', lineHeight: 1.3,
+            opacity: 0.7,
+          }}>
+            Display only — predictions use Hybrid Transformer Pipeline.
+          </div>
         </div>
 
         <div>
           <div className="sidebar__config-label" style={{ justifyContent: 'center', textAlign: 'center', display: 'block' }}>
-            Confidence Threshold
+            Decision Sensitivity
           </div>
           <div className="conf-radio">
             <label className="conf-radio__label">
@@ -144,7 +152,7 @@ export function Sidebar() {
                 onChange={() => setConfidenceThreshold(0.60)}
               />
               <span className="conf-radio__name">Low</span>
-              <span className="conf-radio__val">0.60</span>
+              <span className="conf-radio__val">0.04</span>
             </label>
             <label className="conf-radio__label">
               <input
@@ -153,7 +161,7 @@ export function Sidebar() {
                 onChange={() => setConfidenceThreshold(0.75)}
               />
               <span className="conf-radio__name">Mid</span>
-              <span className="conf-radio__val">0.75</span>
+              <span className="conf-radio__val">0.06</span>
             </label>
             <label className="conf-radio__label">
               <input
@@ -162,7 +170,7 @@ export function Sidebar() {
                 onChange={() => setConfidenceThreshold(0.85)}
               />
               <span className="conf-radio__name">High</span>
-              <span className="conf-radio__val">0.85</span>
+              <span className="conf-radio__val">0.08</span>
             </label>
             <label className="conf-radio__label">
               <input
@@ -171,27 +179,34 @@ export function Sidebar() {
                 onChange={() => setConfidenceThreshold(0.95)}
               />
               <span className="conf-radio__name">Max</span>
-              <span className="conf-radio__val">0.95</span>
+              <span className="conf-radio__val">0.10</span>
             </label>
             <span className="conf-radio__selection" aria-hidden="true" />
           </div>
         </div>
 
         <div>
-          <div className="sidebar__config-label">Domain Filter</div>
+          <div className="sidebar__config-label">Content Type (Optional)</div>
           <NeuralInputWrap>
             <select
               className="sidebar__config-select"
               value={domainFilter}
               onChange={e => setDomainFilter(e.target.value)}
             >
-              <option>All Domains</option>
-              <option>Electronics</option>
-              <option>Food &amp; Beverage</option>
-              <option>Hospitality</option>
-              <option>E-commerce</option>
+              <option>All</option>
+              <option>Product Review</option>
+              <option>Food Review</option>
+              <option>Movie Review</option>
+              <option>E-commerce Experience</option>
             </select>
           </NeuralInputWrap>
+          <div style={{
+            fontSize: '9px', color: 'var(--color-text-faint, #555)',
+            textAlign: 'center', marginTop: '4px', lineHeight: 1.3,
+            opacity: 0.7,
+          }}>
+            Does not affect sentiment prediction.
+          </div>
         </div>
       </div>
 

@@ -235,8 +235,15 @@ function Icon3DExport({ size = 22 }: { size?: number }) {
 /* ── Capitalize helper for Model & Domain labels (#16) ── */
 function capitalize(s: string): string {
   if (s === 'all') return 'All'
-  if (s === 'best') return 'Best'
-  if (s === 'LinearSVC') return 'Linear SVC'
+  if (s === 'best') return 'Auto (Hybrid Pipeline)'
+  if (s === 'LinearSVC') return 'Linear SVC (Benchmark)'
+  if (s === 'LogisticRegression') return 'Logistic Regression (Benchmark)'
+  if (s === 'NaiveBayes') return 'Naive Bayes (Benchmark)'
+  if (s === 'RandomForest') return 'Random Forest (Benchmark)'
+  if (s === 'food') return 'Food Review'
+  if (s === 'ecom') return 'E-commerce Experience'
+  if (s === 'movie') return 'Movie Review'
+  if (s === 'product') return 'Product Review'
   return s
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/^./, c => c.toUpperCase())
@@ -509,6 +516,7 @@ td{padding:9px 10px;text-align:center;border-bottom:1px solid rgba(33,38,45,.6);
   <div class="a-card">
     <div class="section-head"><div class="section-head-box">${LI.details}<h2>Analysis Details</h2></div></div>
     <div style="font-size:12px;line-height:2;text-align:center">
+      <div>Pipeline: <strong style="color:#00d9ff">Hybrid Transformer (RoBERTa + XLM-R + NLLB)</strong></div>
       <div>Model: <strong>${data.model_used}</strong></div>
       <div>Processing: <strong>${data.processing_ms}ms</strong></div>
       ${data.sarcasm ? `<div>Sarcasm: <strong style="color:${data.sarcasm.detected ? '#f43f5e' : '#22c55e'}">${data.sarcasm.detected ? 'Detected' : 'Not Detected'}</strong></div>` : ''}
@@ -618,11 +626,10 @@ ${data.sarcasm ? `
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: '10px',
                 padding: '6px 16px',
-                background: 'linear-gradient(135deg, rgba(0,217,255,0.07), rgba(0,255,136,0.05))',
+                background: '#121827',
                 border: '1px solid rgba(0,217,255,0.22)',
                 borderRadius: '9999px',
                 boxShadow: '0 0 14px rgba(0,217,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06)',
-                backdropFilter: 'blur(8px)',
                 animation: 'detect-badge-shimmer 3s ease-in-out infinite',
               }}>
                 {/* 3D Globe icon */}
@@ -675,21 +682,24 @@ ${data.sarcasm ? `
               <NeuralSelect id="model-select" value={model}
                       onChange={e => setModel(e.target.value as ModelChoice)}
                       options={MODELS.map(m => ({ label: capitalize(m), value: m }))} />
+              <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — predictions use Hybrid Transformer Pipeline.</div>
             </div>
             <div className="form-group" style={{ textAlign: 'center' }}>
-              <label className="form-label" htmlFor="domain-select" style={{ display: 'block', textAlign: 'center' }}>Domain</label>
+              <label className="form-label" htmlFor="domain-select" style={{ display: 'block', textAlign: 'center' }}>Content Type (Optional)</label>
               <NeuralSelect id="domain-select" value={domain}
                       onChange={e => setDomain(e.target.value as DomainChoice)}
                       options={DOMAINS.map(d => ({ label: capitalize(d), value: d }))} />
+              <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Does not affect sentiment prediction.</div>
             </div>
             <div className="form-group" style={{ textAlign: 'center' }}>
-              <label className="form-label" htmlFor="star-select" style={{ display: 'block', textAlign: 'center' }}>Star Rating</label>
+              <label className="form-label" htmlFor="star-select" style={{ display: 'block', textAlign: 'center' }}>User Rating (Optional)</label>
               <NeuralSelect id="star-select" value={starRating ?? ''}
                       onChange={e => setStarRating(e.target.value ? Number(e.target.value) : null)}
                       options={[
                         { label: 'None', value: '' },
                         ...[1,2,3,4,5].map(n => ({ label: '★'.repeat(n), value: n }))
                       ]} />
+              <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Helps validate sentiment (does not affect prediction).</div>
             </div>
           </div>
 
@@ -835,6 +845,39 @@ ${data.sarcasm ? `
                   {i < arr.length - 1 && <span className="pipeline-arrow">→</span>}
                 </span>
               ))}
+            </div>
+            {/* Pipeline Info Strip */}
+            <div style={{
+              display: 'flex', justifyContent: 'center', gap: 'var(--space-4)',
+              marginTop: 'var(--space-3)', paddingTop: 'var(--space-3)',
+              borderTop: '1px solid rgba(255,255,255,0.04)',
+              fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: 'var(--color-text-faint)' }}>Pipeline Type:</span>
+                <span style={{ color: '#00d9ff', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>Hybrid Transformer Pipeline</span>
+              </div>
+              <span style={{ color: 'rgba(255,255,255,0.1)' }}>·</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: 'var(--color-text-faint)' }}>Model Used:</span>
+                <span style={{ color: '#2dd4bf', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{data.model_used}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Polarity Gauge — after Processing Pipeline ── */}
+          <div className="card animate-in">
+            <SectionHeader icon={<Icon3DGauge size={22} />} title="Polarity Gauge" subtitle="Sentiment polarity visualization" />
+            <div className="polarity-gauge" style={{ textAlign: 'center' }}>
+              <div className="polarity-gauge__track">
+                <div className="polarity-gauge__marker"
+                     style={{ left: `${((data.polarity + 1) / 2) * 100}%` }} />
+              </div>
+              <div className="polarity-gauge__labels" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+                <span style={{ color: '#f43f5e', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Negative</span>
+                <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Neutral</span>
+                <span style={{ color: '#22c55e', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Positive</span>
+              </div>
             </div>
           </div>
 
@@ -1010,21 +1053,7 @@ ${data.sarcasm ? `
             </div>
           )}
 
-          {/* ── SECTION 9 — Polarity Gauge (#14) ── */}
-          <div className="card animate-in">
-            <SectionHeader icon={<Icon3DGauge size={22} />} title="Polarity Gauge" subtitle="Sentiment polarity visualization" />
-            <div className="polarity-gauge" style={{ textAlign: 'center' }}>
-              <div className="polarity-gauge__track">
-                <div className="polarity-gauge__marker"
-                     style={{ left: `${((data.polarity + 1) / 2) * 100}%` }} />
-              </div>
-              <div className="polarity-gauge__labels" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
-                <span style={{ color: '#f43f5e', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Negative</span>
-                <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Neutral</span>
-                <span style={{ color: '#22c55e', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Positive</span>
-              </div>
-            </div>
-          </div>
+          {/* Polarity Gauge moved to after Processing Pipeline */}
 
           {/* ── SECTION 10 — Export Results (#15) ── */}
           <div className="card animate-in card--animated">

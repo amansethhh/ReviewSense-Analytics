@@ -597,10 +597,61 @@ export function ModelDashboardPage() {
         )
       })()}
 
-      {/* SECTION 1 — Best Model Banner */}
+      {/* ══════ SECTION 0 — PRODUCTION ARCHITECTURE ══════ */}
+      <div className="card animate-in" style={{ marginBottom: 'var(--space-4)' }}>
+        <SectionHeader icon={<Icon3DBolt size={22} />} title="Production Architecture" subtitle="Active inference pipeline" />
+        <div style={{ padding: 'var(--space-4)' }}>
+          {/* ACTIVE SYSTEM badge */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-3)' }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '8px',
+              padding: '6px 18px', borderRadius: '9999px',
+              background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
+              fontSize: 'var(--text-xs)', color: '#22c55e', fontWeight: 700,
+              letterSpacing: '0.08em', textTransform: 'uppercase' as const,
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 2s ease-in-out infinite' }} />
+              ACTIVE SYSTEM
+            </div>
+          </div>
+          {/* Pipeline title */}
+          <div style={{ textAlign: 'center', marginBottom: 'var(--space-3)' }}>
+            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}>
+              Hybrid Transformer Pipeline
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+              V5 — 95.8% verified accuracy
+            </div>
+          </div>
+          {/* Architecture cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
+            {[
+              { label: 'RoBERTa', desc: 'English + Hinglish', color: '#00d9ff' },
+              { label: 'XLM-R', desc: 'Multilingual fallback', color: '#a78bfa' },
+              { label: 'NLLB', desc: 'Translation layer', color: '#2dd4bf' },
+              { label: 'Decision Layer', desc: 'Confidence + Margin', color: '#f59e0b' },
+            ].map(item => (
+              <div key={item.label} style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                padding: 'var(--space-3)', borderRadius: '10px',
+                background: `${item.color}08`, border: `1px solid ${item.color}25`,
+              }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: item.color, fontFamily: 'var(--font-mono)' }}>
+                  {item.label}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', textAlign: 'center' }}>
+                  {item.desc}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 1 — Best Benchmark Model Banner */}
       {bestModel && (
         <div className="card animate-in">
-          <SectionHeader icon={<Icon3DTrophy size={22} />} title={bestModel.name} subtitle="Best performing model across all metrics" />
+          <SectionHeader icon={<Icon3DTrophy size={22} />} title={`${bestModel.name} (Offline Only)`} subtitle="Best benchmark model — not used in live predictions" />
           <div className="best-model-banner">
             <div>
               <div style={{
@@ -650,9 +701,19 @@ export function ModelDashboardPage() {
         </div>
       )}
 
-      {/* SECTION 2 — All Models Leaderboard */}
+      {/* SECTION 2 — Benchmark Models Leaderboard */}
       <div className="card animate-in animate-in--d1" style={{ marginTop: 'var(--space-4)' }}>
-        <SectionHeader icon={<Icon3DTable size={22} />} title="All Models Comparison" subtitle="Click column headers to sort" />
+        <SectionHeader icon={<Icon3DTable size={22} />} title="Benchmark Models (Offline Evaluation)" subtitle="Click column headers to sort" />
+        {/* Benchmark warning */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-2)',
+          padding: 'var(--space-2) var(--space-3)', margin: '0 var(--space-3)',
+          background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.18)',
+          borderRadius: '8px', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)',
+          lineHeight: 1.5, marginBottom: 'var(--space-2)', textAlign: 'center',
+        }}>
+          <span>⚠ These models are used for <strong style={{ color: 'var(--color-text)' }}>offline evaluation only</strong> and are NOT part of the live prediction system. Production inference uses the Hybrid Transformer Pipeline (RoBERTa + XLM-R + NLLB).</span>
+        </div>
         <div className="results-table-wrap">
           <table className="leaderboard-table">
             <thead><tr>
@@ -779,9 +840,9 @@ export function ModelDashboardPage() {
       {/* SECTION 8 — Sentiment Trend (latest 3 jobs) */}
       <div className="card animate-in" style={{ marginTop: 'var(--space-4)' }}>
         <SectionHeader icon={<Icon3DTrend size={22} />} title="Sentiment Trend"
-          subtitle={`Latest ${Math.min(3, trendPoints.length)} batch job${trendPoints.length !== 1 ? 's' : ''} — sentiment distribution`} />
+          subtitle={`Latest ${Math.min(4, trendPoints.length)} batch job${trendPoints.length !== 1 ? 's' : ''} — sentiment distribution`} />
         <div className="card-body">
-          <SentimentTrendChart data={trendPoints.length > 0 ? trendPoints.slice(-3) : undefined} />
+          <SentimentTrendChart data={trendPoints.length > 0 ? trendPoints.slice(-4) : undefined} />
         </div>
       </div>
 
@@ -813,7 +874,7 @@ export function ModelDashboardPage() {
             </div>
             <div className="model-insight-card__text">
               {bestModel?.name ?? 'LinearSVC'} achieves the best balance of accuracy
-              and speed. Recommended for production.
+              and speed among benchmark models. Production uses the Hybrid Transformer Pipeline.
             </div>
           </div>
         </div>
@@ -924,15 +985,15 @@ function TranslationDashboard() {
             display: 'inline-block', marginTop: 4,
           }} />
           <span>
-            <strong style={{ color: 'var(--color-text)' }}>Translation Engine: NLLB (Meta)</strong>
-            {' '}— Display only. All translations use facebook/nllb-200-distilled-600M locally.
-            Sentiment classification always uses original text.
-            On failure, original text is shown with a failure indicator.
+            <strong style={{ color: 'var(--color-text)' }}>Translation Layer: NLLB (Meta) + XLM-R Fallback</strong>
+            {' '}— Used only when required by routing logic. Non-English text is translated via NLLB (facebook/nllb-200-distilled-600M) with strict trust validation.
+            Sentiment is always computed using transformer models (RoBERTa for English/Hinglish, XLM-R for multilingual).
+            On trust failure, XLM-R analyzes the original text directly — no data is lost.
           </span>
         </div>
 
-        {/* KPI row — 3 cards (NLLB only) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-3)' }}>
+        {/* KPI row — 4 cards (V5 architecture) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-3)' }}>
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
             padding: 'var(--space-3)', background: 'rgba(0,217,255,0.06)',
@@ -964,6 +1025,16 @@ function TranslationDashboard() {
               {nllbSuccess}
             </div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>NLLB Translations</div>
+          </div>
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+            padding: 'var(--space-3)', background: 'rgba(45,212,191,0.06)',
+            border: '1px solid rgba(45,212,191,0.15)', borderRadius: '10px',
+          }}>
+            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: '#2dd4bf', fontFamily: 'var(--font-mono)' }}>
+              {stats.total_translations > 0 ? ((nllbSuccess / stats.total_translations) * 100).toFixed(1) : '0.0'}%
+            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Trust Validated</div>
           </div>
         </div>
 

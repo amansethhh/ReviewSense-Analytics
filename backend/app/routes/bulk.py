@@ -392,9 +392,7 @@ def _process_bulk_job(
         )
 
         # 3A: Prepare texts for batch inference
-        # CRITICAL: Classify on ORIGINAL text, not translated.
-        # Translation is for display only. The XLM model handles
-        # non-Latin scripts natively.
+        # V5: Translation feeds inference when trust-validated. Fallback to XLM-R on failure.
         predict_texts: list[str] = []
         predict_lang_codes: list[str] = []
         for idx in range(total):
@@ -483,8 +481,12 @@ def _process_bulk_job(
             if not scores:
                 scores = [1/3, 1/3, 1/3]  # fallback if missing
             
-            # V4+ STABILITY LOCK: Margin-based decision layer
-            pred_class, margin, decision_type = apply_decision_layer(scores, LABEL_MAP)
+            # V5: Dynamic margin-based decision layer
+            _model_key = pred.get("model_used", "xlm-r" if lang_code != "en" else "roberta")
+            _route = "ENGLISH" if lang_code == "en" else "MULTILINGUAL"
+            pred_class, margin, decision_type = apply_decision_layer(
+                scores, LABEL_MAP, route=_route, model_used=_model_key,
+            )
 
             guard_result = apply_short_text_guard(
                 original_text, pred_class, raw_conf
@@ -546,7 +548,7 @@ def _process_bulk_job(
                 sentiment_raw = "neutral"
 
             # RULE 3: analysis_input_source always "original"
-            # Translation is DISPLAY ONLY — never affects classification
+            # V5: Translation used for RoBERTa inference when trust-validated
             analysis_input_source = "original"
 
             row_result_dict = {

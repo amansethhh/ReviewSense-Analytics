@@ -5,7 +5,7 @@ V4: Single translation engine. No fallbacks, no retries to
 external services. NLLB runs locally.
 
 If NLLB fails → return original text with status "failed".
-Translation is for DISPLAY ONLY — never affects sentiment.
+V5: Translation feeds inference when trust-validated. Fallback to XLM-R on failure.
 """
 
 import logging

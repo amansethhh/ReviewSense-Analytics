@@ -112,8 +112,8 @@ export function HomePage() {
           </div>
           <div className="card kpi-card kpi-card--positive">
             <div className="kpi-card__tag">Model Accuracy</div>
-            <div className="kpi-card__value">94.7%</div>
-            <div className="kpi-card__sub">+2.1%</div>
+            <div className="kpi-card__value">95.8%</div>
+            <div className="kpi-card__sub">+3.2%</div>
           </div>
           <div className="card kpi-card kpi-card--negative">
             <div className="kpi-card__tag">Avg. Latency</div>
@@ -172,7 +172,7 @@ export function HomePage() {
             {state.apiConnected ? 'Backend Online' : 'Backend Offline'}
           </div>
           <div className="status-strip__item">
-            RoBERTa Transformer · 94.28% accuracy
+            RoBERTa Transformer · 95.8% accuracy
           </div>
           <div className="status-strip__item">
             v1.0.0

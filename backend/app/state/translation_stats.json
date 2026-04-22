@@ -2,7 +2,7 @@
   "translation_counts": {
     "nllb_success": 24,
     "failed": 1,
-    "skipped_english": 55,
+    "skipped_english": 57,
     "helsinki_success": 75,
     "google_success": 0,
     "failed_raw_predict_success": 12
@@ -13,7 +13,7 @@
       "failed": 0
     },
     "en": {
-      "count": 62,
+      "count": 64,
       "failed": 0
     },
     "so": {

@@ -27,8 +27,15 @@ const STOPWORDS = new Set(['a','the','is','was','and','or','but','in','on','at',
 /* ── Capitalize helper for Model & Domain labels ── */
 function capitalize(s: string): string {
   if (s === 'all') return 'All'
-  if (s === 'best') return 'Best'
-  if (s === 'LinearSVC') return 'Linear SVC'
+  if (s === 'best') return 'Auto (Hybrid Pipeline)'
+  if (s === 'LinearSVC') return 'Linear SVC (Benchmark)'
+  if (s === 'LogisticRegression') return 'Logistic Regression (Benchmark)'
+  if (s === 'NaiveBayes') return 'Naive Bayes (Benchmark)'
+  if (s === 'RandomForest') return 'Random Forest (Benchmark)'
+  if (s === 'food') return 'Food Review'
+  if (s === 'ecom') return 'E-commerce Experience'
+  if (s === 'movie') return 'Movie Review'
+  if (s === 'product') return 'Product Review'
   return s
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/^./, c => c.toUpperCase())
@@ -908,11 +915,10 @@ export function LanguageAnalysisPage() {
                   <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: '10px',
                     padding: '6px 16px',
-                    background: 'linear-gradient(135deg, rgba(0,217,255,0.07), rgba(0,255,136,0.05))',
+                    background: '#121827',
                     border: '1px solid rgba(0,217,255,0.22)',
                     borderRadius: '9999px',
                     boxShadow: '0 0 14px rgba(0,217,255,0.12), inset 0 1px 0 rgba(255,255,255,0.06)',
-                    backdropFilter: 'blur(8px)',
                     animation: 'detect-badge-shimmer 3s ease-in-out infinite',
                   }}>
                     {/* 3D Globe icon */}
@@ -965,28 +971,31 @@ export function LanguageAnalysisPage() {
                 </div>
               </div>
 
-              {/* Model / Domain / Star Rating — same as LivePredictionPage */}
+              {/* Model / Domain / User Rating — same as LivePredictionPage */}
               <div className="form-row" style={{ marginTop: 'var(--space-4)' }}>
                 <div className="form-group" style={{ textAlign: 'center' }}>
                   <label className="form-label" htmlFor="lang-model-select" style={{ display: 'block', textAlign: 'center' }}>Model</label>
                   <NeuralSelect id="lang-model-select" value={model}
                     onChange={e => setModel(e.target.value as ModelChoice)}
                     options={MODELS.map(m => ({ label: capitalize(m), value: m }))} />
+                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — predictions use Hybrid Transformer Pipeline.</div>
                 </div>
                 <div className="form-group" style={{ textAlign: 'center' }}>
-                  <label className="form-label" htmlFor="lang-domain-select" style={{ display: 'block', textAlign: 'center' }}>Domain</label>
+                  <label className="form-label" htmlFor="lang-domain-select" style={{ display: 'block', textAlign: 'center' }}>Content Type (Optional)</label>
                   <NeuralSelect id="lang-domain-select" value={domain}
                     onChange={e => setDomain(e.target.value as DomainChoice)}
                     options={DOMAINS.map(d => ({ label: capitalize(d), value: d }))} />
+                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Does not affect sentiment prediction.</div>
                 </div>
                 <div className="form-group" style={{ textAlign: 'center' }}>
-                  <label className="form-label" htmlFor="lang-star-select" style={{ display: 'block', textAlign: 'center' }}>Star Rating</label>
+                  <label className="form-label" htmlFor="lang-star-select" style={{ display: 'block', textAlign: 'center' }}>User Rating (Optional)</label>
                   <NeuralSelect id="lang-star-select" value={starRating ?? ''}
                     onChange={e => setStarRating(e.target.value ? Number(e.target.value) : null)}
                     options={[
                       { label: 'None', value: '' },
                       ...[1,2,3,4,5].map(n => ({ label: '★'.repeat(n), value: n }))
                     ]} />
+                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Helps validate sentiment (does not affect prediction).</div>
                 </div>
               </div>
 
@@ -1172,6 +1181,46 @@ export function LanguageAnalysisPage() {
                       {i < arr.length - 1 && <span className="pipeline-arrow">→</span>}
                     </span>
                   ))}
+                </div>
+              </div>
+
+              {/* Routing Info */}
+              <div style={{
+                display: 'flex', justifyContent: 'center', gap: 'var(--space-4)',
+                margin: 'var(--space-3) 0 0', padding: 'var(--space-3)',
+                background: 'rgba(0,217,255,0.03)', border: '1px solid rgba(0,217,255,0.08)',
+                borderRadius: '8px', fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)',
+                flexWrap: 'wrap' as const,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'var(--color-text-faint)' }}>Route:</span>
+                  <span style={{ color: '#a78bfa', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{data.language_code === 'en' ? 'ENGLISH' : 'MULTILINGUAL'}</span>
+                </div>
+                <span style={{ color: 'rgba(255,255,255,0.1)' }}>·</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'var(--color-text-faint)' }}>Model Used:</span>
+                  <span style={{ color: '#2dd4bf', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{data.model_used}</span>
+                </div>
+                <span style={{ color: 'rgba(255,255,255,0.1)' }}>·</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'var(--color-text-faint)' }}>Translation:</span>
+                  <span style={{ color: data.translation_needed ? '#f59e0b' : '#22c55e', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{data.translation_needed ? 'Used (NLLB)' : 'Not Required'}</span>
+                </div>
+              </div>
+
+              {/* Polarity Gauge — matches LivePredictionPage exactly */}
+              <div className="card animate-in animate-in--d2 card--animated" style={{ marginTop: 'var(--space-4)' }}>
+                <SectionHeader icon={<Icon3DChart size={22} />} title="Polarity Gauge" subtitle="Sentiment polarity visualization" />
+                <div className="polarity-gauge" style={{ textAlign: 'center' }}>
+                  <div className="polarity-gauge__track">
+                    <div className="polarity-gauge__marker"
+                         style={{ left: `${((data.polarity + 1) / 2) * 100}%` }} />
+                  </div>
+                  <div className="polarity-gauge__labels" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+                    <span style={{ color: '#f43f5e', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Negative</span>
+                    <span style={{ color: 'var(--color-text-muted)', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Neutral</span>
+                    <span style={{ color: '#22c55e', fontWeight: 600, fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Positive</span>
+                  </div>
                 </div>
               </div>
 
@@ -1494,9 +1543,10 @@ export function LanguageAnalysisPage() {
                       <select id="lang-bulk-model" className="form-select" value={bModel}
                               onChange={e => setBModel(e.target.value)}>
                         {['best','LinearSVC','LogisticRegression','NaiveBayes','RandomForest'].map(m =>
-                          <option key={m} value={m}>{m === 'best' ? 'Best' : m.replace(/([A-Z])/g, ' $1').trim()}</option>)}
+                          <option key={m} value={m}>{capitalize(m)}</option>)}
                       </select>
                     </NeuralInputWrap>
+                    <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — predictions use Hybrid Transformer Pipeline.</div>
                   </div>
                   {/* Only ABSA + Sarcasm — this page is always multilingual, no toggle needed */}
                   <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-8)', flexWrap: 'wrap', marginTop: 'var(--space-4)' }}>

@@ -1,8 +1,10 @@
 """Translation module — NLLB (Meta) single engine.
 
-V4 ARCHITECTURE:
+V5 ARCHITECTURE:
   - ONLY engine: facebook/nllb-200-distilled-600M
-  - Translation is for DISPLAY ONLY — never affects sentiment
+  - Translation is USED for inference ONLY when validated.
+    If translation passes trust check → RoBERTa on translated text.
+    If translation fails trust check → fallback to XLM-R on original.
   - On failure: return original text with translation_failed=True
   - No fallback engines, no templates, no Helsinki, no Google
 
@@ -343,6 +345,15 @@ _HINGLISH_REPLACEMENTS = {
     "tik": "okay",
     "zyada": "more",
     "thoda": "little",
+    # V5 additions: common social media Hinglish
+    "faltu": "useless",
+    "dhokha": "fraud",
+    "barbaad": "wasted",
+    "pagal": "crazy",
+    "behtareen": "excellent",
+    "shandar": "magnificent",
+    "ghatiya": "poor quality",
+    "badiya": "great",
 }
 
 # Hindi filler words that should be stripped (not translated)
@@ -464,17 +475,21 @@ def translation_trust_check(original: str, translated: str) -> tuple:
         )
         return False, "polarity_inversion"
 
-    # Length sanity
+    # Length sanity (V5: tightened to 0.5–2.0 for stricter validation)
     orig_words = max(len(original.split()), 1)
     trans_words = len(translated.split())
     ratio = trans_words / orig_words
 
-    if ratio < 0.3 or ratio > 3.0:
+    if ratio < 0.5 or ratio > 2.0:
         logger.warning(
-            "[TRUST GATE] Length ratio %.2f outside bounds [0.3, 3.0]",
+            "[TRUST GATE] Length ratio %.2f outside bounds [0.5, 2.0]",
             ratio,
         )
         return False, "length_mismatch"
+
+    # V5 FIX 4: Reject if translation is identical to source (no actual translation)
+    if translated.strip().lower() == original.strip().lower():
+        return False, "identical_to_source"
 
     return True, "trusted"
 
@@ -540,14 +555,15 @@ def translate_to_english(
     """
     Translate `text` from `src_lang` to English using NLLB.
 
-    V4 CONTRACT:
+    V5 CONTRACT:
       On success: (English translation, "nllb")
       On English passthrough: (original_text, "passthrough")
       On cache hit: (cached_translation, "cache")
       On failure: (original_text, "passthrough_failed")
 
     NLLB is the ONLY translation engine. No fallbacks.
-    Translation is for DISPLAY ONLY — never affects sentiment.
+    Translation is used for inference when validated;
+    fallback to XLM-R on original text when translation fails.
 
     Returns:
         Tuple of (translated_text, method)

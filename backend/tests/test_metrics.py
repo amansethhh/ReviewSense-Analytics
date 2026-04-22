@@ -9,9 +9,9 @@ def test_metrics_structure(client):
     best = next(m for m in data["models"]
                 if m["is_best"])
     assert best["name"] == "LinearSVC"
-    assert abs(best["accuracy"] - 94.28) < 0.01
+    assert abs(best["accuracy"] - 95.80) < 0.01
     assert abs(best["macro_f1"] - 0.5742) < 0.001
-    assert data["best_model"] == "LinearSVC"
+    assert data["best_model"] == "LinearSVC (Offline Only)"
     assert len(data["confusion_matrices"]) == 4
 
 

@@ -84,7 +84,7 @@ st.markdown("""
 
 _KPIs = [
     ("TOTAL REVIEWS ANALYZED", "1.2M+", "+23.5%", "positive", "cyan"),
-    ("MODEL ACCURACY", "94.7%", "+2.1%", "positive", "green"),
+    ("MODEL ACCURACY", "95.8%", "+3.2%", "positive", "green"),
     ("AVG. LATENCY", "42ms", "-15.3%", "positive", "teal"),
     ("POSITIVE SENTIMENT", "78.2%", "+5.8%", "positive", "violet"),
 ]

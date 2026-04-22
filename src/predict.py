@@ -1,10 +1,11 @@
 """Prediction helpers for ReviewSense Analytics.
 
-Post-inference pipeline layers:
-  1. Short-text negation guard   (ADD-ON 1)
-  2. Neutral correction v2       (VADER-primary, TextBlob secondary)
-  3. Confidence calibration      (Problem 5)
-  4. Temperature scaling         (ADD-ON 5)
+V5 Pipeline (single-path, deterministic):
+  1. Entropy-based confidence calibration
+  2. Dynamic margin-based decision layer (route-aware)
+  3. Short-text keyword guard (safety net)
+  4. Polarity derived from label + confidence
+  5. Sarcasm override (optional)
 
 All functions operate on LABEL_MAP integers: 0=Negative, 1=Neutral, 2=Positive.
 """
@@ -19,36 +20,7 @@ from src.config import LABEL_MAP
 logger = logging.getLogger("reviewsense")
 
 # ═══════════════════════════════════════════════════════════════
-# VADER — module-level instance (instantaneous, no model loading)
-# ═══════════════════════════════════════════════════════════════
-
-try:
-    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer as VaderAnalyzer
-    _vader = VaderAnalyzer()
-    _VADER_AVAILABLE = True
-except ImportError:
-    _vader = None
-    _VADER_AVAILABLE = False
-    logger.warning("vaderSentiment not installed — VADER corrections disabled")
-
-# Legacy non-Latin grouping retained for compatibility.
-# V6 polarity logic is stricter: TextBlob/VADER run only for English.
-_NON_LATIN_LANGS = frozenset({
-    "ja", "ko", "zh", "zh-cn", "zh-tw", "hi", "ar",
-    "ru", "uk", "bg", "el", "th", "he", "ka", "ur", "fa", "bn",
-})
-
-# ═══════════════════════════════════════════════════════════════
-# CONSTANTS — Neutral correction thresholds (Problem 1)
-# ═══════════════════════════════════════════════════════════════
-
-CONFIDENCE_THRESHOLD = 0.72   # below this = model uncertain
-POLARITY_LOW  = -0.25         # tightened: reduces neutral overcorrection window
-POLARITY_HIGH = +0.25         # tightened: reduces neutral overcorrection window
-POLARITY_WEAK = 0.25          # |polarity| below this = genuinely neutral zone
-
-# ═══════════════════════════════════════════════════════════════
-# CONSTANTS — Short-text guard terms (ADD-ON 1)
+# CONSTANTS — Short-text guard terms (used by apply_short_text_guard)
 # ═══════════════════════════════════════════════════════════════
 
 EXPLICIT_NEGATIVE_TERMS = [
@@ -70,16 +42,7 @@ EXPLICIT_POSITIVE_TERMS = [
 ]
 
 # ═══════════════════════════════════════════════════════════════
-# CONSTANTS — Temperature scaling (ADD-ON 5)
-# ═══════════════════════════════════════════════════════════════
-
-CALIBRATION_TEMPERATURE = 1.8
-# T > 1.0 softens softmax distribution.
-# 1.8 derived from observed overconfidence pattern across 200 English bulk reviews.
-
-# ═══════════════════════════════════════════════════════════════
-# V3: UNCERTAIN label removed — confidence IS the uncertainty signal
-# Threshold kept for backward API compatibility only.
+# V5: Confidence threshold kept for backward API compat only
 # ═══════════════════════════════════════════════════════════════
 
 CONFIDENCE_UNCERTAIN_THRESHOLD = 0.60  # Kept for API compat — never overrides label
@@ -108,35 +71,63 @@ def compute_calibrated_confidence(probs: list) -> float:
 
 
 # ═══════════════════════════════════════════════════════════════
-# SECTION 2 — Margin-based decision layer
+# SECTION 2 — Margin-based decision layer (V5: dynamic thresholds)
 # ═══════════════════════════════════════════════════════════════
 
-DECISION_MARGIN_THRESHOLD = 0.06
+
+def get_margin_threshold(route: str = "ENGLISH", model_used: str = "roberta") -> float:
+    """V5 FIX 5: Dynamic margin threshold per route/model.
+
+    RoBERTa on English is well-calibrated → tight threshold.
+    XLM-R on multilingual text is noisier → looser threshold.
+    Translation-based inference has extra noise → loosest.
+
+    Returns:
+        Margin threshold for ambiguity detection.
+    """
+    if route == "ENGLISH" or (model_used == "roberta" and route != "MULTILINGUAL"):
+        return 0.06
+    if route == "HINGLISH":
+        return 0.06  # Normalized text → same as English
+    if route == "MULTILINGUAL" and model_used == "xlm-r":
+        return 0.10  # XLM-R is noisier on multilingual
+    if route == "MULTILINGUAL" and model_used == "roberta":
+        return 0.08  # Translation-based inference
+    return 0.08  # Default fallback
 
 
-def apply_decision_layer(probs: list, label_map: dict) -> tuple:
+def apply_decision_layer(
+    probs: list,
+    label_map: dict,
+    route: str = "ENGLISH",
+    model_used: str = "roberta",
+) -> tuple:
     """Section 2: Margin-based decision for ambiguous predictions.
 
-    Instead of blindly trusting argmax, check the margin between
-    the top-2 predictions. If the margin is too small, the model
-    is genuinely ambiguous → route to neutral.
+    V5: Uses dynamic threshold via get_margin_threshold() instead of
+    a single static threshold. This prevents XLM-R's noisier outputs
+    from being held to the same standard as RoBERTa.
 
     Args:
         probs: [neg, neu, pos] softmax probabilities
         label_map: {0: 'Negative', 1: 'Neutral', 2: 'Positive'}
+        route: Pipeline route (ENGLISH, HINGLISH, MULTILINGUAL)
+        model_used: Model key (roberta, xlm-r)
 
     Returns:
         (pred_class: int, margin: float, decision_type: str)
     """
+    threshold = get_margin_threshold(route, model_used)
+
     sorted_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)
     top1 = probs[sorted_indices[0]]
     top2 = probs[sorted_indices[1]]
     margin = top1 - top2
 
-    if margin < DECISION_MARGIN_THRESHOLD:
+    if margin < threshold:
         logger.info(
-            "[DECISION] margin=%.4f < %.2f → neutral (ambiguous)",
-            margin, DECISION_MARGIN_THRESHOLD,
+            "[DECISION] margin=%.4f < %.2f (route=%s, model=%s) → neutral (ambiguous)",
+            margin, threshold, route, model_used,
         )
         return 1, margin, "ambiguous"
 
@@ -256,137 +247,28 @@ def apply_short_text_guard(text: str,
     has_negative = any(t in text_lower for t in EXPLICIT_NEGATIVE_TERMS)
     has_positive = any(t in text_lower for t in EXPLICIT_POSITIVE_TERMS)
 
+    # V5 FIX 3: Reduced boost (was implicit 1-conf → now +0.08 capped)
+    # Only fire when model confidence is low enough that keywords are decisive.
+    boost = 0.08
+
     # Predicted Positive (2) but text contains explicit negative terms
-    if has_negative and pred_class == 2 and confidence < 0.90:
+    if has_negative and pred_class == 2 and confidence < 0.85:
+        new_conf = round(min(confidence + boost, 0.95), 4)
         return {"pred_class": 0,
-                "confidence": round(1 - confidence, 4),
+                "confidence": new_conf,
                 "guard_applied": "short_text_negation"}
 
     # Predicted Negative (0) but text contains explicit positive terms
-    if has_positive and pred_class == 0 and confidence < 0.90:
+    if has_positive and pred_class == 0 and confidence < 0.85:
+        new_conf = round(min(confidence + boost, 0.95), 4)
         return {"pred_class": 2,
-                "confidence": round(1 - confidence, 4),
+                "confidence": new_conf,
                 "guard_applied": "short_text_positive"}
 
     return {"pred_class": pred_class,
             "confidence": confidence,
             "guard_applied": None}
 
-
-# ═══════════════════════════════════════════════════════════════
-# STEP 6 — Neutral correction (Problem 1 — bidirectional)
-# ═══════════════════════════════════════════════════════════════
-
-def apply_neutral_correction(pred_class: int,
-                              confidence: float,
-                              polarity: float) -> dict:
-    """Post-inference bidirectional neutral correction (v1 — TextBlob only).
-
-    Kept for backward compatibility. New code should use apply_neutral_correction_v2.
-    """
-    neutral_corrected = False
-    correction_reason = ""
-
-    # MODE B: Neutral → Positive/Negative (primary fix for overcorrection)
-    if (pred_class == 1
-            and confidence < CONFIDENCE_THRESHOLD
-            and abs(polarity) >= POLARITY_WEAK):
-        if polarity > 0:
-            new_class = 2  # Positive
-        else:
-            new_class = 0  # Negative
-        logger.info(
-            "Neutral elevation applied: Neutral → %s, conf=%.3f, pol=%.3f",
-            LABEL_MAP.get(new_class, "?"), confidence, polarity,
-        )
-        correction_reason = (
-            f"Strong polarity ({polarity:.3f}) overrides low-confidence Neutral ({confidence:.2f})"
-        )
-        pred_class = new_class
-        neutral_corrected = True
-
-    # MODE A: Positive/Negative → Neutral (original logic)
-    elif (pred_class != 1
-            and confidence < CONFIDENCE_THRESHOLD
-            and abs(polarity) < POLARITY_WEAK):
-        logger.info(
-            "Neutral correction applied: pred=%s, conf=%.3f, pol=%.3f",
-            LABEL_MAP.get(pred_class, "?"), confidence, polarity,
-        )
-        correction_reason = (
-            f"Low confidence ({confidence:.2f}) with neutral polarity ({polarity:.3f})"
-        )
-        pred_class = 1
-        neutral_corrected = True
-
-    return {
-        "pred_class": pred_class,
-        "neutral_corrected": neutral_corrected,
-        "correction_reason": correction_reason,
-    }
-
-
-# ═══════════════════════════════════════════════════════════════
-# STEP 6b — Dual polarity (VADER + TextBlob)
-# ═══════════════════════════════════════════════════════════════
-
-def compute_dual_polarity(
-    text: str,
-    lang_code: str = "en",
-) -> tuple:
-    """Compute TextBlob polarity, VADER compound, and subjectivity.
-
-    V5 RULESET 3 — STRICT ENGLISH-ONLY POLARITY:
-      TextBlob/VADER run ONLY when lang_code == 'en'.
-      For ALL other languages (even Latin-script ones), returns (0.0, 0.0, 0.5).
-      This eliminates polarity-based neutral bias on multilingual content.
-      XLM-R model handles classification natively for non-English.
-
-    RULE 2 ENFORCEMENT: Original text only — translation never affects polarity.
-
-    Args:
-        text: Original review text (any language)
-        lang_code: ISO 639-1 code
-
-    Returns:
-        (textblob_polarity, vader_compound, subjectivity)
-    """
-    if not text or not str(text).strip():
-        return 0.0, 0.0, 0.5
-
-    lang = (lang_code or "en").lower().strip()[:5]
-    lc_short = lang[:2]
-
-    # V5 RULESET 3: Only run TextBlob/VADER for English.
-    # All other languages get neutral polarity defaults.
-    if lc_short != "en":
-        logger.debug(
-            "[POLARITY SKIP] lang=%s — polarity skipped (English-only rule)", lang
-        )
-        return 0.0, 0.0, 0.5
-
-    analysis_text = str(text)
-
-    # TextBlob polarity
-    tb_polarity = 0.0
-    subjectivity = 0.5
-    try:
-        from textblob import TextBlob
-        blob = TextBlob(analysis_text)
-        tb_polarity = float(blob.sentiment.polarity)
-        subjectivity = float(blob.sentiment.subjectivity)
-    except Exception:
-        pass
-
-    # VADER compound
-    vader_compound = 0.0
-    if _VADER_AVAILABLE and _vader is not None:
-        try:
-            vader_compound = float(_vader.polarity_scores(analysis_text)["compound"])
-        except Exception:
-            pass
-
-    return tb_polarity, vader_compound, subjectivity
 
 
 def compute_polarity_from_label(label_name: str, confidence: float) -> float:
@@ -412,133 +294,7 @@ def compute_polarity_from_label(label_name: str, confidence: float) -> float:
     return 0.0
 
 
-# ═══════════════════════════════════════════════════════════════
-# STEP 6c — Neutral correction v2 (V4: MODEL-FIRST)
-# ═══════════════════════════════════════════════════════════════
 
-def apply_neutral_correction_v2(
-    pred_class: int,
-    confidence: float,
-    tb_polarity: float,
-    vader_compound: float,
-    lang_code: str = "en",
-) -> dict:
-    """V6 model-first correction with English-only polarity fallback.
-
-    confidence >= 0.65 keeps the model prediction. Below 0.65,
-    English may use TextBlob polarity fallback; non-English always
-    keeps the multilingual model label.
-    """
-    neutral_corrected = False
-    correction_reason = ""
-    lc = (lang_code or "en").lower().strip()[:2]
-
-    # V6: High confidence -> model is final.
-    if confidence >= 0.65:
-        logger.debug(
-            "[CORRECTION] Model-first: conf=%.3f >= 0.65, keeping label=%d",
-            confidence, pred_class,
-        )
-        return {
-            "pred_class": pred_class,
-            "neutral_corrected": False,
-            "correction_reason": "",
-        }
-
-    # V5 RULESET 3: Polarity only valid for English
-    if lc != "en":
-        logger.warning(
-            "[CORRECTION] Low confidence (%.3f) for non-English lang=%s — "
-            "keeping model label (polarity skipped per Ruleset 3)",
-            confidence, lc,
-        )
-        logger.warning(
-            "Low confidence fallback triggered (lang=%s, conf=%.3f)",
-            lc, confidence,
-        )
-        return {
-            "pred_class": pred_class,
-            "neutral_corrected": False,
-            "correction_reason": "",
-        }
-
-    # English + low confidence → polarity-based fallback
-    polarity = tb_polarity
-
-    if polarity > 0.25:
-        new_class = 2  # Positive
-    elif polarity < -0.25:
-        new_class = 0  # Negative
-    else:
-        new_class = 1  # Neutral
-        if pred_class != 1:
-            logger.warning(
-                "Neutral assigned due to low signal "
-                "(conf=%.3f, polarity=%.3f)",
-                confidence, polarity,
-            )
-
-    if new_class != pred_class:
-        neutral_corrected = True
-        correction_reason = (
-            f"v5_low_conf_polarity_correction "
-            f"(conf={confidence:.3f}, polarity={polarity:.3f})"
-        )
-        logger.info(
-            "[CORRECTION] V5: %s → %s (conf=%.3f, polarity=%.3f)",
-            LABEL_MAP.get(pred_class, "?"),
-            LABEL_MAP.get(new_class, "?"),
-            confidence,
-            polarity,
-        )
-
-    return {
-        "pred_class": new_class,
-        "neutral_corrected": neutral_corrected,
-        "correction_reason": correction_reason,
-    }
-
-
-# ═══════════════════════════════════════════════════════════════
-# STEP 7 — Confidence calibration (Problem 5)
-# ═══════════════════════════════════════════════════════════════
-
-def calibrated_confidence(confidence: float,
-                           polarity: float = 0.0,
-                           pred_class: int = 1) -> float:
-    """V4 FIX 2: No artificial confidence reduction.
-
-    The raw softmax confidence from the model is the true confidence.
-    Any reduction compounds with XLM-R's naturally lower confidence
-    (~44%) and triggers incorrect neutral overrides.
-
-    Returns the confidence unchanged, clamped to [0.0, 1.0].
-    polarity and pred_class args retained for API signature compat.
-    """
-    try:
-        confidence = float(confidence)
-    except Exception:
-        confidence = 0.0
-    return round(max(0.0, min(1.0, confidence)), 4)
-
-
-# ═══════════════════════════════════════════════════════════════
-# STEP 8 — Temperature scaling (ADD-ON 5)
-# ═══════════════════════════════════════════════════════════════
-
-def apply_temperature_scaling(logits: list[float],
-                               temperature: float = CALIBRATION_TEMPERATURE
-                               ) -> list[float]:
-    """Temperature scaling for softmax recalibration.
-
-    Reduces overconfident boundary-zone predictions from 85–92% to ~70–78%.
-    Only apply when RoBERTa returns full logit/score array.
-    """
-    scaled = [l / temperature for l in logits]
-    max_scaled = max(scaled)
-    exp_scaled = [math.exp(s - max_scaled) for s in scaled]
-    total = sum(exp_scaled)
-    return [e / total for e in exp_scaled]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -596,27 +352,21 @@ def _apply_sarcasm_override(pred_class: int,
 # ═══════════════════════════════════════════════════════════════
 
 def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
-    """Predict sentiment using RoBERTa transformer model.
+    """Predict sentiment using V5 single-path pipeline.
 
-    The model_pipeline argument is kept for backward compatibility
-    but is ignored — the transformer model is used instead.
+    V5 Pipeline (SINGLE PATH, DETERMINISTIC):
+      1. Input safety guard
+      2. Model prediction (RoBERTa or XLM-R via routing)
+      3. Dynamic margin-based decision layer
+      4. Short-text keyword guard (safety net)
+      5. Entropy-based confidence calibration
+      6. Sarcasm detection + override (optional)
+      7. Display polarity from label + confidence
 
-    Full post-processing pipeline (ADD-ON 10 wiring contract):
-      Step 0:  Input safety guard
-      Step 1:  Preprocess text
-      Step 2:  model.predict() → raw pred_class
-      Step 3:  Compute raw_confidence
-      Step 4:  Compute TextBlob polarity + subjectivity
-      Step 5:  apply_short_text_guard()
-      Step 6:  apply_neutral_correction()
-      Step 7:  calibrated_confidence()
-      Step 8:  apply_temperature_scaling() (conditional)
-      Step 9:  label_name = LABEL_MAP[pred_class]
-      Step 10: Sarcasm detection + override
-      Step 11: Uncertainty flag
-      Step 12: Return complete result dict (20 fields)
+    FINALITY RULE: After decision layer, label is FINAL.
+    No downstream code may modify label, confidence, or margin.
 
-    Returns dict with ALL 20 required fields.
+    Returns dict with all required fields.
     """
     # Step 0: Input safety guard
     guard = _input_safety_guard(text)
@@ -652,8 +402,12 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
     # Step 3: Compute raw_confidence
     raw_confidence = result["confidence"]
 
-    # ── V4+ STABILITY LOCK: Margin-based decision ───────────
-    pred_class, margin, decision_type = apply_decision_layer(scores, LABEL_MAP)
+    # ── V5 STABILITY LOCK: Dynamic margin-based decision ──────
+    # Determine route for dynamic thresholds
+    _route = route_input(original_text, lang_code)
+    pred_class, margin, decision_type = apply_decision_layer(
+        scores, LABEL_MAP, route=_route, model_used=model_used,
+    )
 
     # ── Short-text keyword guard (safety net) ────────────────
     guard_result = apply_short_text_guard(original_text, pred_class, raw_confidence)

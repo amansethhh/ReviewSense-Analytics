@@ -232,8 +232,11 @@ function SectionHeader({ icon, title, subtitle }: { icon: React.ReactNode; title
 
 /* ── Capitalize helper ── */
 function formatModelName(s: string): string {
-  if (s === 'best') return 'Best'
-  if (s === 'LinearSVC') return 'Linear SVC'
+  if (s === 'best') return 'Auto (Hybrid Pipeline)'
+  if (s === 'LinearSVC') return 'Linear SVC (Benchmark)'
+  if (s === 'LogisticRegression') return 'Logistic Regression (Benchmark)'
+  if (s === 'NaiveBayes') return 'Naive Bayes (Benchmark)'
+  if (s === 'RandomForest') return 'Random Forest (Benchmark)'
   // Only split at camelCase boundaries: uppercase preceded by lowercase
   return s
     .replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -687,6 +690,7 @@ export function BulkAnalysisPage() {
                         <option key={m} value={m}>{formatModelName(m)}</option>)}
                     </select>
                   </NeuralInputWrap>
+                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — predictions use Hybrid Transformer Pipeline.</div>
                 </div>
               </div>
               {/*
@@ -757,7 +761,7 @@ export function BulkAnalysisPage() {
             errorCount={errorCount}
             progressPct={progressPct}
             configRows={[
-              ['Model', model === 'best' ? 'Best' : formatModelName(model)],
+              ['Model', formatModelName(model)],
               ['Multi', isMultilingual ? 'ON' : 'OFF'],
               ['ABSA', runAbsa ? 'ON' : 'OFF'],
               ['Sarcasm', runSarcasm ? 'ON' : 'OFF'],

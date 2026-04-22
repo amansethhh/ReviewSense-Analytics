@@ -131,6 +131,9 @@ HINGLISH_MARKERS = {
     "wali", "wale", "phir", "abhi", "bohot", "seedha",
     "bakwaas", "bakwas", "zabardast", "kharab", "wahiyat",
     "mazaa", "maza", "dhansu", "lajawab", "kamaal",
+    # V5 additions: common social media Hinglish
+    "faltu", "dhokha", "barbaad", "pagal", "chutiya",
+    "behtareen", "shandar", "ghatiya", "badiya",
 }
 
 
