@@ -435,11 +435,10 @@ def _process_bulk_job(
         completed = 0
         from src.config import LABEL_MAP
         from src.predict import (
-            apply_neutral_correction_v2,
             apply_short_text_guard,
-            apply_temperature_scaling,
-            calibrated_confidence,
-            compute_dual_polarity,
+            compute_calibrated_confidence,
+            apply_decision_layer,
+            compute_polarity_from_label,
         )
 
         def _postprocess_row(
@@ -480,69 +479,31 @@ def _process_bulk_job(
             raw_conf = float(
                 pred.get("confidence", 0.0)
             )
-            # RULE 2: Polarity on ORIGINAL TEXT ONLY
-            # Translation NEVER affects polarity/sentiment
-            try:
-                polarity_val, vader_compound, subjectivity_val = (
-                    compute_dual_polarity(
-                        original_text, lang_code,
-                    )
-                )
-            except Exception:
-                polarity_val = 0.0
-                vader_compound = 0.0
-                subjectivity_val = 0.0
+            scores = pred.get("scores", [])
+            if not scores:
+                scores = [1/3, 1/3, 1/3]  # fallback if missing
+            
+            # V4+ STABILITY LOCK: Margin-based decision layer
+            pred_class, margin, decision_type = apply_decision_layer(scores, LABEL_MAP)
 
-            pred_class = int(pred.get("label", 1))
             guard_result = apply_short_text_guard(
                 original_text, pred_class, raw_conf
             )
             pred_class = guard_result["pred_class"]
-            confidence = (
-                guard_result["confidence"]
-                if guard_result["guard_applied"]
-                else raw_conf
-            )
-            nc_result = apply_neutral_correction_v2(
-                pred_class,
-                confidence,
-                polarity_val,
-                vader_compound,
-                lang_code,
-            )
-            pred_class = nc_result["pred_class"]
-            confidence = calibrated_confidence(
-                confidence, polarity_val, pred_class
-            )
-            scores = pred.get("scores", [])
-            if raw_conf <= 0.92 and len(scores) == 3:
-                temp_probs = apply_temperature_scaling(scores)
-                confidence = round(
-                    max(min(confidence, temp_probs[pred_class]), 0.30),
-                    4,
-                )
+            
+            # Entropy-based calibrated confidence
+            confidence = compute_calibrated_confidence(scores)
 
-            if lang_code[:2] == "en" and 0.60 < confidence < 0.82:
-                model_direction = (
-                    "positive" if pred_class == 2 else
-                    "negative" if pred_class == 0 else "neutral"
-                )
-                textblob_direction = (
-                    "positive" if polarity_val > 0.08 else
-                    "negative" if polarity_val < -0.08 else "neutral"
-                )
-                if (
-                    model_direction != textblob_direction
-                    and textblob_direction != "neutral"
-                    and model_direction != "neutral"
-                ):
-                    confidence = round(confidence * 0.85, 4)
-                elif (
-                    model_direction == textblob_direction
-                    and abs(polarity_val) > 0.45
-                    and model_direction != "neutral"
-                ):
-                    confidence = round(min(confidence * 1.08, 0.97), 4)
+            label_name = LABEL_MAP.get(pred_class, "Neutral")
+            sentiment_raw = label_name.lower()
+            if sentiment_raw not in [
+                "positive", "negative", "neutral"
+            ]:
+                sentiment_raw = "neutral"
+            
+            # V4+ Polarity is derived purely from label and calibrated confidence
+            polarity_val = compute_polarity_from_label(label_name, confidence)
+            subjectivity_val = 0.5  # Neutral default for subjectivity
 
             label_name = LABEL_MAP.get(pred_class, "Neutral")
             sentiment_raw = label_name.lower()

@@ -652,76 +652,23 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
     # Step 3: Compute raw_confidence
     raw_confidence = result["confidence"]
 
-    # ── SECTION 4: PRECISION DECISION ORDER ─────────────────
-    # Step 3.1: Label lock — protect high-confidence predictions
-    pred_class, label_locked = apply_label_lock(pred_class, raw_confidence)
-    confidence_status = "accepted"
+    # ── V4+ STABILITY LOCK: Margin-based decision ───────────
+    pred_class, margin, decision_type = apply_decision_layer(scores, LABEL_MAP)
 
-    # Step 3.2: Confidence gate — only if NOT locked
-    if not label_locked:
-        pred_class, raw_confidence, confidence_status = apply_confidence_gate(
-            pred_class, raw_confidence, scores
-        )
+    # ── Short-text keyword guard (safety net) ────────────────
+    guard_result = apply_short_text_guard(original_text, pred_class, raw_confidence)
+    pred_class = guard_result["pred_class"]
+    guard_applied = guard_result["guard_applied"]
 
-    # Step 4: Compute dual polarity (VADER + TextBlob)
-    polarity, vader_compound, subjectivity = compute_dual_polarity(
-        original_text, lang_code
-    )
-
-    # Step 5: apply_short_text_guard — SKIP if label is locked
-    if label_locked:
-        confidence = raw_confidence
-        guard_applied = None
-        logger.debug("[LABEL LOCK] Skipping short-text guard (conf=%.3f >= %.2f)",
-                     raw_confidence, HIGH_CONFIDENCE_LOCK)
-    else:
-        guard_result = apply_short_text_guard(original_text, pred_class, raw_confidence)
-        pred_class = guard_result["pred_class"]
-        confidence = guard_result["confidence"]
-        guard_applied = guard_result["guard_applied"]
-
-        # If guard didn't fire, use raw confidence
-        if guard_applied is None:
-            confidence = raw_confidence
-
-    # Step 6: apply_neutral_correction_v2 — SKIP if label is locked
-    if label_locked:
-        neutral_corrected = False
-        correction_reason = ""
-        logger.debug("[LABEL LOCK] Skipping neutral correction (conf=%.3f >= %.2f)",
-                     raw_confidence, HIGH_CONFIDENCE_LOCK)
-    else:
-        nc_result = apply_neutral_correction_v2(
-            pred_class, confidence, polarity, vader_compound, lang_code
-        )
-        pred_class = nc_result["pred_class"]
-        neutral_corrected = nc_result["neutral_corrected"]
-        correction_reason = nc_result["correction_reason"]
-
-    # Step 7: V4 FIX 2 — No confidence reduction. Raw softmax passes through.
-    confidence = calibrated_confidence(confidence, polarity, pred_class)
-
-    # Step 8: Temperature scaling — V4: applied to LOGITS for label selection
-    # only. Does NOT reduce the output confidence shown to the user.
-    temperature_scaled = False
-    # (Temperature scaling on logits already happened inside
-    #  transformer_predict via the model's softmax. No additional
-    #  confidence reduction is applied here.)
+    # ── Entropy-based calibrated confidence ──────────────────
+    confidence = compute_calibrated_confidence(scores)
 
     # Step 8.5: V4 — Ensemble penalties REMOVED.
-    # XLM-R at 44% confidence + 0.85 penalty = 37% — triggers neutral collapse.
-    # The model label is trusted; confidence is reported as-is.
 
     # Step 8.9: V4 ADD-ON 1 — Protect confident Positive/Negative labels
     protected_label = LABEL_MAP[pred_class]
     was_protected = False
     if pred_class in (0, 2) and raw_confidence >= 0.45:
-        # Model said Positive or Negative with >= 45% raw confidence.
-        # This prediction survives ALL downstream corrections.
-        if pred_class != result["label"]:
-            # Correction tried to change it — restore.
-            pass  # pred_class is already the corrected value
-        # Mark as protected so no subsequent logic can override.
         was_protected = True
         logger.debug(
             "[PROTECTION] Label %s protected (raw_conf=%.3f >= 0.45)",
@@ -777,8 +724,6 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
         reliability = "low"
 
     # Step 13: Compute display polarity from label + confidence
-    # Section 3 FIX: TextBlob returns 0.0 for non-English, breaking UI gauge.
-    # This derives polarity from the model's actual prediction.
     display_polarity = compute_polarity_from_label(label_name, confidence)
 
     # Step 14: Return complete result dict
@@ -788,11 +733,11 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
         "confidence": float(confidence),
         "raw_confidence": float(raw_confidence),
         "polarity": display_polarity,
-        "subjectivity": round(float(subjectivity), 4),
-        "neutral_corrected": neutral_corrected,
-        "correction_reason": correction_reason,
+        "subjectivity": 0.5,
+        "neutral_corrected": False,
+        "correction_reason": "",
         "guard_applied": guard_applied,
-        "temperature_scaled": temperature_scaled,
+        "temperature_scaled": False,
         "translation_status": "OK",
         "translation_flagged": False,
         "translation_failed": False,
@@ -800,8 +745,8 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
         "analysis_input_source": "original",
         "model_used": model_used,
         "was_protected": was_protected,
-        "label_locked": label_locked,
-        "confidence_status": confidence_status,
+        "margin": round(margin, 4),
+        "decision_type": decision_type,
         "reliability": reliability,
         "sarcasm_detected": sarcasm_detected,
         "sarcasm_confidence": float(sarcasm_confidence_val),

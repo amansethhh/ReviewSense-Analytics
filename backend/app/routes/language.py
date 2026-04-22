@@ -488,17 +488,9 @@ def detect_translate_and_predict_sync(
 
     # RULE 2: Polarity on ORIGINAL TEXT ONLY
     # Translation NEVER affects polarity/sentiment
-    try:
-        from src.predict import compute_dual_polarity
-        polarity_val, _vader, subjectivity_val = (
-            compute_dual_polarity(
-                original_text,
-                language_code,
-            )
-        )
-    except Exception:
-        polarity_val = float(pred.get("polarity", 0.0))
-        subjectivity_val = float(pred.get("subjectivity", 0.0))
+    from src.predict import compute_polarity_from_label
+    polarity_val = compute_polarity_from_label(label_name, raw_conf)
+    subjectivity_val = 0.5
 
     # English-only app corrections. Non-English must keep the XLM-R label.
     if (language_code or "en").lower().strip()[:2] == "en":
@@ -627,14 +619,9 @@ def _run_language_pipeline(
         confidence_pct = normalize_confidence(raw_conf)
 
         # V3 FIX: Compute real polarity
-        try:
-            from src.predict import compute_dual_polarity
-            polarity_val, _vader, subjectivity_val = (
-                compute_dual_polarity(text, "en")
-            )
-        except Exception:
-            polarity_val = float(pred.get("polarity", 0.0))
-            subjectivity_val = float(pred.get("subjectivity", 0.0))
+        from src.predict import compute_polarity_from_label
+        polarity_val = compute_polarity_from_label(label_name, raw_conf)
+        subjectivity_val = 0.5
 
         # FIX-3: Null prediction guard
         if confidence_pct == 0.0 and raw_conf == 0.0:
@@ -719,16 +706,9 @@ def _run_language_pipeline(
     confidence_pct = normalize_confidence(raw_conf)
 
     # V6: Polarity is computed on original text and skipped for non-English.
-    try:
-        from src.predict import compute_dual_polarity
-        polarity_val, _vader, subjectivity_val = (
-            compute_dual_polarity(
-                text, lang_code,
-            )
-        )
-    except Exception:
-        polarity_val = float(pred.get("polarity", 0.0))
-        subjectivity_val = float(pred.get("subjectivity", 0.0))
+    from src.predict import compute_polarity_from_label
+    polarity_val = compute_polarity_from_label(label_name, raw_conf)
+    subjectivity_val = 0.5
 
     # FIX-3: Null prediction guard
     if confidence_pct == 0.0 and raw_conf == 0.0:
