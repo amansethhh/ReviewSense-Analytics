@@ -35,3 +35,12 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Archive / Cleanup
+evaluation/reports/
+data/archive/
+scripts/archive/
+backend/tests/archive/
+tests/archive/
+structure.txt
+*.log
