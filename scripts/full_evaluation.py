@@ -1,6 +1,8 @@
 """
-V4 Evaluation Script — ReviewSense Analytics
+V4+Precision Evaluation Script — ReviewSense Analytics
 Uses the SAME pipeline as the FastAPI /predict endpoint.
+
+Section 6: Includes accuracy, neutral rate, and low-confidence rate metrics.
 
 Usage:
     python -m scripts.full_evaluation           # Normal mode
@@ -60,7 +62,7 @@ random.shuffle(dataset)
 # ── PREDICTION ───────────────────────────────────────────────
 
 def predict_direct(text: str, debug: bool = False) -> dict:
-    """Use the same pipeline as the API — direct function import."""
+    """Section 6: Use the same pipeline as the API — direct function import."""
     from src.pipeline.inference import run_pipeline
     result = run_pipeline(text)
     label_name = result.get("label_name", "")
@@ -69,6 +71,9 @@ def predict_direct(text: str, debug: bool = False) -> dict:
         "confidence": result.get("confidence", 0.0),
         "model_used": result.get("model_used", "unknown"),
         "language_detected": result.get("language_detected", "unknown"),
+        "confidence_status": result.get("confidence_status", "unknown"),
+        "label_locked": result.get("label_locked", False),
+        "polarity": result.get("polarity", 0.0),
     }
 
 
@@ -83,6 +88,9 @@ def main():
     y_true = []
     y_pred = []
     errors = []
+    low_confidence_count = 0
+    label_locked_count = 0
+    zero_polarity_non_neutral = 0
 
     print(f"\nRunning evaluation on {len(dataset)} samples...\n")
     start = time.perf_counter()
@@ -95,6 +103,18 @@ def main():
         y_true.append(true_label)
         y_pred.append(pred_label)
 
+        # Track low-confidence flagged
+        if result.get("confidence_status") == "low_confidence_ambiguous":
+            low_confidence_count += 1
+
+        # Track label-locked
+        if result.get("label_locked"):
+            label_locked_count += 1
+
+        # Track polarity zero for non-neutral
+        if pred_label in ("positive", "negative") and result.get("polarity", 0.0) == 0.0:
+            zero_polarity_non_neutral += 1
+
         if pred_label != true_label:
             errors.append({
                 "text": item["text"],
@@ -102,6 +122,7 @@ def main():
                 "pred": pred_label,
                 "confidence": result.get("confidence", 0),
                 "model_used": result.get("model_used", "?"),
+                "confidence_status": result.get("confidence_status", "?"),
             })
 
     elapsed = time.perf_counter() - start
@@ -119,7 +140,7 @@ def main():
     # ── REPORT ───────────────────────────────────────────────
     mode = "DEBUG (raw model)" if args.debug else "PRODUCTION (full pipeline)"
     print(f"\n{'='*60}")
-    print(f"  V4 EVALUATION RESULTS  [{mode}]")
+    print(f"  V4+PRECISION EVALUATION RESULTS  [{mode}]")
     print(f"{'='*60}")
     print(f"  Samples:   {len(dataset)}")
     print(f"  Time:      {elapsed:.1f}s ({elapsed/len(dataset)*1000:.0f}ms/sample)")
@@ -138,14 +159,27 @@ def main():
     for row in cm:
         print(f"    {row}")
 
-    # ── Neutral rate check ───────────────────────────────────
+    # ── Section 6 metrics ────────────────────────────────────
     neutral_pct = distribution.get("neutral", 0) / len(dataset) * 100
-    if neutral_pct > 50:
-        print(f"\n  [WARNING] Neutral rate {neutral_pct:.0f}% > 50% — bias detected!")
-    else:
-        print(f"\n  [OK] Neutral rate {neutral_pct:.0f}% within acceptable range.")
+    low_conf_pct = low_confidence_count / len(dataset) * 100
+    locked_pct = label_locked_count / len(dataset) * 100
 
-    print(f"  Total Errors: {len(errors)}")
+    print(f"\n  ── Precision Layer Metrics ──")
+    print(f"  Neutral rate:          {neutral_pct:.1f}%", end="")
+    if 15 <= neutral_pct <= 35:
+        print(f"  [OK]")
+    elif neutral_pct > 50:
+        print(f"  [WARNING: bias detected]")
+    else:
+        print(f"  [CHECK]")
+
+    print(f"  Low-confidence gated:  {low_confidence_count} ({low_conf_pct:.1f}%)", end="")
+    print(f"  [{'YES' if low_confidence_count > 0 else 'NONE'}]")
+
+    print(f"  Label-locked:          {label_locked_count} ({locked_pct:.1f}%)")
+    print(f"  Zero-polarity errors:  {zero_polarity_non_neutral}")
+
+    print(f"\n  Total Errors: {len(errors)}")
 
     # Save errors
     try:

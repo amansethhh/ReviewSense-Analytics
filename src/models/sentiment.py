@@ -203,7 +203,7 @@ def predict(text: str, lang_code: str = "en") -> dict:
 def predict_batch(
     texts: list[str],
     lang_codes: list[str] | None = None,
-    batch_size: int = 8,
+    batch_size: int = 32,
 ) -> list[dict]:
     """Batch sentiment prediction with language-aware model routing.
 

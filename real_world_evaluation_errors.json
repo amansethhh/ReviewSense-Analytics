@@ -1,0 +1,119 @@
+[
+  {
+    "index": 36,
+    "text": "Not bad, not great, just adequate.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.5237791538238525,
+    "language": "en",
+    "detected_language": "en"
+  },
+  {
+    "index": 37,
+    "text": "Standard quality, no complaints but no praise either.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.5417357683181763,
+    "language": "en",
+    "detected_language": "en"
+  },
+  {
+    "index": 39,
+    "text": "It arrived on time and looks like the picture.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.714662492275238,
+    "language": "en",
+    "detected_language": "en"
+  },
+  {
+    "index": 41,
+    "text": "I have mixed feelings about this product.",
+    "true_label": "neutral",
+    "predicted_label": "negative",
+    "confidence": 0.8411190509796143,
+    "language": "en",
+    "detected_language": "en"
+  },
+  {
+    "index": 42,
+    "text": "It works but I expected a bit more for this price.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.5148484706878662,
+    "language": "en",
+    "detected_language": "en"
+  },
+  {
+    "index": 43,
+    "text": "The product is fine, does what it says.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.6631082892417908,
+    "language": "en",
+    "detected_language": "en"
+  },
+  {
+    "index": 61,
+    "text": "Ne perdez pas votre argent avec ce produit.",
+    "true_label": "negative",
+    "predicted_label": "neutral",
+    "confidence": 0.37157633900642395,
+    "language": "fr",
+    "detected_language": "fr"
+  },
+  {
+    "index": 62,
+    "text": "Correct sans plus, fait le travail minimum.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.3867981731891632,
+    "language": "fr",
+    "detected_language": "fr"
+  },
+  {
+    "index": 63,
+    "text": "Moyen, rien d'exceptionnel.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.4431189298629761,
+    "language": "fr",
+    "detected_language": "fr"
+  },
+  {
+    "index": 82,
+    "text": "Esta bien, nada del otro mundo.",
+    "true_label": "neutral",
+    "predicted_label": "positive",
+    "confidence": 0.4881967008113861,
+    "language": "es",
+    "detected_language": "es"
+  },
+  {
+    "index": 91,
+    "text": "لا تشتري هذا المنتج أبداً.",
+    "true_label": "negative",
+    "predicted_label": "neutral",
+    "confidence": 0.4805298149585724,
+    "language": "ar",
+    "detected_language": "ar"
+  },
+  {
+    "index": 92,
+    "text": "مقبول، لا شيء مميز.",
+    "true_label": "neutral",
+    "predicted_label": "negative",
+    "confidence": 0.7079002857208252,
+    "language": "ar",
+    "detected_language": "ar"
+  },
+  {
+    "index": 112,
+    "text": "Aceitavel, nada de especial.",
+    "true_label": "neutral",
+    "predicted_label": "negative",
+    "confidence": 0.438345342874527,
+    "language": "pt",
+    "detected_language": "es"
+  }
+]

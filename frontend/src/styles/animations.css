@@ -22,27 +22,6 @@
   -webkit-perspective: 1000px;
 }
 
-/* ── PERF FIX: Layout containment for animated cards ──
-   Isolates animated elements so their animations don't
-   trigger re-layout of the entire page when bulk data updates. */
-.card--animated {
-  contain: layout style;
-}
-
-/* ── PERF FIX: Result table row containment ──
-   Each row is layout-contained so adding/removing rows
-   doesn't trigger full table re-layout. */
-.result-table tbody tr {
-  contain: content;
-}
-
-/* ── PERF FIX: Processing stage isolation ──
-   The processing view should NOT re-layout when
-   progress data changes — only repaint affected elements. */
-.analysis-layout {
-  contain: layout;
-}
-
 
 /* ── 0-PRE. RS ANIMATED LOGO ───────────────────────── */
 

@@ -519,10 +519,9 @@ export function BulkAnalysisPage() {
     showToast('success', 'Excel file downloaded')
   }, [result, jobId, showToast, runAbsa, runSarcasm, topAbsaAspects])
 
-  const displayRows = useMemo(() => {
-    if (!result?.results) return []
-    return showAll ? result.results : result.results.slice(0, 10)
-  }, [result?.results, showAll])
+  const displayRows = result?.results
+    ? (showAll ? result.results : result.results.slice(0, 10))
+    : []
 
   return (
     <PageWrapper title="Bulk Analysis" subtitle="Upload a CSV and analyze thousands of reviews" hideTopBar>

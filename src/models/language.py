@@ -129,17 +129,19 @@ HINGLISH_MARKERS = {
     "sahi", "galat", "dukaan", "khana", "ganda", "mast",
     "yaar", "bhai", "ekdum", "aur", "lekin", "matlab", "wala",
     "wali", "wale", "phir", "abhi", "bohot", "seedha",
+    "bakwaas", "bakwas", "zabardast", "kharab", "wahiyat",
+    "mazaa", "maza", "dhansu", "lajawab", "kamaal",
 }
 
 
 def detect_hinglish(text: str) -> bool:
     """Detect Hinglish (code-switched Hindi-English in Roman script).
 
-    Uses curated Hindi word markers. Returns True if 2+ markers found.
+    Section 3: Threshold lowered to 1 marker for better recall.
     """
     tokens = set(text.lower().split())
     overlap = tokens & HINGLISH_MARKERS
-    return len(overlap) >= 2
+    return len(overlap) >= 1
 
 
 # ═══════════════════════════════════════════════════════════════

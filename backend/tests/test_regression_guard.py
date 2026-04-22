@@ -1,4 +1,4 @@
-﻿"""
+"""
 Regression guard: Ensures the 7/8 edge case result is preserved
 across all future code changes. Run after any schema or prediction change.
 """

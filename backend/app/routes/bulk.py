@@ -63,7 +63,7 @@ _ROW_TIMEOUT_S: float = 15.0
 
 # Performance: Scale workers based on CPU cores
 import multiprocessing as _mp
-_MAX_ROW_WORKERS = min(2, _mp.cpu_count() or 2)
+_MAX_ROW_WORKERS = min(4, _mp.cpu_count() or 2)
 
 # Dedicated executor for per-row timeout isolation.
 _row_executor = ThreadPoolExecutor(
@@ -418,7 +418,7 @@ def _process_bulk_job(
         batch_predictions = _sentiment_batch(
             predict_texts,
             lang_codes=predict_lang_codes,
-            batch_size=8,
+            batch_size=32,
         )
 
         _update_progress_pct(job_id, 65.0)
@@ -514,9 +514,35 @@ def _process_bulk_job(
             confidence = calibrated_confidence(
                 confidence, polarity_val, pred_class
             )
-            # V4 FIX: Temperature scaling and ensemble penalty REMOVED.
-            # Reducing confidence triggers neutral collapse for XLM-R at ~44%.
-            # The model label is trusted; confidence is reported as-is.
+            scores = pred.get("scores", [])
+            if raw_conf <= 0.92 and len(scores) == 3:
+                temp_probs = apply_temperature_scaling(scores)
+                confidence = round(
+                    max(min(confidence, temp_probs[pred_class]), 0.30),
+                    4,
+                )
+
+            if lang_code[:2] == "en" and 0.60 < confidence < 0.82:
+                model_direction = (
+                    "positive" if pred_class == 2 else
+                    "negative" if pred_class == 0 else "neutral"
+                )
+                textblob_direction = (
+                    "positive" if polarity_val > 0.08 else
+                    "negative" if polarity_val < -0.08 else "neutral"
+                )
+                if (
+                    model_direction != textblob_direction
+                    and textblob_direction != "neutral"
+                    and model_direction != "neutral"
+                ):
+                    confidence = round(confidence * 0.85, 4)
+                elif (
+                    model_direction == textblob_direction
+                    and abs(polarity_val) > 0.45
+                    and model_direction != "neutral"
+                ):
+                    confidence = round(min(confidence * 1.08, 0.97), 4)
 
             label_name = LABEL_MAP.get(pred_class, "Neutral")
             sentiment_raw = label_name.lower()

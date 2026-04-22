@@ -1,0 +1,115 @@
+text,language,true_label,stars,predicted_label,confidence,detected_language,expected_detected
+"Absolutely love this product, exceeded all expectations!",en,positive,5,positive,0.9878256916999817,en,en
+"Best purchase I've made this year, highly recommend!",en,positive,5,positive,0.9845182299613953,en,en
+"Outstanding quality and fast shipping, very impressed.",en,positive,5,positive,0.9778205156326294,en,en
+"The customer service was exceptional, resolved my issue immediately.",en,positive,5,positive,0.9188652038574219,en,en
+"Perfect fit, great material, looks exactly like the photos.",en,positive,5,positive,0.9623783826828003,en,en
+Five stars! This is exactly what I was looking for.,en,positive,5,positive,0.9815592169761658,en,en
+"Incredible value for the money, couldn't be happier.",en,positive,5,positive,0.9840346574783325,en,en
+"Works perfectly right out of the box, setup was a breeze.",en,positive,5,positive,0.9541996717453003,en,en
+"My kids love it, great gift idea for any occasion.",en,positive,5,positive,0.9867576360702515,en,en
+Arrived earlier than expected and in perfect condition.,en,positive,5,positive,0.9473103880882263,en,en
+"The sound quality is phenomenal, truly immersive experience.",en,positive,5,positive,0.9773061871528625,en,en
+"Super comfortable and stylish, get compliments every time.",en,positive,5,positive,0.9830126166343689,en,en
+Exceeded my expectations in every way possible.,en,positive,5,positive,0.8699859380722046,en,en
+"Absolutely brilliant, one of the best things I've ever bought.",en,positive,5,positive,0.9835227131843567,en,en
+The build quality is superb and feels very premium.,en,positive,5,positive,0.9759869575500488,en,en
+"I am so glad I purchased this, it changed my daily routine.",en,positive,5,positive,0.9823564291000366,en,en
+Fantastic product with great attention to detail.,en,positive,5,positive,0.9786433577537537,en,en
+"Terrible quality, broke after just one week of use.",en,negative,1,negative,0.9425325989723206,en,en
+"Complete waste of money, does not work as advertised.",en,negative,1,negative,0.8935075402259827,en,en
+"Worst purchase ever, returning immediately for a refund.",en,negative,1,negative,0.9491856098175049,en,en
+"Customer support was useless, waited three hours for nothing.",en,negative,1,negative,0.9466996192932129,en,en
+Cheap materials that fell apart on the first day.,en,negative,1,negative,0.8530932068824768,en,en
+"The battery dies within two hours, completely unacceptable.",en,negative,1,negative,0.934396505355835,en,en
+Arrived damaged and the seller refused to help.,en,negative,1,negative,0.8749166131019592,en,en
+"Misleading product description, nothing like the pictures.",en,negative,1,negative,0.921413779258728,en,en
+Horrible smell that won't go away even after washing.,en,negative,1,negative,0.9352443814277649,en,en
+"Total scam, received a completely different product.",en,negative,1,negative,0.9190819263458252,en,en
+"The zipper broke on first use, very disappointing.",en,negative,1,negative,0.9190286993980408,en,en
+"Screen stopped working after two days, defective product.",en,negative,1,negative,0.9192359447479248,en,en
+"Extremely noisy and overheats constantly, very unsafe.",en,negative,1,negative,0.8984106183052063,en,en
+"Tastes awful, had to throw it away immediately.",en,negative,1,negative,0.9350602626800537,en,en
+"Paint peeled off within a week, terrible craftsmanship.",en,negative,1,negative,0.9409682750701904,en,en
+This is the worst thing I have ever wasted money on.,en,negative,1,negative,0.9548946022987366,en,en
+"Do not buy this, it is a complete disappointment.",en,negative,1,negative,0.9277280569076538,en,en
+"It's okay for the price, nothing special.",en,neutral,3,neutral,0.6375755667686462,en,en
+"Average product, meets basic requirements.",en,neutral,3,neutral,0.5768704414367676,en,en
+"Not bad, not great, just adequate.",en,neutral,3,positive,0.5237791538238525,en,en
+"Standard quality, no complaints but no praise either.",en,neutral,3,positive,0.5417357683181763,en,en
+"Acceptable for occasional use, wouldn't rely on it daily.",en,neutral,3,neutral,0.7107517123222351,en,en
+It arrived on time and looks like the picture.,en,neutral,3,positive,0.714662492275238,en,en
+"Exactly as described, nothing more nothing less.",en,neutral,3,neutral,0.5221033692359924,en,en
+I have mixed feelings about this product.,en,neutral,3,negative,0.8411190509796143,en,en
+It works but I expected a bit more for this price.,en,neutral,3,positive,0.5148484706878662,en,en
+"The product is fine, does what it says.",en,neutral,3,positive,0.6631082892417908,en,en
+"यह उत्पाद बहुत अच्छा है, मुझे बहुत पसंद आया!",hi,positive,5,positive,0.790789783000946,hi,
+"शानदार गुणवत्ता और तेज़ डिलीवरी, बहुत खुश हूँ।",hi,positive,5,positive,0.8173903226852417,hi,
+बहुत बढ़िया! उम्मीदों से बेहतर।,hi,positive,5,positive,0.7671741843223572,hi,
+"इस उत्पाद ने मेरी ज़िन्दगी बदल दी, शानदार!",hi,positive,5,positive,0.8299220204353333,hi,
+"बेकार उत्पाद, एक हफ्ते में टूट गया।",hi,negative,1,negative,0.8203194737434387,hi,
+"पैसे की पूरी बर्बादी, बिल्कुल काम नहीं करता।",hi,negative,1,negative,0.6526476144790649,hi,
+"यह उत्पाद बिल्कुल बेकार है, कभी मत खरीदो।",hi,negative,1,negative,0.7405601739883423,hi,
+"बहुत खराब क्वालिटी, निराश हूँ।",hi,negative,1,negative,0.8600351214408875,hi,
+"ठीक-ठाक है, कुछ खास नहीं।",hi,neutral,3,neutral,0.34827721118927,hi,
+कीमत के हिसाब से ठीक है।,hi,neutral,3,neutral,0.41549256443977356,hi,
+"Excellent produit, je le recommande vivement!",fr,positive,5,positive,0.9762704968452454,en,fr
+Qualite exceptionnelle et livraison rapide.,fr,positive,5,positive,0.785732090473175,fr,fr
+Magnifique! Exactement ce que je cherchais.,fr,positive,5,positive,0.8080890774726868,fr,fr
+"Absolument parfait, merci beaucoup!",fr,positive,5,positive,0.8518051505088806,fr,fr
+"Produit terrible, casse apres deux jours.",fr,negative,1,negative,0.8934026956558228,en,fr
+"Tres decu, ne fonctionne pas comme decrit.",fr,negative,1,negative,0.618389368057251,fr,fr
+"Horrible qualite, je demande un remboursement.",fr,negative,1,negative,0.9387820363044739,en,fr
+Ne perdez pas votre argent avec ce produit.,fr,negative,1,neutral,0.37157633900642395,fr,fr
+"Correct sans plus, fait le travail minimum.",fr,neutral,3,positive,0.3867981731891632,fr,fr
+"Moyen, rien d'exceptionnel.",fr,neutral,3,positive,0.4431189298629761,fr,fr
+"Ausgezeichnetes Produkt, bin sehr zufrieden!",de,positive,5,positive,0.842186689376831,de,de
+Hervorragende Qualitat und schnelle Lieferung.,de,positive,5,positive,0.7986109852790833,de,de
+Fantastisch! Besser als erwartet.,de,positive,5,positive,0.8266006708145142,de,de
+"Wunderschon, sehr empfehlenswert!",de,positive,5,positive,0.8231824040412903,de,de
+"Schreckliche Qualitat, nach einem Tag kaputt.",de,negative,1,negative,0.8734973073005676,de,de
+"Totale Geldverschwendung, funktioniert uberhaupt nicht.",de,negative,1,negative,0.8617281317710876,de,de
+"Furchtbar, sofort zuruckgeschickt.",de,negative,1,negative,0.8468844294548035,de,de
+"Sehr enttauschend, wurde niemals wieder kaufen.",de,negative,1,negative,0.658068835735321,de,de
+"In Ordnung, nichts Besonderes.",de,neutral,3,neutral,0.4459587335586548,de,de
+"Durchschnittlich, erfullt den Grundzweck.",de,neutral,3,neutral,0.622758686542511,de,de
+"Excelente producto, lo recomiendo totalmente!",es,positive,5,positive,0.8086696267127991,es,es
+Calidad increible y envio muy rapido.,es,positive,5,positive,0.770693838596344,es,es
+Maravilloso! Supero mis expectativas.,es,positive,5,positive,0.856829822063446,es,es
+Perfecto! Exactamente lo que necesitaba.,es,positive,5,positive,0.6849783658981323,es,es
+"Pesima calidad, se rompio en dos dias.",es,negative,1,negative,0.849774956703186,es,es
+"Una completa estafa, no funciona para nada.",es,negative,1,negative,0.8592008948326111,es,es
+"Horrible, quiero mi dinero de vuelta.",es,negative,1,negative,0.9299144148826599,en,es
+"Muy decepcionante, no lo recomiendo.",es,negative,1,negative,0.8512329459190369,es,es
+"Esta bien, nada del otro mundo.",es,neutral,3,positive,0.4881967008113861,es,es
+"Normal, cumple su funcion.",es,neutral,3,neutral,0.4516720175743103,es,es
+منتج ممتاز، أنصح به بشدة!,ar,positive,5,positive,0.8360015153884888,ar,ar
+جودة رائعة وتوصيل سريع.,ar,positive,5,positive,0.6867918372154236,ar,ar
+رائع! أفضل من المتوقع.,ar,positive,5,positive,0.8039722442626953,ar,ar
+ممتاز! بالضبط ما كنت أبحث عنه.,ar,positive,5,positive,0.6752728819847107,ar,ar
+جودة سيئة جداً، انكسر بعد يوم واحد.,ar,negative,1,negative,0.8305780291557312,ar,ar
+مضيعة للمال، لا يعمل على الإطلاق.,ar,negative,1,negative,0.8030582070350647,ar,ar
+فظيع، أريد استرداد أموالي.,ar,negative,1,negative,0.7217122316360474,ar,ar
+لا تشتري هذا المنتج أبداً.,ar,negative,1,neutral,0.4805298149585724,ar,ar
+مقبول، لا شيء مميز.,ar,neutral,3,negative,0.7079002857208252,ar,ar
+عادي، يؤدي الغرض الأساسي.,ar,neutral,3,neutral,0.49051183462142944,ar,ar
+素晴らしい製品、大満足です！,ja,positive,5,positive,0.8113032579421997,ja,ja
+品質が非常に高く、迅速な配送でした。,ja,positive,5,positive,0.7044293880462646,ja,ja
+最高！期待以上でした。,ja,positive,5,positive,0.8158608675003052,ja,ja
+完璧！まさに探していたもの。,ja,positive,5,positive,0.7332019805908203,ja,ja
+ひどい品質、一日で壊れました。,ja,negative,1,negative,0.8593418598175049,ja,ja
+お金の無駄、全く機能しません。,ja,negative,1,negative,0.7190425395965576,ja,ja
+最悪、すぐに返品しました。,ja,negative,1,negative,0.6767925024032593,ja,ja
+非常に失望しました、二度と買いません。,ja,negative,1,negative,0.8487586975097656,ja,ja
+まあまあ、特に印象なし。,ja,neutral,3,neutral,0.48177874088287354,ja,ja
+普通、基本的な用途には十分。,ja,neutral,3,neutral,0.5537998080253601,ja,ja
+"Produto excelente, recomendo muito!",pt,positive,5,positive,0.8110077977180481,pt,pt
+Qualidade incrivel e entrega rapida.,pt,positive,5,positive,0.7681290507316589,pt,pt
+Maravilhoso! Superou minhas expectativas.,pt,positive,5,positive,0.8533967733383179,pt,pt
+Perfeito! Exatamente o que eu precisava.,pt,positive,5,positive,0.662964940071106,pt,pt
+"Pessima qualidade, quebrou em dois dias.",pt,negative,1,negative,0.842008650302887,pt,pt
+"Desperdicio total de dinheiro, nao funciona.",pt,negative,1,negative,0.8099138140678406,pt,pt
+"Horrivel, quero meu dinheiro de volta.",pt,negative,1,negative,0.8309404253959656,pt,pt
+"Muito decepcionante, nao recomendo.",pt,negative,1,negative,0.8574225306510925,pt,pt
+"Aceitavel, nada de especial.",pt,neutral,3,negative,0.438345342874527,es,pt
+"Normal, cumpre a funcao.",pt,neutral,3,neutral,0.5333502292633057,ro,pt

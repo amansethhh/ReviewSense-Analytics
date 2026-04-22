@@ -1,0 +1,115 @@
+text,language,true_label,stars
+"Absolutely love this product, exceeded all expectations!",en,positive,5
+"Best purchase I've made this year, highly recommend!",en,positive,5
+"Outstanding quality and fast shipping, very impressed.",en,positive,5
+"The customer service was exceptional, resolved my issue immediately.",en,positive,5
+"Perfect fit, great material, looks exactly like the photos.",en,positive,5
+Five stars! This is exactly what I was looking for.,en,positive,5
+"Incredible value for the money, couldn't be happier.",en,positive,5
+"Works perfectly right out of the box, setup was a breeze.",en,positive,5
+"My kids love it, great gift idea for any occasion.",en,positive,5
+Arrived earlier than expected and in perfect condition.,en,positive,5
+"The sound quality is phenomenal, truly immersive experience.",en,positive,5
+"Super comfortable and stylish, get compliments every time.",en,positive,5
+Exceeded my expectations in every way possible.,en,positive,5
+"Absolutely brilliant, one of the best things I've ever bought.",en,positive,5
+The build quality is superb and feels very premium.,en,positive,5
+"I am so glad I purchased this, it changed my daily routine.",en,positive,5
+Fantastic product with great attention to detail.,en,positive,5
+"Terrible quality, broke after just one week of use.",en,negative,1
+"Complete waste of money, does not work as advertised.",en,negative,1
+"Worst purchase ever, returning immediately for a refund.",en,negative,1
+"Customer support was useless, waited three hours for nothing.",en,negative,1
+Cheap materials that fell apart on the first day.,en,negative,1
+"The battery dies within two hours, completely unacceptable.",en,negative,1
+Arrived damaged and the seller refused to help.,en,negative,1
+"Misleading product description, nothing like the pictures.",en,negative,1
+Horrible smell that won't go away even after washing.,en,negative,1
+"Total scam, received a completely different product.",en,negative,1
+"The zipper broke on first use, very disappointing.",en,negative,1
+"Screen stopped working after two days, defective product.",en,negative,1
+"Extremely noisy and overheats constantly, very unsafe.",en,negative,1
+"Tastes awful, had to throw it away immediately.",en,negative,1
+"Paint peeled off within a week, terrible craftsmanship.",en,negative,1
+This is the worst thing I have ever wasted money on.,en,negative,1
+"Do not buy this, it is a complete disappointment.",en,negative,1
+"It's okay for the price, nothing special.",en,neutral,3
+"Average product, meets basic requirements.",en,neutral,3
+"Not bad, not great, just adequate.",en,neutral,3
+"Standard quality, no complaints but no praise either.",en,neutral,3
+"Acceptable for occasional use, wouldn't rely on it daily.",en,neutral,3
+It arrived on time and looks like the picture.,en,neutral,3
+"Exactly as described, nothing more nothing less.",en,neutral,3
+I have mixed feelings about this product.,en,neutral,3
+It works but I expected a bit more for this price.,en,neutral,3
+"The product is fine, does what it says.",en,neutral,3
+"यह उत्पाद बहुत अच्छा है, मुझे बहुत पसंद आया!",hi,positive,5
+"शानदार गुणवत्ता और तेज़ डिलीवरी, बहुत खुश हूँ।",hi,positive,5
+बहुत बढ़िया! उम्मीदों से बेहतर।,hi,positive,5
+"इस उत्पाद ने मेरी ज़िन्दगी बदल दी, शानदार!",hi,positive,5
+"बेकार उत्पाद, एक हफ्ते में टूट गया।",hi,negative,1
+"पैसे की पूरी बर्बादी, बिल्कुल काम नहीं करता।",hi,negative,1
+"यह उत्पाद बिल्कुल बेकार है, कभी मत खरीदो।",hi,negative,1
+"बहुत खराब क्वालिटी, निराश हूँ।",hi,negative,1
+"ठीक-ठाक है, कुछ खास नहीं।",hi,neutral,3
+कीमत के हिसाब से ठीक है।,hi,neutral,3
+"Excellent produit, je le recommande vivement!",fr,positive,5
+Qualite exceptionnelle et livraison rapide.,fr,positive,5
+Magnifique! Exactement ce que je cherchais.,fr,positive,5
+"Absolument parfait, merci beaucoup!",fr,positive,5
+"Produit terrible, casse apres deux jours.",fr,negative,1
+"Tres decu, ne fonctionne pas comme decrit.",fr,negative,1
+"Horrible qualite, je demande un remboursement.",fr,negative,1
+Ne perdez pas votre argent avec ce produit.,fr,negative,1
+"Correct sans plus, fait le travail minimum.",fr,neutral,3
+"Moyen, rien d'exceptionnel.",fr,neutral,3
+"Ausgezeichnetes Produkt, bin sehr zufrieden!",de,positive,5
+Hervorragende Qualitat und schnelle Lieferung.,de,positive,5
+Fantastisch! Besser als erwartet.,de,positive,5
+"Wunderschon, sehr empfehlenswert!",de,positive,5
+"Schreckliche Qualitat, nach einem Tag kaputt.",de,negative,1
+"Totale Geldverschwendung, funktioniert uberhaupt nicht.",de,negative,1
+"Furchtbar, sofort zuruckgeschickt.",de,negative,1
+"Sehr enttauschend, wurde niemals wieder kaufen.",de,negative,1
+"In Ordnung, nichts Besonderes.",de,neutral,3
+"Durchschnittlich, erfullt den Grundzweck.",de,neutral,3
+"Excelente producto, lo recomiendo totalmente!",es,positive,5
+Calidad increible y envio muy rapido.,es,positive,5
+Maravilloso! Supero mis expectativas.,es,positive,5
+Perfecto! Exactamente lo que necesitaba.,es,positive,5
+"Pesima calidad, se rompio en dos dias.",es,negative,1
+"Una completa estafa, no funciona para nada.",es,negative,1
+"Horrible, quiero mi dinero de vuelta.",es,negative,1
+"Muy decepcionante, no lo recomiendo.",es,negative,1
+"Esta bien, nada del otro mundo.",es,neutral,3
+"Normal, cumple su funcion.",es,neutral,3
+منتج ممتاز، أنصح به بشدة!,ar,positive,5
+جودة رائعة وتوصيل سريع.,ar,positive,5
+رائع! أفضل من المتوقع.,ar,positive,5
+ممتاز! بالضبط ما كنت أبحث عنه.,ar,positive,5
+جودة سيئة جداً، انكسر بعد يوم واحد.,ar,negative,1
+مضيعة للمال، لا يعمل على الإطلاق.,ar,negative,1
+فظيع، أريد استرداد أموالي.,ar,negative,1
+لا تشتري هذا المنتج أبداً.,ar,negative,1
+مقبول، لا شيء مميز.,ar,neutral,3
+عادي، يؤدي الغرض الأساسي.,ar,neutral,3
+素晴らしい製品、大満足です！,ja,positive,5
+品質が非常に高く、迅速な配送でした。,ja,positive,5
+最高！期待以上でした。,ja,positive,5
+完璧！まさに探していたもの。,ja,positive,5
+ひどい品質、一日で壊れました。,ja,negative,1
+お金の無駄、全く機能しません。,ja,negative,1
+最悪、すぐに返品しました。,ja,negative,1
+非常に失望しました、二度と買いません。,ja,negative,1
+まあまあ、特に印象なし。,ja,neutral,3
+普通、基本的な用途には十分。,ja,neutral,3
+"Produto excelente, recomendo muito!",pt,positive,5
+Qualidade incrivel e entrega rapida.,pt,positive,5
+Maravilhoso! Superou minhas expectativas.,pt,positive,5
+Perfeito! Exatamente o que eu precisava.,pt,positive,5
+"Pessima qualidade, quebrou em dois dias.",pt,negative,1
+"Desperdicio total de dinheiro, nao funciona.",pt,negative,1
+"Horrivel, quero meu dinheiro de volta.",pt,negative,1
+"Muito decepcionante, nao recomendo.",pt,negative,1
+"Aceitavel, nada de especial.",pt,neutral,3
+"Normal, cumpre a funcao.",pt,neutral,3

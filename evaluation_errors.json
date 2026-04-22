@@ -1,100 +1,242 @@
 [
   {
-    "text": "Arrived on time, standard packaging",
+    "text": "Decent product for the price point",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.7112,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Produit correct, sans plus",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.093,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Produit correct, sans plus",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.093,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "عادي جدا لا يوجد شيء مميز",
+    "true": "neutral",
+    "pred": "negative",
+    "confidence": 0.5906,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Ganz normal, erfüllt seinen Zweck",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.2774,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Produit correct, sans plus",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.093,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Ganz normal, erfüllt seinen Zweck",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.2774,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.5352,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Decent product for the price point",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.7112,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "عادي جدا لا يوجد شيء مميز",
+    "true": "neutral",
+    "pred": "negative",
+    "confidence": 0.5906,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Decent product for the price point",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.7112,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Produit correct, sans plus",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.093,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "عادي جدا لا يوجد شيء مميز",
+    "true": "neutral",
+    "pred": "negative",
+    "confidence": 0.5906,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Ganz normal, erfüllt seinen Zweck",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.2774,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Produit correct, sans plus",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.093,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Ganz normal, erfüllt seinen Zweck",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.2774,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Ganz normal, erfüllt seinen Zweck",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.2774,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Decent product for the price point",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.7112,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.5352,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.5352,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Produit correct, sans plus",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.093,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.5352,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "عادي جدا لا يوجد شيء مميز",
+    "true": "neutral",
+    "pred": "negative",
+    "confidence": 0.5906,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
+  },
+  {
+    "text": "Decent product for the price point",
+    "true": "neutral",
+    "pred": "positive",
+    "confidence": 0.7112,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.5352,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
     "text": "Arrived on time, standard packaging",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.5352,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
-    "text": "Arrived on time, standard packaging",
+    "text": "Ganz normal, erfüllt seinen Zweck",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.2774,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
-    "text": "Arrived on time, standard packaging",
+    "text": "عادي جدا لا يوجد شيء مميز",
     "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "pred": "negative",
+    "confidence": 0.5906,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
-    "text": "Arrived on time, standard packaging",
+    "text": "Decent product for the price point",
     "true": "neutral",
     "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "confidence": 0.7112,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   },
   {
-    "text": "Arrived on time, standard packaging",
+    "text": "عادي جدا لا يوجد شيء مميز",
     "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
-  },
-  {
-    "text": "Arrived on time, standard packaging",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
-  },
-  {
-    "text": "Arrived on time, standard packaging",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
-  },
-  {
-    "text": "Arrived on time, standard packaging",
-    "true": "neutral",
-    "pred": "positive",
-    "confidence": 0.8141,
-    "model_used": "unknown"
+    "pred": "negative",
+    "confidence": 0.5906,
+    "model_used": "unknown",
+    "confidence_status": "unknown"
   }
 ]

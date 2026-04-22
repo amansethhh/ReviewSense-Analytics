@@ -17,16 +17,20 @@ logger = logging.getLogger("reviewsense")
 
 import functools
 from src.models.language import detect_language
-from src.models.translation import translate_batch, translate_to_english
+from src.models.translation import translate_batch, translate_to_english, normalize_hinglish, translation_trust_check
 from src.models.sentiment import predict as sentiment_predict
 from src.models.sentiment import predict_batch as sentiment_predict_batch
 from src.predict import (
     apply_short_text_guard,
     apply_neutral_correction_v2,
     compute_dual_polarity,
+    compute_polarity_from_label,
     calibrated_confidence,
     apply_temperature_scaling,
     _apply_sarcasm_override,
+    apply_confidence_gate,
+    apply_label_lock,
+    HIGH_CONFIDENCE_LOCK,
 )
 from src.sarcasm_detector import detect_sarcasm_bulk
 from src.config import LABEL_MAP
@@ -126,45 +130,62 @@ def _apply_post_processing(
 ) -> dict:
     """Apply the full post-processing pipeline to a single prediction.
 
-    V6 Pipeline order:
-      Step 4: Dual polarity (TextBlob/VADER) for English only
-      Step 5: Short-text guard on original text only
-      Step 6: Neutral correction v2 model-first logic
-      Step 7: Confidence calibration
-      Step 8: Temperature scaling
+    V6+Precision Pipeline order:
+      Step 3.1: Label lock (protect high-confidence labels)
+      Step 3.2: Confidence gate (filter ambiguous low-confidence)
+      Step 4:   Dual polarity (TextBlob/VADER) for English only
+      Step 5:   Short-text guard — SKIP if label locked
+      Step 6:   Neutral correction v2 — SKIP if label locked
+      Step 7:   Confidence calibration
     """
     scores = sentiment["scores"]
     pred_class = sentiment["label"]
     raw_confidence = sentiment["confidence"]
 
+    # ── SECTION 4: PRECISION DECISION ORDER ─────────────────
+    # Step 3.1: Label lock — protect high-confidence predictions
+    pred_class, label_locked = apply_label_lock(pred_class, raw_confidence)
+    confidence_status = "accepted"
+
+    # Step 3.2: Confidence gate — only if NOT locked
+    if not label_locked:
+        pred_class, raw_confidence, confidence_status = apply_confidence_gate(
+            pred_class, raw_confidence, scores
+        )
+
     # Step 4: Dual polarity - English only.
-    # For non-English, returns (0.0, 0.0, 0.5) automatically
     polarity, vader_compound, subjectivity = compute_dual_polarity(text, lang_code)
 
-    # Step 5: Short-text guard on original text only.
-    # translated_text is accepted for backward compatibility but never used
-    # for sentiment decisions.
-    guard_text = text
+    # Step 5: Short-text guard — SKIP if label locked
+    if label_locked:
+        confidence = raw_confidence
+        guard_applied = None
+    else:
+        guard_result = apply_short_text_guard(text, pred_class, raw_confidence)
+        pred_class = guard_result["pred_class"]
+        confidence = guard_result["confidence"] if guard_result["guard_applied"] else raw_confidence
+        guard_applied = guard_result["guard_applied"]
 
-    guard_result = apply_short_text_guard(guard_text, pred_class, raw_confidence)
-    pred_class = guard_result["pred_class"]
-    confidence = guard_result["confidence"] if guard_result["guard_applied"] else raw_confidence
-    guard_applied = guard_result["guard_applied"]
-
-    # Step 6: Neutral correction v2 - model first.
-    nc = apply_neutral_correction_v2(pred_class, confidence, polarity, vader_compound, lang_code)
-    pred_class = nc["pred_class"]
-    neutral_corrected = nc["neutral_corrected"]
-    correction_reason = nc["correction_reason"]
+    # Step 6: Neutral correction v2 — SKIP if label locked
+    if label_locked:
+        neutral_corrected = False
+        correction_reason = ""
+    else:
+        nc = apply_neutral_correction_v2(pred_class, confidence, polarity, vader_compound, lang_code)
+        pred_class = nc["pred_class"]
+        neutral_corrected = nc["neutral_corrected"]
+        correction_reason = nc["correction_reason"]
 
     # Step 7: V4 FIX 2 — No artificial confidence reduction
     confidence = calibrated_confidence(confidence, polarity, pred_class)
 
-    # Step 8: V4 — Temperature scaling REMOVED from output confidence.
-    # Reducing confidence triggers neutral collapse for XLM-R at ~44%.
+    # Step 8: Temperature scaling REMOVED from output confidence.
     temperature_scaled = False
 
     label_name = LABEL_MAP[pred_class]
+
+    # Derive display polarity from label + confidence.
+    display_polarity = compute_polarity_from_label(label_name, confidence)
 
     return {
         "label": pred_class,
@@ -172,13 +193,15 @@ def _apply_post_processing(
         "sentiment": label_name,
         "confidence": float(confidence),
         "raw_confidence": float(raw_confidence),
-        "polarity": round(float(polarity), 4),
+        "polarity": display_polarity,
         "subjectivity": round(float(subjectivity), 4),
         "neutral_corrected": neutral_corrected,
         "correction_reason": correction_reason,
         "guard_applied": guard_applied,
         "temperature_scaled": temperature_scaled,
         "scores": scores,
+        "label_locked": label_locked,
+        "confidence_status": confidence_status,
     }
 
 
@@ -208,61 +231,135 @@ def run_pipeline(
     enable_sarcasm: bool = False,
     enable_aspects: bool = True,
 ) -> dict:
-    """Run the full NLP pipeline on a single text input."""
+    """Run the full NLP pipeline on a single text input.
+
+    HYBRID ARCHITECTURE (Sections 1-5):
+      ENGLISH     → RoBERTa on original text
+      HINGLISH    → Normalize → RoBERTa on normalized text
+      MULTILINGUAL → Translate → (valid → RoBERTa on translated, invalid → XLM-R on original)
+    """
     original = clean_text(text)
     if not original:
         return _empty_result()
 
-    # Step 1: Detect language (enhanced hierarchy)
+    # ── Step 1: Detect language ─────────────────────────────
     lang_info = detect_language(original)
     lang_code = lang_info["code"]
     hinglish_detected = lang_info.get("hinglish_detected", False)
     logger.info("Language detected: %s (%s)", lang_info["name"], lang_code)
 
-    # Step 2: Translate if not English
+    # ── Section 1: Route input ──────────────────────────────
+    from src.predict import route_input
+    route = route_input(original, lang_code)
+
+    # Fix: if route_input detected MULTILINGUAL but lang detector said "en",
+    # the text contains non-English markers. Override lang_code to ensure
+    # XLM-R is used (not the English RoBERTa path).
+    if route == "MULTILINGUAL" and lang_code == "en":
+        lang_code = "xx"  # Generic multilingual — will use XLM-R
+        logger.info("Route override: lang_code en → xx (non-English markers detected)")
+
+    logger.info("Pipeline route: %s", route)
+
+    # ── Sections 3+4: Conditional routing ───────────────────
     translation_status = "OK"
     translation_flagged = False
     translated = original
     was_translated = False
+    translation_valid = None  # None for non-multilingual routes
 
-    if hinglish_detected:
-        # Hinglish: skip translation, use direct inference
-        logger.info("Hinglish detected — skipping translation")
-        translated = original
-        was_translated = False
-    elif lang_code not in ("en", "unknown"):
-        logger.info("Translating text from %s to English", lang_code)
-        tr_result = safe_translate(original, lang_code)
-        translated = tr_result["translated_text"]
-        translation_status = tr_result["translation_status"]
-        was_translated = translated.strip().lower() != original.strip().lower()
+    if route == "ENGLISH":
+        # CASE 1: English → RoBERTa on original text
+        final_text = original
+        model_lang = "en"  # Forces RoBERTa routing
+        logger.info("Route ENGLISH: RoBERTa on original text")
 
-        # Validate translation (Problem 2) — ENFORCEMENT
-        if was_translated:
-            if not validate_translation(original, translated):
-                # Fall back to original text — do NOT trust translation
-                translation_flagged = True
-                translation_status = "FALLBACK_PASSTHROUGH"
-                translated = original
-                was_translated = False
-                logger.warning(
-                    "Invalid translation | lang=%s | falling back to original text",
-                    lang_code,
-                )
+    elif route == "HINGLISH":
+        # CASE 2: Hinglish → Normalize → RoBERTa
+        hinglish_detected = True
+        final_text = normalize_hinglish(original)
+        translated = final_text  # Show normalized as "translation"
+        was_translated = final_text.strip().lower() != original.strip().lower()
+        model_lang = "en"  # Forces RoBERTa routing
+        logger.info("Route HINGLISH: Normalize → RoBERTa")
 
-    # V3 RULE 2: Classification ALWAYS uses ORIGINAL text
-    # Translation is for DISPLAY ONLY
-    analysis_input = original
+    else:
+        # CASE 3: Multilingual → Route based on language family
+        #
+        # XLM-R is strong on Latin-script European languages (de, fr, es, it, pt).
+        # For these, ALWAYS use XLM-R on original text — it's more accurate
+        # than translating and running through RoBERTa.
+        #
+        # For non-Latin languages (ar, hi, ja, zh, ko, etc.), XLM-R may struggle.
+        # Use translation→RoBERTa when translation is valid.
+        XLM_PREFERRED_LANGS = frozenset({
+            "de", "fr", "es", "it", "pt", "nl", "sv", "da", "no", "fi",
+            "pl", "cs", "ro", "hu", "tr", "id", "ms", "vi",
+            "xx",  # Generic multilingual override (misdetected non-English)
+        })
 
-    # Step 3: Run sentiment on ORIGINAL text
-    logger.info("Running sentiment prediction on original text")
-    sentiment = sentiment_predict(analysis_input, lang_code=lang_code)
+        if lang_code in XLM_PREFERRED_LANGS:
+            # XLM-R preferred: use XLM-R directly on original text
+            final_text = original
+            model_lang = lang_code
+            translation_valid = None  # Translation not attempted for model routing
 
-    # Apply full post-processing pipeline on ORIGINAL text
-    # Pass translated for guard use on non-English texts (display only, not sentiment)
+            # Translate for DISPLAY — skip if lang unknown (xx)
+            if lang_code != "xx":
+                logger.info("Route MULTILINGUAL→XLM-R (preferred): %s", lang_code)
+                tr_result = safe_translate(original, lang_code)
+                translated = tr_result["translated_text"]
+                translation_status = tr_result["translation_status"]
+                was_translated = translated.strip().lower() != original.strip().lower()
+            else:
+                logger.info("Route MULTILINGUAL→XLM-R (override): non-English markers detected")
+
+        else:
+            # Non-Latin languages: Translate → Trust check → Route
+            logger.info("Route MULTILINGUAL: Translating from %s", lang_code)
+            tr_result = safe_translate(original, lang_code)
+            translated = tr_result["translated_text"]
+            translation_status = tr_result["translation_status"]
+            was_translated = translated.strip().lower() != original.strip().lower()
+
+            if was_translated:
+                trusted, trust_reason = translation_trust_check(original, translated)
+                translation_valid = trusted
+
+                if trusted:
+                    # Valid translation → RoBERTa on translated English text
+                    final_text = translated
+                    model_lang = "en"  # Forces RoBERTa routing
+                    logger.info(
+                        "Route MULTILINGUAL→ROBERTA: Valid translation, using RoBERTa"
+                    )
+                else:
+                    # Invalid translation → XLM-R on original text
+                    final_text = original
+                    model_lang = lang_code  # Forces XLM-R routing
+                    translation_flagged = True
+                    translation_status = f"FALLBACK_{trust_reason.upper()}"
+                    was_translated = False
+                    logger.warning(
+                        "Route MULTILINGUAL→XLM-R: Translation rejected (%s), using XLM-R",
+                        trust_reason,
+                    )
+            else:
+                # Translation returned same text → XLM-R on original
+                final_text = original
+                model_lang = lang_code
+                translation_valid = False
+                logger.info("Route MULTILINGUAL→XLM-R: No translation produced")
+
+    # ── Step 3: Run sentiment on routed text ────────────────
+    logger.info("Running sentiment prediction (model_lang=%s)", model_lang)
+    sentiment = sentiment_predict(final_text, lang_code=model_lang)
+    model_used = sentiment.get("model_used", "unknown")
+
+    # ── Apply full post-processing pipeline ─────────────────
     pp = _apply_post_processing(
-        analysis_input, sentiment,
-        lang_code=lang_code,
+        final_text, sentiment,
+        lang_code=model_lang,
         translated_text="",
     )
 
@@ -282,7 +379,7 @@ def run_pipeline(
     if enable_sarcasm:
         logger.info("Running sarcasm detection")
         from src.models.sarcasm_model import predict as sarcasm_predict
-        sarcasm_result = sarcasm_predict(analysis_input)
+        sarcasm_result = sarcasm_predict(final_text)
         sarcasm_detected = sarcasm_result.get("is_sarcastic", False)
         sarcasm_confidence_val = sarcasm_result.get("confidence", 0.0)
         sarcasm_reason = sarcasm_result.get("reason", "")
@@ -297,6 +394,10 @@ def run_pipeline(
             pp["sentiment"] = LABEL_MAP[override["pred_class"]]
             confidence = override["confidence"]
             sarcasm_applied = True
+            # Recalculate polarity after sarcasm label flip
+            pp["polarity"] = compute_polarity_from_label(
+                LABEL_MAP[override["pred_class"]], confidence
+            )
 
     # Aspects (optional)
     aspects = []
@@ -304,16 +405,23 @@ def run_pipeline(
         logger.info("Running aspect-based analysis")
         try:
             from src.models.aspect import analyze_aspects
-            aspects = analyze_aspects(analysis_input)
+            aspects = analyze_aspects(final_text)
         except Exception as e:
             logger.warning("Aspect analysis error: %s", e)
 
-    # V3 RULE 9: Structured logging
+    # ── Section 5: Pipeline trace ───────────────────────────
+    pipeline_trace = {
+        "route": route,
+        "model_used": model_used,
+        "translation_used": model_used == "roberta" and route == "MULTILINGUAL",
+        "translation_valid": translation_valid,
+    }
+
+    # Structured logging
     logger.info(
-        "Pipeline complete: model_used=auto language_detected=%s "
-        "translation_status=%s correction_applied=%s final_label=%s conf=%.1f%%",
-        lang_code, translation_status,
-        "yes" if pp["neutral_corrected"] else "no",
+        "Pipeline complete: route=%s model_used=%s language=%s "
+        "translation_status=%s final_label=%s conf=%.1f%%",
+        route, model_used, lang_code, translation_status,
         pp["sentiment"], confidence * 100,
     )
 
@@ -338,9 +446,10 @@ def run_pipeline(
         "temperature_scaled": pp["temperature_scaled"],
         "translation_status": translation_status,
         "translation_flagged": translation_flagged,
-        "translation_failed": translation_status == "FALLBACK_PASSTHROUGH",
+        "translation_failed": translation_status.startswith("FALLBACK"),
         "hinglish_detected": hinglish_detected,
-        "analysis_input_source": "original",
+        "analysis_input_source": route.lower(),
+        "pipeline_trace": pipeline_trace,
         "sarcasm": sarcasm_result,
         "sarcasm_status": "ENABLED" if enable_sarcasm else "DISABLED",
         "sarcasm_detected": sarcasm_detected,
@@ -451,9 +560,14 @@ def run_pipeline_batch(
             )
 
     # Step 3: Batch sentiment
+    # Section 4: Normalize Hinglish texts before sentiment prediction
     _progress(25, f"⚡ Running sentiment model on {total} reviews...")
+    analysis_texts = [
+        normalize_hinglish(clean_texts[i]) if hinglish_flags[i] else clean_texts[i]
+        for i in range(total)
+    ]
     lang_codes = [li.get("code", "en") for li in lang_infos]
-    sentiments = sentiment_predict_batch(clean_texts, lang_codes=lang_codes)
+    sentiments = sentiment_predict_batch(analysis_texts, lang_codes=lang_codes)
     _progress(60, "✅ Sentiment analysis complete")
 
     # Step 4: Batch sarcasm (transformer-based)
@@ -519,6 +633,10 @@ def run_pipeline_batch(
                 pp["label_name"] = LABEL_MAP[sarc_override["pred_class"]]
                 pp["sentiment"] = LABEL_MAP[sarc_override["pred_class"]]
                 confidence = sarc_override["confidence"]
+                # Section 1 FIX: Recalculate polarity after sarcasm label flip
+                pp["polarity"] = compute_polarity_from_label(
+                    LABEL_MAP[sarc_override["pred_class"]], confidence
+                )
 
 
             results.append({

@@ -84,6 +84,113 @@ CALIBRATION_TEMPERATURE = 1.8
 
 CONFIDENCE_UNCERTAIN_THRESHOLD = 0.60  # Kept for API compat — never overrides label
 
+# ═══════════════════════════════════════════════════════════════
+# SECTION 1 — Confidence Gate (precision decision layer)
+# ═══════════════════════════════════════════════════════════════
+
+MIN_CONFIDENCE = 0.55
+LOW_CONFIDENCE_NEUTRAL_MARGIN = 0.10
+
+
+def apply_confidence_gate(label: int, confidence: float, probs: list) -> tuple:
+    """Section 1: Gate low-confidence ambiguous predictions to neutral.
+
+    Args:
+        label: predicted class (0=neg, 1=neu, 2=pos)
+        confidence: model confidence (0-1)
+        probs: [neg, neu, pos] softmax probabilities
+
+    Returns:
+        (label, confidence, status) where status is:
+        - "accepted": prediction passed the gate
+        - "low_confidence_ambiguous": gated to neutral
+    """
+    if confidence < MIN_CONFIDENCE:
+        sorted_probs = sorted(probs, reverse=True)
+        margin = sorted_probs[0] - sorted_probs[1]
+
+        if margin < LOW_CONFIDENCE_NEUTRAL_MARGIN:
+            logger.info(
+                "[CONFIDENCE GATE] conf=%.3f margin=%.3f → neutral",
+                confidence, margin,
+            )
+            return 1, confidence, "low_confidence_ambiguous"
+
+    return label, confidence, "accepted"
+
+
+# ═══════════════════════════════════════════════════════════════
+# SECTION 2 — Label Lock (prevent wrong flips)
+# ═══════════════════════════════════════════════════════════════
+
+HIGH_CONFIDENCE_LOCK = 0.75
+
+
+def apply_label_lock(label: int, confidence: float) -> tuple:
+    """Section 2: Lock high-confidence labels to prevent downstream overrides.
+
+    Returns:
+        (label, locked) where locked=True means skip all overrides.
+    """
+    if confidence >= HIGH_CONFIDENCE_LOCK:
+        return label, True
+    return label, False
+
+# ═══════════════════════════════════════════════════════════════
+# SECTION 1 — Input routing (hybrid architecture)
+# ═══════════════════════════════════════════════════════════════
+
+def route_input(text: str, lang: str) -> str:
+    """Section 1: Determine pipeline route for an input.
+
+    Returns:
+        "ENGLISH"       — direct RoBERTa inference
+        "HINGLISH"      — normalize → RoBERTa inference
+        "MULTILINGUAL"  — translate → (valid → RoBERTa, invalid → XLM-R)
+
+    NOTE: Hinglish is checked FIRST because detect_language() returns
+    lang_code="en" for Roman-script Hinglish text.
+    Also catches non-English Latin-script text misdetected as "en".
+    """
+    from src.models.language import detect_hinglish
+    import re
+
+    # Hinglish check MUST come before English check
+    if detect_hinglish(text):
+        return "HINGLISH"
+
+    if lang not in ("en", "unknown"):
+        return "MULTILINGUAL"
+
+    # Language detector said "en" — but verify it's actually English.
+    # Short French/German/Spanish texts often get misclassified as English.
+    # Check for diacritical marks (é, ä, ñ, etc.) or common non-English words.
+    if lang == "en":
+        # Diacritical mark check (not present in English)
+        if re.search(r'[àáâãäåæçèéêëìíîïðñòóôõöùúûüýþÿ]', text.lower()):
+            return "MULTILINGUAL"
+
+        # Common non-English word check (short high-frequency words)
+        _NON_ENGLISH_MARKERS = frozenset({
+            # German
+            "sehr", "schlecht", "ich", "bin", "ist", "nicht", "das", "gut",
+            "fantastisch", "schrecklich", "furchtbar",
+            # French
+            "c'est", "tres", "très", "je", "une", "est", "pas", "rien",
+            "mauvais", "mauvaise", "moyen", "produit",
+            # Spanish
+            "muy", "bueno", "malo", "esto", "esta", "pero", "mejor", "peor",
+            # Italian
+            "molto", "questo", "questa", "buono", "cattivo",
+            # Portuguese
+            "muito", "bom", "mau", "este", "esta",
+        })
+        tokens = set(text.lower().replace("'", " ").split())
+        if tokens & _NON_ENGLISH_MARKERS:
+            return "MULTILINGUAL"
+
+    return "ENGLISH"
+
 
 # ═══════════════════════════════════════════════════════════════
 # STEP 0 — Input safety guard
@@ -274,6 +381,29 @@ def compute_dual_polarity(
             pass
 
     return tb_polarity, vader_compound, subjectivity
+
+
+def compute_polarity_from_label(label_name: str, confidence: float) -> float:
+    """Derive a meaningful polarity score from model label + confidence.
+
+    Section 3 FIX: TextBlob/VADER return 0.0 for non-English text,
+    breaking the UI gauge. This function produces a polarity value
+    that reflects the model's actual sentiment prediction:
+        positive → +confidence  (e.g. +0.892)
+        negative → -confidence  (e.g. -0.761)
+        neutral  → 0.0
+
+    This is used as the *display* polarity sent to the frontend.
+    The raw TextBlob polarity is still used for VADER corrections
+    on English text (internal only).
+    """
+    label = str(label_name).lower().strip()
+    conf = max(0.0, min(1.0, float(confidence)))
+    if label == "positive":
+        return round(conf, 4)
+    elif label == "negative":
+        return round(-conf, 4)
+    return 0.0
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -516,28 +646,51 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
     # Step 3: Compute raw_confidence
     raw_confidence = result["confidence"]
 
+    # ── SECTION 4: PRECISION DECISION ORDER ─────────────────
+    # Step 3.1: Label lock — protect high-confidence predictions
+    pred_class, label_locked = apply_label_lock(pred_class, raw_confidence)
+    confidence_status = "accepted"
+
+    # Step 3.2: Confidence gate — only if NOT locked
+    if not label_locked:
+        pred_class, raw_confidence, confidence_status = apply_confidence_gate(
+            pred_class, raw_confidence, scores
+        )
+
     # Step 4: Compute dual polarity (VADER + TextBlob)
     polarity, vader_compound, subjectivity = compute_dual_polarity(
         original_text, lang_code
     )
 
-    # Step 5: apply_short_text_guard (ADD-ON 1)
-    guard_result = apply_short_text_guard(original_text, pred_class, raw_confidence)
-    pred_class = guard_result["pred_class"]
-    confidence = guard_result["confidence"]
-    guard_applied = guard_result["guard_applied"]
-
-    # If guard didn't fire, use raw confidence
-    if guard_applied is None:
+    # Step 5: apply_short_text_guard — SKIP if label is locked
+    if label_locked:
         confidence = raw_confidence
+        guard_applied = None
+        logger.debug("[LABEL LOCK] Skipping short-text guard (conf=%.3f >= %.2f)",
+                     raw_confidence, HIGH_CONFIDENCE_LOCK)
+    else:
+        guard_result = apply_short_text_guard(original_text, pred_class, raw_confidence)
+        pred_class = guard_result["pred_class"]
+        confidence = guard_result["confidence"]
+        guard_applied = guard_result["guard_applied"]
 
-    # Step 6: apply_neutral_correction_v2 (VADER-primary, TextBlob secondary)
-    nc_result = apply_neutral_correction_v2(
-        pred_class, confidence, polarity, vader_compound, lang_code
-    )
-    pred_class = nc_result["pred_class"]
-    neutral_corrected = nc_result["neutral_corrected"]
-    correction_reason = nc_result["correction_reason"]
+        # If guard didn't fire, use raw confidence
+        if guard_applied is None:
+            confidence = raw_confidence
+
+    # Step 6: apply_neutral_correction_v2 — SKIP if label is locked
+    if label_locked:
+        neutral_corrected = False
+        correction_reason = ""
+        logger.debug("[LABEL LOCK] Skipping neutral correction (conf=%.3f >= %.2f)",
+                     raw_confidence, HIGH_CONFIDENCE_LOCK)
+    else:
+        nc_result = apply_neutral_correction_v2(
+            pred_class, confidence, polarity, vader_compound, lang_code
+        )
+        pred_class = nc_result["pred_class"]
+        neutral_corrected = nc_result["neutral_corrected"]
+        correction_reason = nc_result["correction_reason"]
 
     # Step 7: V4 FIX 2 — No confidence reduction. Raw softmax passes through.
     confidence = calibrated_confidence(confidence, polarity, pred_class)
@@ -617,13 +770,18 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
     else:
         reliability = "low"
 
-    # Step 13: Return complete result dict
+    # Step 13: Compute display polarity from label + confidence
+    # Section 3 FIX: TextBlob returns 0.0 for non-English, breaking UI gauge.
+    # This derives polarity from the model's actual prediction.
+    display_polarity = compute_polarity_from_label(label_name, confidence)
+
+    # Step 14: Return complete result dict
     return {
         "label": pred_class,
         "label_name": label_name,
         "confidence": float(confidence),
         "raw_confidence": float(raw_confidence),
-        "polarity": round(float(polarity), 4),
+        "polarity": display_polarity,
         "subjectivity": round(float(subjectivity), 4),
         "neutral_corrected": neutral_corrected,
         "correction_reason": correction_reason,
@@ -636,6 +794,8 @@ def predict_sentiment(text, model_pipeline=None, run_sarcasm_detection=True):
         "analysis_input_source": "original",
         "model_used": model_used,
         "was_protected": was_protected,
+        "label_locked": label_locked,
+        "confidence_status": confidence_status,
         "reliability": reliability,
         "sarcasm_detected": sarcasm_detected,
         "sarcasm_confidence": float(sarcasm_confidence_val),

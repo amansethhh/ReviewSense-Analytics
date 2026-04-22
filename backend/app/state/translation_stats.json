@@ -1,9 +1,10 @@
 {
   "translation_counts": {
+    "nllb_success": 15,
+    "failed": 1,
+    "skipped_english": 51,
     "helsinki_success": 75,
     "google_success": 0,
-    "failed": 0,
-    "skipped_english": 51,
     "failed_raw_predict_success": 12
   },
   "language_counts": {
@@ -12,7 +13,7 @@
       "failed": 0
     },
     "en": {
-      "count": 52,
+      "count": 57,
       "failed": 0
     },
     "so": {
@@ -24,7 +25,7 @@
       "failed": 0
     },
     "es": {
-      "count": 24,
+      "count": 27,
       "failed": 0
     },
     "it": {
@@ -44,12 +45,12 @@
       "failed": 0
     },
     "fr": {
-      "count": 11,
+      "count": 13,
       "failed": 0
     },
     "hi": {
-      "count": 11,
-      "failed": 0
+      "count": 14,
+      "failed": 1
     },
     "fi": {
       "count": 1,
@@ -64,7 +65,7 @@
       "failed": 0
     },
     "ja": {
-      "count": 5,
+      "count": 7,
       "failed": 0
     },
     "unknown": {
@@ -76,6 +77,10 @@
       "failed": 0
     },
     "pt": {
+      "count": 1,
+      "failed": 0
+    },
+    "nl": {
       "count": 1,
       "failed": 0
     }
