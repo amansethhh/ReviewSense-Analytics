@@ -27,7 +27,7 @@
 <div align="center">
 
 <a href="https://github.com/amansethhh/ReviewSense-Analytics/releases/download/v1.0/demo.mp4">
-  <img src="docs/images/demo-preview.gif" width="820"/>
+  <img src="https://raw.githubusercontent.com/amansethhh/ReviewSense-Analytics/main/docs/images/demo-preview.gif" width="820"/>
 </a>
 
 </div>
