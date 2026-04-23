@@ -4,9 +4,13 @@
 
 # ReviewSense Analytics
 
-### Production-ready multilingual sentiment intelligence platform
+<p align="center">
+ Production-ready multilingual sentiment intelligence platform
+</p>
 
-### **Hybrid Transformer Routing • Confidence-Aware Decisions • Explainable AI**
+<p align="center">
+ Hybrid Transformer Routing • Confidence-Aware Decisions • Explainable AI
+</p>
 
 <br>
 
@@ -16,6 +20,10 @@
   <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black"/>
   <img src="https://img.shields.io/badge/Transformers-HuggingFace-FFD21E"/>
   <img src="https://img.shields.io/badge/License-MIT-green.svg"/>
+</p>
+
+<p align="center">
+  ⭐ If you like this project, consider giving it a star!
 </p>
 
 </div>
@@ -230,6 +238,106 @@ ReviewSense-Analytics/
 | POST   | /feedback | Feedback logging    |
 
 </div>
+
+---
+
+## 🛠 Setup Instructions
+
+### 🔧 Prerequisites
+
+Ensure your system has:
+
+- Python **3.10+**
+- Node.js **18+**
+- npm or yarn
+- Git
+
+---
+
+## 📥 Clone Repository
+
+```bash
+git clone https://github.com/amansethhh/ReviewSense-Analytics.git
+cd ReviewSense-Analytics
+```
+## ⚙️ Backend Setup (FastAPI)
+
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv venv
+
+# Activate environment
+# Windows
+venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+▶ Run Backend Server
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+Backend running at:
+
+```bash
+http://localhost:8000
+```
+## 🌐 Frontend Setup (React + TypeScript)
+
+```bash
+cd frontend
+
+npm install
+```
+▶ Run Frontend
+
+```bash
+npm run dev
+```
+Frontend running at:
+
+```bash
+http://localhost:5173
+```
+## 🔗 Environment Configuration
+
+Create a .env file inside frontend/:
+
+```bash
+VITE_API_URL=http://localhost:8000
+```
+---
+
+## 🧪 How to Use
+
+- 🔍 **Live Prediction**  
+  Enter multilingual or Hinglish text → get sentiment, confidence, explanation  
+
+- 📦 **Bulk Analysis**  
+  Upload CSV file → process batch sentiment predictions  
+
+- 📊 **Dashboard**  
+  View analytics, insights, and model outputs  
+  
+---
+
+## 📁 System Flow
+
+Input → API → NLP Pipeline → Model → Decision Layer → Output → Dashboard
+
+---
+
+## 📝 Notes
+
+First run may take time due to model loading
+Ensure internet connection for translation models (NLLB)
+Use small datasets initially for faster testing
 
 ---
 
