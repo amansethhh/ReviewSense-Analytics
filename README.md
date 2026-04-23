@@ -24,13 +24,19 @@
 
 ## 🎬 Live Demo
 
-<div align="center">
+<p align="center">
 
-<a href="https://github.com/amansethhh/ReviewSense-Analytics/releases/download/v1.0/demo.mp4">
-  <img src="https://raw.githubusercontent.com/amansethhh/ReviewSense-Analytics/main/docs/images/demo-preview.gif" width="820"/>
-</a>
+<img 
+  src="https://raw.githubusercontent.com/amansethhh/ReviewSense-Analytics/main/docs/images/demo-preview.gif"
+  alt="ReviewSense Analytics Demo"
+  width="900"
+/>
 
-</div>
+</p>
+
+<p align="center">
+<sub>Real-time multilingual sentiment analysis • Bulk CSV processing • Explainability • Interactive dashboard</sub>
+</p>
 
 ---
 
@@ -108,7 +114,7 @@
 
 <div align="center">
 
-<img src="docs/images/architecture.png" width="900"/>
+<img src="docs/images/your-architecture.png" width="900"/>
 
 </div>
 
@@ -118,16 +124,17 @@
 
 <div align="center">
 
-| Metric    | Value |
-| --------- | ----- |
-| Accuracy  | ~91%  |
-| Precision | ~0.92 |
-| Recall    | ~0.91 |
-| F1 Score  | ~0.90 |
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Accuracy</td><td>~91%</td></tr>
+<tr><td>Precision</td><td>~0.92</td></tr>
+<tr><td>Recall</td><td>~0.91</td></tr>
+<tr><td>F1 Score</td><td>~0.90</td></tr>
+</table>
+
+<p><sub>Evaluated on mixed multilingual dataset (real-world inputs)</sub></p>
 
 </div>
-
-<sub>Evaluated on mixed multilingual dataset (real-world inputs)</sub>
 
 ---
 
