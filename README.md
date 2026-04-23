@@ -28,7 +28,7 @@
 
 <img 
   src="https://raw.githubusercontent.com/amansethhh/ReviewSense-Analytics/main/docs/images/demo-preview.gif"
-  alt="ReviewSense Analytics Demo"
+  alt="ReviewSense Demo"
   width="900"
 />
 
