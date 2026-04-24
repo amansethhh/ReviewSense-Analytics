@@ -978,7 +978,7 @@ export function LanguageAnalysisPage() {
                   <NeuralSelect id="lang-model-select" value={model}
                     onChange={e => setModel(e.target.value as ModelChoice)}
                     options={MODELS.map(m => ({ label: capitalize(m), value: m }))} />
-                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — predictions use Hybrid Transformer Pipeline.</div>
+                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — Predictions use Hybrid Transformer Pipeline.</div>
                 </div>
                 <div className="form-group" style={{ textAlign: 'center' }}>
                   <label className="form-label" htmlFor="lang-domain-select" style={{ display: 'block', textAlign: 'center' }}>Content Type (Optional)</label>
@@ -1546,7 +1546,7 @@ export function LanguageAnalysisPage() {
                           <option key={m} value={m}>{capitalize(m)}</option>)}
                       </select>
                     </NeuralInputWrap>
-                    <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — predictions use Hybrid Transformer Pipeline.</div>
+                    <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — Predictions use Hybrid Transformer Pipeline.</div>
                   </div>
                   {/* Only ABSA + Sarcasm — this page is always multilingual, no toggle needed */}
                   <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-8)', flexWrap: 'wrap', marginTop: 'var(--space-4)' }}>

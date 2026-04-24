@@ -112,7 +112,7 @@ export function Sidebar() {
             textAlign: 'center', marginTop: '4px', lineHeight: 1.3,
             opacity: 0.7,
           }}>
-            Display only — predictions use Hybrid Transformer Pipeline.
+            Display only — Predictions use Hybrid Transformer Pipeline.
           </div>
         </div>
 

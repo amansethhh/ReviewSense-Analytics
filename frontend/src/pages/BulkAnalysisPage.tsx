@@ -690,7 +690,7 @@ export function BulkAnalysisPage() {
                         <option key={m} value={m}>{formatModelName(m)}</option>)}
                     </select>
                   </NeuralInputWrap>
-                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — predictions use Hybrid Transformer Pipeline.</div>
+                  <div style={{ fontSize: '9px', color: 'var(--color-text-faint)', textAlign: 'center', marginTop: '4px', opacity: 0.7, lineHeight: 1.3 }}>Display only — Predictions use Hybrid Transformer Pipeline.</div>
                 </div>
               </div>
               {/*

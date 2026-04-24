@@ -7,7 +7,7 @@
 
 export const UI_LABELS = {
   /* ── Model Selection ─────────────────────── */
-  MODEL_DISPLAY_NOTE: 'Display only — predictions use Hybrid Transformer Pipeline.',
+  MODEL_DISPLAY_NOTE: 'Display only — Predictions use Hybrid Transformer Pipeline.',
 
   /* ── User Rating ─────────────────────────── */
   USER_RATING: 'User Rating (Optional)',
