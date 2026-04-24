@@ -125,7 +125,7 @@ tr:nth-child(even) td{background:rgba(13,17,23,.45)}
 .ai-item{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:12px;line-height:1.7;justify-content:flex-start;text-align:left;width:100%}
 .ai-item:last-child{border-bottom:none}
 .ai-item strong{color:#e6edf3}
-.transl{font-size:10px;color:#8b949e;font-style:italic}
+.transl{color:#c9d1d9}
 
 /* ── Footer ── */
 .footer{text-align:center;padding:22px 0;color:#8b949e;font-size:11px;border-top:1px solid #21262d;margin-top:26px;width:100%}
