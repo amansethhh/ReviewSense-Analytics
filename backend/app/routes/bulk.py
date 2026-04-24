@@ -1147,6 +1147,8 @@ async def get_active_jobs():
                 "status":     status.value if hasattr(status, "value") else str(status),
                 "processed":  job.get("processed", 0),
                 "total":      job.get("total_rows", 0),
+                "phase":      job.get("phase", "init"),
+                "progress":   round(job.get("progress", 0.0), 1),
                 "created_at": created.isoformat() if created else "",
             })
     return {"active_jobs": active}

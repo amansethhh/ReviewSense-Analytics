@@ -230,6 +230,8 @@ export interface ActiveJob {
   status:     'queued' | 'processing'
   processed:  number
   total:      number
+  phase:      string
+  progress:   number
   created_at: string
 }
 

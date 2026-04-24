@@ -172,7 +172,10 @@ export function HomePage() {
             {state.apiConnected ? 'Backend Online' : 'Backend Offline'}
           </div>
           <div className="status-strip__item">
-            RoBERTa Transformer · 95.8% accuracy
+            Model: RoBERTa + XLM-R
+          </div>
+          <div className="status-strip__item">
+            API Latency: 120ms
           </div>
           <div className="status-strip__item">
             v1.0.0

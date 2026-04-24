@@ -118,7 +118,8 @@
 .sidebar__section-label {
   font-size:0.62rem; font-weight:600; letter-spacing:0.1em;
   text-transform:uppercase; color:var(--color-text-faint);
-  padding:var(--space-2) var(--space-3) var(--space-1);
+  padding:var(--space-1) var(--space-3);
+  margin-bottom:var(--space-1);
   text-align:center;
 }
 .sidebar__link {
@@ -272,6 +273,177 @@
   transition: opacity 0.25s ease;
 }
 .sidebar--collapsed .sidebar__footer { opacity: 0; pointer-events: none; }
+
+/* ── 3D NAV COMPASS ICON ────────────────────────────── */
+.nav-3d-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 4px rgba(0, 217, 255, 0.5));
+  animation: nav-3d-float 3s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes nav-3d-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%      { transform: translateY(-1px) rotate(8deg); }
+}
+
+/* ── SIDEBAR PROGRESS LOADER ────────────────────────── */
+.sidebar-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Pipeline step indicators — CSS Grid for equal spacing ── */
+.sidebar-progress__steps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  width: 100%;
+}
+
+.sidebar-progress__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  opacity: 0.3;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  padding: 2px 0;
+}
+
+.sidebar-progress__step--done {
+  opacity: 0.7;
+}
+
+.sidebar-progress__step--active {
+  opacity: 1;
+  animation: sidebar-step-pulse 1.5s ease-in-out infinite;
+}
+
+.sidebar-progress__step svg {
+  flex-shrink: 0;
+}
+
+.sidebar-progress__step-label {
+  font-size: 0.46rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-text-faint);
+  text-align: center;
+  line-height: 1;
+  font-family: var(--font-mono);
+}
+
+@keyframes sidebar-step-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.7; transform: scale(1.08); }
+}
+
+/* ── Progress bar (compact — overall pipeline %) ── */
+.sidebar-progress__container {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  background: radial-gradient(circle, #1b2735, #090a0f);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 217, 255, 0.12);
+}
+
+.sidebar-progress__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #00D9FF, #00FF88);
+  border-radius: 20px;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 0 8px rgba(0, 217, 255, 0.4),
+    0 0 16px rgba(0, 255, 136, 0.2);
+}
+
+.sidebar-progress__bar::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.15), transparent);
+  opacity: 0.5;
+  animation: sidebar-progress-ripple 3s infinite;
+}
+
+.sidebar-progress__text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  z-index: 2;
+  font-family: var(--font-mono);
+}
+
+.sidebar-progress__particles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sidebar-progress__particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0.4;
+  animation: sidebar-progress-float 5s infinite ease-in-out;
+}
+
+.sidebar-progress__particle:nth-child(1) { top: 10%; left: 20%; animation-delay: 0s; }
+.sidebar-progress__particle:nth-child(2) { top: 30%; left: 70%; animation-delay: 1s; }
+.sidebar-progress__particle:nth-child(3) { top: 50%; left: 50%; animation-delay: 2s; }
+.sidebar-progress__particle:nth-child(4) { top: 80%; left: 40%; animation-delay: 1.5s; }
+.sidebar-progress__particle:nth-child(5) { top: 90%; left: 60%; animation-delay: 2.5s; }
+
+@keyframes sidebar-progress-ripple {
+  0%   { transform: translate(-50%, -50%) scale(0.5); opacity: 0.7; }
+  100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+}
+
+@keyframes sidebar-progress-float {
+  0%   { transform: translateY(0) translateX(0); }
+  50%  { transform: translateY(-6px) translateX(3px); }
+  100% { transform: translateY(0) translateX(0); }
+}
+
+/* Collapse behaviour — hide progress loader when sidebar is collapsed */
+.sidebar--collapsed .sidebar-progress {
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease, width 0.3s ease;
+}
+
 
 /* ── SIDEBAR COLLAPSE SYSTEM ─────────────────────────── */
 

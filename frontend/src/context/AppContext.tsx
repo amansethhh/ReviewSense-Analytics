@@ -25,7 +25,7 @@ const initialState: AppState = {
   lastPrediction:      null,
   metricsCache:        null,
   apiConnected:        true,
-  confidenceThreshold: 0.60,
+  confidenceThreshold: 0.85,
 }
 
 // ── Actions ─────────────────────────────────────────

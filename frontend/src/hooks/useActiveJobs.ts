@@ -1,51 +1,62 @@
 /**
- * useActiveJobs — polls GET /bulk/active every 3 seconds.
+ * useActiveJobs — polls GET /bulk/active for sidebar progress.
  *
- * Used by the Sidebar nav bar indicator to show a pulsing dot
- * when any job is currently queued or processing.
+ * Used by the Sidebar progress loader to show real-time pipeline
+ * stages when any job is currently queued or processing.
  *
  * Features:
+ * - ADAPTIVE POLLING: 1000ms when jobs are active (near-zero latency
+ *   vs the analysis page's 500ms poller), 3000ms when idle.
  * - Page Visibility API: pauses polling when browser tab is hidden
  * - Resumes immediately on tab focus (no stale data)
  * - Non-critical: silently swallows errors (indicator is best-effort)
- * - Separate 3000ms interval — does not interfere with 250ms job polls
  */
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { getActiveJobs } from '@/api/api'
 import type { ActiveJob } from '@/api/api'
 
-const POLL_MS = 3000
+/** Idle poll — no jobs running, just checking periodically. */
+const POLL_IDLE_MS = 3000
+/** Active poll — jobs running, keep the sidebar in sync with the analysis page. */
+const POLL_ACTIVE_MS = 1000
 
 export function useActiveJobs(): ActiveJob[] {
   const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([])
   const mountedRef = useRef(true)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasActiveRef = useRef(false)
 
-  useEffect(() => {
-    mountedRef.current = true
-    let timerHandle: ReturnType<typeof setTimeout> | null = null
+  const poll = useCallback(async () => {
+    if (!mountedRef.current) return
 
-    const poll = async () => {
-      if (!mountedRef.current) return
-
-      // Page Visibility API: skip fetch when tab is hidden; resume on visible
-      if (document.visibilityState !== 'hidden') {
-        try {
-          const data = await getActiveJobs()
-          if (mountedRef.current) setActiveJobs(data.active_jobs)
-        } catch {
-          // Non-critical — silently ignore network errors
+    // Page Visibility API: skip fetch when tab is hidden
+    if (document.visibilityState !== 'hidden') {
+      try {
+        const data = await getActiveJobs()
+        if (mountedRef.current) {
+          const jobs = data.active_jobs
+          setActiveJobs(jobs)
+          hasActiveRef.current = jobs.length > 0
         }
-      }
-
-      if (mountedRef.current) {
-        timerHandle = setTimeout(poll, POLL_MS)
+      } catch {
+        // Non-critical — silently ignore network errors
       }
     }
 
-    // Resume immediately when tab becomes visible again
+    if (mountedRef.current) {
+      // Adaptive interval: fast when jobs active, slow when idle
+      const interval = hasActiveRef.current ? POLL_ACTIVE_MS : POLL_IDLE_MS
+      timerRef.current = setTimeout(poll, interval)
+    }
+  }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+
+    // Resume immediately when tab becomes visible
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && mountedRef.current) {
-        if (timerHandle) clearTimeout(timerHandle)
+        if (timerRef.current) clearTimeout(timerRef.current)
         poll()
       }
     }
@@ -55,10 +66,10 @@ export function useActiveJobs(): ActiveJob[] {
 
     return () => {
       mountedRef.current = false
-      if (timerHandle) clearTimeout(timerHandle)
+      if (timerRef.current) clearTimeout(timerRef.current)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [])
+  }, [poll])
 
   return activeJobs
 }
